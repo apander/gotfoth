@@ -50,7 +50,7 @@
         if (txtBus) txtBus.innerText = `${pBus}%`;
 
         const pending = items
-            .filter((p) => G.needsGrading(p.status))
+            .filter((p) => G.needsGrading(p.status) && !G.isUnscheduledPaper(p))
             .map((p) => ({ p, t: new Date(p.scheduled_date) }))
             .filter((x) => !Number.isNaN(x.t.getTime()))
             .sort((a, b) => a.t - b.t);
@@ -108,6 +108,7 @@
         const we = endOfWeek(now);
         const weekDue = items.filter((p) => {
             if (G.isGraded(p.status)) return false;
+            if (G.isUnscheduledPaper(p)) return false;
             const t = new Date(p.scheduled_date);
             if (Number.isNaN(t.getTime())) return false;
             return t >= ws && t <= we;

@@ -10,9 +10,10 @@ The UI loads as **classic scripts** (not ES modules) so it runs when you open `i
 |-------|------|--------|
 | `paper_title` | text | Required for deposit |
 | `subject` | select | e.g. `Psychology`, `Business Studies` |
+| `year` | text | Exam cohort year (e.g. `2023`), stored as text in PocketBase — used for backlog grid and performance (P1/P2 pairing). |
 | `paper_type` | select | Must match `boundaries.paper_key` (e.g. `Business P1`, not `Business Studies P1`) |
 | `status` | select | `Planned` → `Completed` → graded terminal state |
-| `scheduled_date` | date | ISO with time |
+| `scheduled_date` | date | ISO with time. If omitted at deposit, the app sends `2099-12-31 …` as “not scheduled yet” until you set a real date in PocketBase. |
 | `score` | number | 0–100 when graded |
 | `max_score` | number | Optional |
 | `file_paper`, `file_scheme`, `file_attempt` | file | |
@@ -41,7 +42,44 @@ The app treats **`Marked` and `Graded` both as graded** for charts and heatmaps.
 | `key` | e.g. `psy_p1_date`, `bus_p1_date` |
 | `value` | DateTime |
 
-Used for the dashboard exam countdown strip (`EXAM_SETTING_KEYS` in `js/config.js`).
+Used for the Diary exam countdown strip (`EXAM_SETTING_KEYS` in `js/config.js`).
+
+### Optional Google Calendar import keys
+
+If you run `sync_google_ics.py`, it writes additional rows in `settings`:
+
+- `key`: `gcal_evt_<hash>`
+- `value`: JSON string, e.g. `{"date":"2026-04-07","label":"Business homework","uid":"..."}`.
+
+The frontend calendar renders these as **dark-grey chips** inside date cells. This is a read-only import path from Google iCal feed URL (no OAuth).
+
+It also writes:
+
+- `key`: `gcal_sync_status`
+- `value`: JSON string, e.g. `{"last_sync":"...","events_total":18,"events_in_window":9,"source":"google_ics"}`
+
+The schedule calendar shows this as **Last Google sync** above the month grid.
+
+## Cron sync script
+
+`sync_google_ics.py` reads a Google Calendar iCal URL and upserts the above `gcal_evt_` keys.
+
+### Required env var
+
+- `GCAL_ICS_URL` = Google "Secret address in iCal format" URL
+
+### Optional env vars
+
+- `PB_URL` (default `http://mycloudex2ultra.local:8090`)
+- `PB_SETTINGS_COLLECTION` (default `settings`)
+- `PB_AUTH_TOKEN` (if your PocketBase rules require auth)
+- `GCAL_EVENT_KEY_PREFIX` (default `gcal_evt_`)
+- `GCAL_SYNC_PAST_DAYS` (default `30`)
+- `GCAL_SYNC_FUTURE_DAYS` (default `365`)
+
+### Example cron entry (every 15 minutes)
+
+`*/15 * * * * /usr/bin/python /path/to/gotfoth/sync_google_ics.py >> /var/log/gcal_sync.log 2>&1`
 
 ## Verification
 

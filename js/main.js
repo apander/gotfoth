@@ -6,23 +6,11 @@
     const G = w.GF;
     let allPapers = [];
 
-    function getSubjectFilter() {
-        const el = document.getElementById("subjectFilter");
-        return el ? el.value : "all";
-    }
-
-    function filterPapers(items, filter) {
-        if (filter === "all") return items;
-        return items.filter((i) => i.subject === filter);
-    }
-
-    function updateFocusLabel(filter) {
-        const el = document.getElementById("current-focus-label");
-        if (!el) return;
-        if (filter === "all") el.innerText = "All";
-        else if (filter === "Psychology") el.innerText = "Psychology";
-        else if (filter === "Business Studies") el.innerText = "Business";
-        else el.innerText = filter;
+    function escHtml(s) {
+        return String(s ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/"/g, "&quot;");
     }
 
     function papersByIdMap(papers) {
@@ -45,6 +33,181 @@
                 if (panel) panel.classList.toggle("hidden");
             });
         });
+    }
+
+    function openSittingDatePicker(recordId) {
+        if (!recordId) return;
+        const inp = w.document.createElement("input");
+        inp.type = "date";
+        inp.className = "fixed -left-[9999px] top-0 opacity-0 w-1 h-1";
+        inp.setAttribute("aria-hidden", "true");
+        const cleanup = function () {
+            try {
+                if (inp.parentNode) inp.parentNode.removeChild(inp);
+            } catch (e) {}
+        };
+        inp.addEventListener(
+            "change",
+            async function () {
+                const v = inp.value;
+                cleanup();
+                if (!v) return;
+                try {
+                    await G.patchPaperRecord(recordId, { scheduled_date: v + " 12:00:00.000Z" });
+                    await loadAllData();
+                } catch (e) {
+                    console.error(e);
+                    w.alert("Could not save the date.");
+                }
+            },
+            { once: true }
+        );
+        w.document.body.appendChild(inp);
+        try {
+            if (typeof inp.showPicker === "function") inp.showPicker();
+            else inp.focus();
+        } catch (e1) {
+            try {
+                inp.focus();
+            } catch (e2) {}
+        }
+    }
+
+    function askUploadAnotherExamModal() {
+        const modal = document.getElementById("upload-again-modal");
+        const yesBtn = document.getElementById("upload-again-yes");
+        const noBtn = document.getElementById("upload-again-no");
+        if (!modal || !yesBtn || !noBtn) {
+            return Promise.resolve(w.confirm("Exam uploaded. Upload another exam now?"));
+        }
+        return new Promise(function (resolve) {
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+
+            function finish(v) {
+                modal.classList.add("hidden");
+                modal.classList.remove("flex");
+                yesBtn.removeEventListener("click", onYes);
+                noBtn.removeEventListener("click", onNo);
+                modal.removeEventListener("click", onBackdrop);
+                resolve(v);
+            }
+            function onYes() {
+                finish(true);
+            }
+            function onNo() {
+                finish(false);
+            }
+            function onBackdrop(ev) {
+                if (ev.target === modal) finish(false);
+            }
+            yesBtn.addEventListener("click", onYes);
+            noBtn.addEventListener("click", onNo);
+            modal.addEventListener("click", onBackdrop);
+        });
+    }
+
+    function goToVaultWithPrefill(subject, year, paperNum) {
+        G.showView("vault");
+        const subjectEl = document.getElementById("paperSub");
+        const yearEl = document.getElementById("paperYear");
+        const partEl = document.getElementById("paperP");
+        if (subjectEl && subject) subjectEl.value = String(subject);
+        if (yearEl && year) yearEl.value = String(year);
+        if (partEl && paperNum) partEl.value = String(paperNum) === "2" ? "P2" : "P1";
+    }
+
+    function yamlCommentsHtml(parsed) {
+        if (!parsed || !parsed.data) {
+            return '<p class="text-sm text-amber-800">No structured YAML comments found for this paper.</p>';
+        }
+        const d = parsed.data;
+        const strengths = Array.isArray(d.strengths) ? d.strengths : [];
+        const weaknesses = Array.isArray(d.weaknesses) ? d.weaknesses : [];
+        const questions = Array.isArray(d.questions) ? d.questions : [];
+        const summary = typeof d.feedback_summary === "string" ? d.feedback_summary : "";
+        var html = "";
+        if (summary) {
+            html +=
+                '<section class="mb-4"><h4 class="text-xs font-black uppercase tracking-widest text-slate-500 mb-1">Summary</h4>' +
+                '<p class="text-sm text-slate-700 leading-relaxed">' +
+                escHtml(summary) +
+                "</p></section>";
+        }
+        if (strengths.length) {
+            html +=
+                '<section class="mb-4"><h4 class="text-xs font-black uppercase tracking-widest text-emerald-700 mb-1">Strengths</h4><ul class="list-disc pl-5 space-y-1 text-sm text-slate-700">';
+            for (let i = 0; i < strengths.length; i++) html += "<li>" + escHtml(strengths[i]) + "</li>";
+            html += "</ul></section>";
+        }
+        if (weaknesses.length) {
+            html +=
+                '<section class="mb-4"><h4 class="text-xs font-black uppercase tracking-widest text-amber-700 mb-1">Improvements</h4><ul class="list-disc pl-5 space-y-1 text-sm text-slate-700">';
+            for (let i = 0; i < weaknesses.length; i++) html += "<li>" + escHtml(weaknesses[i]) + "</li>";
+            html += "</ul></section>";
+        }
+        if (questions.length) {
+            html +=
+                '<section><h4 class="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Question breakdown</h4><div class="space-y-2">';
+            for (let q = 0; q < questions.length; q++) {
+                const item = questions[q] || {};
+                const qLabel = item.question_no != null ? "Q" + item.question_no : "Question";
+                const mark = item.marks_awarded != null ? item.marks_awarded : "—";
+                const max = item.max_marks != null ? item.max_marks : "—";
+                const note = item.comment || item.feedback || "";
+                html +=
+                    '<div class="rounded-lg border border-slate-200 bg-white p-2">' +
+                    '<p class="text-xs font-black text-slate-700">' +
+                    escHtml(qLabel) +
+                    " · " +
+                    escHtml(mark) +
+                    "/" +
+                    escHtml(max) +
+                    "</p>" +
+                    (note ? '<p class="text-xs text-slate-600 mt-1">' + escHtml(note) + "</p>" : "") +
+                    "</div>";
+            }
+            html += "</div></section>";
+        }
+        if (!html) {
+            html = '<p class="text-sm text-slate-600">No comment fields found in this YAML record.</p>';
+        }
+        if (parsed.warnings && parsed.warnings.length) {
+            html +=
+                '<p class="mt-4 text-xs text-amber-700 font-bold">Note: ' +
+                escHtml(parsed.warnings.join(" · ")) +
+                "</p>";
+        }
+        return html;
+    }
+
+    function openYamlCommentsModal(paper) {
+        const modal = document.getElementById("yaml-comments-modal");
+        const close = document.getElementById("yaml-comments-close");
+        const title = document.getElementById("yaml-comments-title");
+        const body = document.getElementById("yaml-comments-body");
+        if (!modal || !close || !title || !body) return;
+        const parsed = paper && paper.full_yaml ? G.parseMarkingYaml(paper.full_yaml, yamlApi()) : null;
+        title.textContent = paper && paper.paper_title ? paper.paper_title : "";
+        body.innerHTML = yamlCommentsHtml(parsed);
+
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+
+        function finish() {
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+            close.removeEventListener("click", onClose);
+            modal.removeEventListener("click", onBackdrop);
+        }
+        function onClose() {
+            finish();
+        }
+        function onBackdrop(ev) {
+            if (ev.target === modal) finish();
+        }
+        close.addEventListener("click", onClose);
+        modal.addEventListener("click", onBackdrop);
     }
 
     const yamlApi = function () {
@@ -70,18 +233,18 @@
         const q = partitionQueueByStatus(items);
         const sections = [
             {
-                title: "Planned",
-                subtitle: "Paper and mark scheme on record. Add attempt when you sit the paper.",
+                title: "Scheduled",
+                subtitle: "Paper and mark scheme on record (PocketBase: Planned). Add attempt when you sit the paper.",
                 items: q.planned,
             },
             {
-                title: "Completed",
-                subtitle: "Attempt uploaded — use Log result when you have Gemini YAML.",
+                title: "Complete",
+                subtitle: "Attempt uploaded — use Log result when you have Gemini YAML (PocketBase: Completed).",
                 items: q.completed,
             },
             {
-                title: "Graded",
-                subtitle: "Marked and scored.",
+                title: "Marked",
+                subtitle: "Graded and scored.",
                 items: q.graded,
             },
         ];
@@ -125,9 +288,7 @@
 
     async function refreshPapersUi() {
         const boundaries = G.getBoundaries();
-        const filter = getSubjectFilter();
-        const items = filterPapers(allPapers, filter);
-        updateFocusLabel(filter);
+        const items = allPapers;
 
         const byId = papersByIdMap(allPapers);
 
@@ -143,7 +304,7 @@
             function (p) {
                 return G.isGraded(p.status);
             },
-            filter
+            "all"
         );
 
         const taskList = document.getElementById("task-list");
@@ -158,6 +319,24 @@
             vaultGrid.innerHTML = renderSegmentedPaperBlocks(items, boundaries, byId, "row");
             G.hydrateMarkingDetails(vaultGrid, byId);
             bindPaperRowEvents(vaultGrid);
+        }
+
+        const backlogEl = document.getElementById("backlog-grid");
+        if (backlogEl) {
+            if (typeof G.renderBacklogGrid !== "function") {
+                backlogEl.innerHTML =
+                    '<p class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-4">Backlog UI did not load. Open the site from the folder that contains <code class="text-xs">js/ui/backlog.js</code> (or check the browser Network tab for a 404).</p>';
+            } else {
+                try {
+                    const subj = G._backlogTabSubject || "Psychology";
+                    if (typeof G.syncBacklogSubjectTabs === "function") G.syncBacklogSubjectTabs(subj);
+                    G.renderBacklogGrid(backlogEl, allPapers, subj);
+                } catch (e) {
+                    console.error(e);
+                    backlogEl.innerHTML =
+                        '<p class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-4">Backlog failed to render. Open the developer console (F12) for the error details.</p>';
+                }
+            }
         }
     }
 
@@ -208,8 +387,8 @@
         const histEl = document.getElementById("historicYaml");
         const historicYaml = histEl && histEl.value ? histEl.value.trim() : "";
 
-        if (!title || !dateVal) {
-            w.alert("Paper title and target date are required.");
+        if (!title) {
+            w.alert("Paper title is required.");
             return;
         }
 
@@ -240,12 +419,19 @@
             subject === "Business Studies" ? "Business" : subject === "Psychology" ? "Psychology" : subject.split(" ")[0];
         const paper_type = typePrefix + " " + part;
 
+        const yearEl = document.getElementById("paperYear");
+        const yearVal = yearEl && yearEl.value ? String(yearEl.value).trim() : "";
+
         const formData = new FormData();
         formData.append("paper_title", title);
         formData.append("subject", subject);
         formData.append("paper_type", paper_type);
+        if (yearVal) formData.append("year", yearVal);
         formData.append("status", status);
-        formData.append("scheduled_date", dateVal + " 12:00:00.000Z");
+        formData.append(
+            "scheduled_date",
+            dateVal ? dateVal + " 12:00:00.000Z" : G.SCHEDULE_TBD_PREFIX + " 12:00:00.000Z"
+        );
         if (fp) formData.append("file_paper", fp);
         if (fs) formData.append("file_scheme", fs);
         if (fa) formData.append("file_attempt", fa);
@@ -257,9 +443,14 @@
 
         const res = await G.createPaperRecord(formData);
         if (res.ok) {
-            if (form) form.reset();
-            G.showView("action");
             await loadAllData();
+            const again = await askUploadAnotherExamModal();
+            if (again) {
+                if (form) form.reset();
+                G.showView("vault");
+            } else {
+                G.showView("history");
+            }
         } else {
             const t = await res.text();
             console.error(t);
@@ -297,10 +488,10 @@
         const n = new Date();
         G.setCalendarView(n.getFullYear(), n.getMonth());
 
-        G.registerViewLoader("dashboard", function () {
+        G.registerViewLoader("schedule", function () {
             refreshPapersUi();
         });
-        G.registerViewLoader("action", function () {
+        G.registerViewLoader("backlog", function () {
             refreshPapersUi();
         });
         G.registerViewLoader("vault", function () {
@@ -309,20 +500,78 @@
         G.registerViewLoader("progress", function () {
             G.renderPerformanceChart();
         });
-
-        const sub = document.getElementById("subjectFilter");
-        if (sub)
-            sub.addEventListener("change", function () {
-                refreshPapersUi();
-            });
+        G.registerViewLoader("history", function () {
+            refreshPapersUi();
+        });
 
         wireCalendarNav();
+
+        w.document.body.addEventListener("click", function (ev) {
+            const setBtn = ev.target && ev.target.closest && ev.target.closest(".js-set-sitting-date");
+            if (setBtn) {
+                ev.preventDefault();
+                const sid = setBtn.getAttribute("data-id");
+                if (sid) openSittingDatePicker(sid);
+                return;
+            }
+            const uploadBtn = ev.target && ev.target.closest && ev.target.closest(".js-backlog-upload");
+            if (uploadBtn) {
+                ev.preventDefault();
+                goToVaultWithPrefill(
+                    uploadBtn.getAttribute("data-subject"),
+                    uploadBtn.getAttribute("data-year"),
+                    uploadBtn.getAttribute("data-paper-num")
+                );
+                return;
+            }
+            const gradeBtn = ev.target && ev.target.closest && ev.target.closest(".js-backlog-grade");
+            if (gradeBtn) {
+                ev.preventDefault();
+                const gid = gradeBtn.getAttribute("data-id");
+                if (gid) logResult(gid);
+                return;
+            }
+            const commentsBtn = ev.target && ev.target.closest && ev.target.closest(".js-view-yaml-comments");
+            if (commentsBtn) {
+                ev.preventDefault();
+                const pid = commentsBtn.getAttribute("data-id");
+                if (!pid) return;
+                const paper = allPapers.find(function (p) {
+                    return p.id === pid;
+                });
+                if (!paper) return;
+                openYamlCommentsModal(paper);
+            }
+        });
+
+        G._backlogTabSubject = G._backlogTabSubject || "Psychology";
+        (function wireBacklogTabs() {
+            const root = document.getElementById("backlog-subject-tabs");
+            if (!root || root._wired) return;
+            root._wired = true;
+            root.querySelectorAll(".backlog-tab").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                    const s = btn.getAttribute("data-subject");
+                    if (!s) return;
+                    G._backlogTabSubject = s;
+                    if (typeof G.syncBacklogSubjectTabs === "function") G.syncBacklogSubjectTabs(s);
+                    const grid = document.getElementById("backlog-grid");
+                    if (grid && typeof G.renderBacklogGrid === "function") {
+                        try {
+                            G.renderBacklogGrid(grid, allPapers, s);
+                        } catch (e) {
+                            console.error(e);
+                        }
+                    }
+                });
+            });
+        })();
 
         try {
             await loadAllData();
         } catch (e) {
             console.error(e);
         }
-        G.showView("dashboard");
+        G.showView("schedule");
     });
 })(window);

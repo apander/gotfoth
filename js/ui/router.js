@@ -1,10 +1,11 @@
 (function (w) {
     const G = w.GF;
     const viewLoaders = {
-        dashboard: null,
-        action: null,
+        schedule: null,
+        backlog: null,
         vault: null,
         progress: null,
+        history: null,
     };
     G.registerViewLoader = function (viewId, fn) {
         viewLoaders[viewId] = fn;
