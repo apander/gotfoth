@@ -2,7 +2,6 @@
     const G = w.GF;
     let perfChart = null;
 
-    /** Normalized paper_type for matching PocketBase options. */
     const T = {
         BUS_P1: "business p1",
         BUS_P2: "business p2",
@@ -10,7 +9,9 @@
         PSY_P2: "psychology p2",
     };
 
-    G._perfViewMode = "papers";
+    /** @type {"year"|"timeline"} */
+    G._perfUXMode = G._perfUXMode || "year";
+    G._perfTimelineSubject = G._perfTimelineSubject || "Psychology";
 
     function normType(paper) {
         return String(paper.paper_type || "")
@@ -18,13 +19,14 @@
             .toLowerCase();
     }
 
+    function normYearString(paper) {
+        var y = G.parsePaperYear(paper);
+        return y == null ? "" : String(y);
+    }
+
     function parseScheduleTime(p) {
         const t = new Date(p.scheduled_date);
         return t.getTime();
-    }
-
-    function sortBySchedule(a, b) {
-        return parseScheduleTime(a) - parseScheduleTime(b);
     }
 
     function fmtDate(ts) {
@@ -35,51 +37,16 @@
         });
     }
 
-    /**
-     * Walk grading events in date order; emit a combined point whenever both slots are filled.
-     * Re-scores overwrite the latest P1/P2 value (re-sits / updates by row order).
-     */
-    function buildCombinedSeries(items, key1, key2, subjectLabel) {
-        const filtered = items
-            .filter(function (p) {
-                const t = normType(p);
-                return t === key1 || t === key2;
-            })
-            .sort(sortBySchedule);
-
-        let s1 = null;
-        let s2 = null;
-        const points = [];
-        for (let i = 0; i < filtered.length; i++) {
-            const p = filtered[i];
-            const t = normType(p);
-            const sc = Number(p.score);
-            if (Number.isNaN(sc)) continue;
-            if (t === key1) s1 = sc;
-            if (t === key2) s2 = sc;
-            if (s1 != null && s2 != null) {
-                points.push({
-                    x: parseScheduleTime(p),
-                    y: Math.round((s1 + s2) / 2),
-                    p1Score: s1,
-                    p2Score: s2,
-                    subject: subjectLabel,
-                    scheduled_date: p.scheduled_date,
-                    afterPaper: p.paper_title || p.paper_type,
-                });
-            }
-        }
-        return { points: points, latestP1: s1, latestP2: s2 };
-    }
-
     function paperToPoint(p) {
         const x = parseScheduleTime(p);
+        const ey = normYearString(p);
         return {
             x: x,
             y: Number(p.score),
             paper_title: p.paper_title || "(Untitled)",
             paper_type: p.paper_type || "",
             scheduled_date: p.scheduled_date,
+            examYear: ey || undefined,
         };
     }
 
@@ -134,7 +101,7 @@
                     max: xMax,
                     title: {
                         display: true,
-                        text: "Scheduled date",
+                        text: "Date taken (scheduled)",
                         color: "#64748b",
                         font: { size: 12, weight: "600" },
                     },
@@ -171,44 +138,391 @@
         };
     }
 
-    function updatePerfTabStyles() {
-        var mode = G._perfViewMode;
-        var pBtn = document.getElementById("perf-tab-papers");
-        var cBtn = document.getElementById("perf-tab-combined");
+    function esc(s) {
+        return String(s ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/"/g, "&quot;");
+    }
+
+    function meanScore(papers) {
+        var nums = [];
+        for (var i = 0; i < papers.length; i++) {
+            var n = Number(papers[i].score);
+            if (!Number.isNaN(n)) nums.push(n);
+        }
+        if (!nums.length) return null;
+        var s = 0;
+        for (var j = 0; j < nums.length; j++) s += nums[j];
+        return s / nums.length;
+    }
+
+    function gradedPapersForSlot(allPapers, subject, typeKey) {
+        var out = [];
+        for (var i = 0; i < allPapers.length; i++) {
+            var p = allPapers[i];
+            if (p.subject !== subject) continue;
+            if (!G.isGraded(p.status)) continue;
+            var sc = Number(p.score);
+            if (Number.isNaN(sc)) continue;
+            if (normType(p) !== typeKey) continue;
+            out.push(p);
+        }
+        return out;
+    }
+
+    function prominentCohortFooter(pctMean, boundaries, subj) {
+        if (pctMean == null || Number.isNaN(pctMean)) return "";
+        var rounded = Math.round(pctMean);
+        var letter = G.letterGradeFromPercent(pctMean, boundaries, subj);
+        return (
+            '<div class="mt-4 pt-4 border-t-2 border-slate-200/80">' +
+            '<p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Subject average (both papers)</p>' +
+            '<div class="flex flex-wrap items-end gap-4 mt-2">' +
+            '<div><p class="text-[10px] font-bold text-slate-500 uppercase mb-0.5">Percentage</p>' +
+            '<p class="text-3xl md:text-4xl font-black text-slate-900 tabular-nums leading-none">' +
+            esc(String(rounded)) +
+            "%</p></div>" +
+            '<div><p class="text-[10px] font-bold text-slate-500 uppercase mb-0.5">Grade</p>' +
+            '<p class="text-4xl md:text-5xl font-black text-emerald-700 tabular-nums leading-none tracking-tight">' +
+            esc(letter) +
+            "</p></div>" +
+            "</div>" +
+            '<p class="text-[11px] text-slate-500 mt-2">From averaged % vs the same mark scheme as each paper (P1/P2 rows are equivalent).</p>' +
+            "</div>"
+        );
+    }
+
+    function avgPaperRow(label, meanVal, count, boundaries, subj) {
+        var scoreTxt;
+        var gradeTxt;
+        if (meanVal == null || count < 1) {
+            scoreTxt = '<span class="text-red-700 font-bold">TBC</span>';
+            gradeTxt = "—";
+        } else {
+            scoreTxt = '<span class="tabular-nums">' + esc(String(Math.round(meanVal))) + "%</span>";
+            gradeTxt = esc(G.letterGradeFromPercent(meanVal, boundaries, subj));
+        }
+        var sub =
+            count > 0
+                ? '<span class="block text-[9px] font-bold text-slate-400 mt-0.5">' +
+                  esc(String(count)) +
+                  " graded · mean</span>"
+                : "";
+        return (
+            '<div class="flex justify-between items-start gap-3 py-2 border-t border-slate-100 first:border-t-0">' +
+            '<span class="text-[10px] font-black uppercase text-slate-500 shrink-0">' +
+            esc(label) +
+            "</span>" +
+            '<div class="text-right min-w-0">' +
+            '<p class="text-sm md:text-base font-black text-slate-900">' +
+            scoreTxt +
+            "</p>" +
+            sub +
+            '<p class="text-xs font-black text-slate-600 uppercase mt-1">Grade <span class="text-slate-900">' +
+            gradeTxt +
+            "</span></p>" +
+            "</div>" +
+            "</div>"
+        );
+    }
+
+    function noPaperYearsSet() {
+        var ys = Array.isArray(G.BACKLOG_NO_PAPERS_YEARS) ? G.BACKLOG_NO_PAPERS_YEARS : [];
+        var out = {};
+        for (var i = 0; i < ys.length; i++) {
+            var y = parseInt(ys[i], 10);
+            if (Number.isFinite(y)) out[String(y)] = true;
+        }
+        return out;
+    }
+
+    function renderYearSnapshotCards(container, allPapers, boundaries, yearFilterRaw) {
+        if (!container) return;
+
+        var labelEl = document.getElementById("perf-year-cohort-label");
+        var subjects = G.BACKLOG_SUBJECTS && G.BACKLOG_SUBJECTS.length ? G.BACKLOG_SUBJECTS : ["Psychology", "Business Studies"];
+
+        if (yearFilterRaw === "all") {
+            if (labelEl) {
+                labelEl.innerHTML =
+                    "<strong>All years</strong> — each value is the <em>mean %</em> of every graded paper of that type (any exam cohort). Pick a single year to see that cohort only.";
+            }
+            var html = "";
+            for (var si = 0; si < subjects.length; si++) {
+                var subj = subjects[si];
+                var psych = String(subj).indexOf("Psychology") >= 0;
+                var accent = psych ? "border-blue-300/80" : "border-emerald-300/80";
+                var tone = psych ? "from-blue-50/80 to-white" : "from-emerald-50/80 to-white";
+                var k1 = psych ? T.PSY_P1 : T.BUS_P1;
+                var k2 = psych ? T.PSY_P2 : T.BUS_P2;
+                var list1 = gradedPapersForSlot(allPapers, subj, k1);
+                var list2 = gradedPapersForSlot(allPapers, subj, k2);
+                var m1 = meanScore(list1);
+                var m2 = meanScore(list2);
+                var g1 = list1.length > 0;
+                var g2 = list2.length > 0;
+                var state = "tbc";
+                if (g1 && g2) state = "complete";
+                else if (g1 || g2) state = "partial";
+                var banner =
+                    state === "complete"
+                        ? "bg-emerald-600 text-white"
+                        : state === "partial"
+                          ? "bg-amber-500 text-white"
+                          : "bg-red-600 text-white";
+                var stateLabel =
+                    state === "complete" ? "Complete" : state === "partial" ? "Partial" : "To be completed";
+                var overallMean = g1 && g2 ? (m1 + m2) / 2 : null;
+                var footer = prominentCohortFooter(overallMean, boundaries, subj);
+                html +=
+                    '<article class="rounded-2xl border-2 ' +
+                    accent +
+                    " bg-gradient-to-br " +
+                    tone +
+                    ' shadow-sm overflow-hidden">' +
+                    '<header class="px-4 py-3 ' +
+                    banner +
+                    ' flex justify-between items-center">' +
+                    '<h3 class="text-sm font-black">' +
+                    esc(subj) +
+                    "</h3>" +
+                    '<span class="text-[10px] font-black uppercase tracking-widest opacity-95">' +
+                    stateLabel +
+                    "</span>" +
+                    "</header>" +
+                    '<div class="px-4 pb-4 pt-1">' +
+                    avgPaperRow("Paper 1", m1, list1.length, boundaries, subj) +
+                    avgPaperRow("Paper 2", m2, list2.length, boundaries, subj) +
+                    footer +
+                    "</div>" +
+                    "</article>";
+            }
+            container.innerHTML = html;
+            return;
+        }
+
+        if (yearFilterRaw === "__none__") {
+            if (labelEl) labelEl.innerHTML = "";
+            container.innerHTML =
+                '<p class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-4">Choose a cohort with an <strong>exam year</strong> set on papers. <em>Unspecified year</em> cannot show a year snapshot.</p>';
+            return;
+        }
+
+        var y = parseInt(yearFilterRaw, 10);
+        if (!Number.isFinite(y)) {
+            if (labelEl) labelEl.innerHTML = "";
+            container.innerHTML = '<p class="text-sm text-slate-500">Invalid exam year.</p>';
+            return;
+        }
+
+        if (labelEl) labelEl.innerHTML = "Exam cohort: <strong>" + esc(String(y)) + "</strong>";
+
+        var noPaperYears = noPaperYearsSet();
+        if (noPaperYears[String(y)]) {
+            container.innerHTML =
+                '<article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">' +
+                '<h3 class="text-sm font-black text-slate-700">No exam papers for this year</h3>' +
+                '<p class="mt-1 text-xs text-slate-600">This cohort is intentionally blank (COVID disruption year), so it does not count as missing progress.</p>' +
+                "</article>";
+            return;
+        }
+
+        var html2 = "";
+        for (var sj = 0; sj < subjects.length; sj++) {
+            var subj2 = subjects[sj];
+            var psych2 = String(subj2).indexOf("Psychology") >= 0;
+            var accent2 = psych2 ? "border-blue-300/80" : "border-emerald-300/80";
+            var tone2 = psych2 ? "from-blue-50/80 to-white" : "from-emerald-50/80 to-white";
+
+            var p1 = G.findPaperForCohortSlot(allPapers, y, subj2, 1);
+            var p2 = G.findPaperForCohortSlot(allPapers, y, subj2, 2);
+            var g1b = !!(p1 && G.isGraded(p1.status));
+            var g2b = !!(p2 && G.isGraded(p2.status));
+
+            var state2 = "tbc";
+            if (g1b && g2b) state2 = "complete";
+            else if (g1b || g2b) state2 = "partial";
+
+            var banner2 =
+                state2 === "complete"
+                    ? "bg-emerald-600 text-white"
+                    : state2 === "partial"
+                      ? "bg-amber-500 text-white"
+                      : "bg-red-600 text-white";
+            var stateLabel2 =
+                state2 === "complete" ? "Complete" : state2 === "partial" ? "Partial" : "To be completed";
+
+            function paperRowSingle(label, p, graded) {
+                var ux = G.backlogUxStatus(p);
+                var scoreTxt = "—";
+                var gradeTxt = "—";
+                if (graded && p) {
+                    scoreTxt = p.score != null ? esc(String(p.score)) + "%" : "—";
+                    gradeTxt = esc(G.letterGrade(p, boundaries));
+                } else {
+                    scoreTxt = '<span class="text-slate-600 text-xs font-bold">' + esc(ux) + "</span>";
+                }
+                return (
+                    '<div class="flex justify-between items-center gap-3 py-2 border-t border-slate-100 first:border-t-0">' +
+                    '<span class="text-[10px] font-black uppercase text-slate-500">' +
+                    esc(label) +
+                    "</span>" +
+                    '<div class="text-right">' +
+                    '<p class="text-sm font-black text-slate-900">' +
+                    scoreTxt +
+                    "</p>" +
+                    '<p class="text-xs font-black text-slate-600 uppercase mt-1">Grade <span class="text-slate-900">' +
+                    gradeTxt +
+                    "</span></p>" +
+                    "</div>" +
+                    "</div>"
+                );
+            }
+
+            var meanPair = null;
+            if (g1b && g2b && p1 && p2) {
+                meanPair = (Number(p1.score) + Number(p2.score)) / 2;
+            }
+            var footer2 = prominentCohortFooter(meanPair, boundaries, subj2);
+
+            html2 +=
+                '<article class="rounded-2xl border-2 ' +
+                accent2 +
+                " bg-gradient-to-br " +
+                tone2 +
+                ' shadow-sm overflow-hidden">' +
+                '<header class="px-4 py-3 ' +
+                banner2 +
+                ' flex justify-between items-center">' +
+                '<h3 class="text-sm font-black">' +
+                esc(subj2) +
+                "</h3>" +
+                '<span class="text-[10px] font-black uppercase tracking-widest opacity-95">' +
+                stateLabel2 +
+                "</span>" +
+                "</header>" +
+                '<div class="px-4 pb-4 pt-1">' +
+                paperRowSingle("Paper 1", p1, g1b) +
+                paperRowSingle("Paper 2", p2, g2b) +
+                footer2 +
+                "</div>" +
+                "</article>";
+        }
+
+        container.innerHTML = html2;
+    }
+
+    function updatePerfUxTabStyles() {
+        var yBtn = document.getElementById("perf-ux-year");
+        var tBtn = document.getElementById("perf-ux-timeline");
+        var mode = G._perfUXMode;
         var active = "px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide bg-slate-900 text-white shadow-sm";
         var idle =
             "px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide bg-slate-100 text-slate-600 hover:bg-slate-200";
-        if (pBtn) pBtn.className = mode === "papers" ? active : idle;
-        if (cBtn) cBtn.className = mode === "combined" ? active : idle;
+        if (yBtn) yBtn.className = mode === "year" ? active : idle;
+        if (tBtn) tBtn.className = mode === "timeline" ? active : idle;
+
+        var yearPanel = document.getElementById("performance-year-panel");
+        var tlPanel = document.getElementById("performance-timeline-panel");
+        var yearFilterWrap = document.getElementById("perf-year-filter-wrap");
+        if (yearPanel) yearPanel.classList.toggle("hidden", mode !== "year");
+        if (tlPanel) tlPanel.classList.toggle("hidden", mode !== "timeline");
+        if (yearFilterWrap) yearFilterWrap.classList.toggle("hidden", mode === "timeline");
+
         var help = document.getElementById("performance-help");
         if (help) {
             help.innerHTML =
-                mode === "papers"
-                    ? "<strong>By paper:</strong> four series — Business P1 &amp; P2, Psychology P1 &amp; P2. Each point is one graded paper."
-                    : "<strong>Subject combined:</strong> a point appears only when <em>both</em> papers for that subject are graded. The value is the average of P1 and P2 (end-of-pair score). If only one paper is done, no combined point exists yet.";
+                mode === "year"
+                    ? "<strong>Year snapshot:</strong> choose an <em>exam year</em> for that cohort, or <strong>All years</strong> for <em>mean scores</em> across every graded P1/P2. <span class='text-red-700 font-bold'>Red</span> = nothing graded; <span class='text-amber-700 font-bold'>amber</span> = one paper type graded; <span class='text-emerald-700 font-bold'>green</span> = both. The large grade is from the subject average % vs the mark scheme."
+                    : "<strong>Progress over time:</strong> all graded papers for the selected subject, by the date each one was scheduled. P1 and P2 are separate lines — no exam-year filter here.";
         }
     }
 
+    function ensurePerfYearFilter() {
+        var sel = document.getElementById("perf-year-filter");
+        if (!sel || sel._filled) return;
+        sel._filled = true;
+        while (sel.firstChild) sel.removeChild(sel.firstChild);
+        var allOpt = document.createElement("option");
+        allOpt.value = "all";
+        allOpt.textContent = "All years (mean of all graded)";
+        sel.appendChild(allOpt);
+        var y0 = G.BACKLOG_YEAR_MIN;
+        var y1 = G.BACKLOG_YEAR_MAX;
+        var noPaperYears = noPaperYearsSet();
+        if (typeof y0 === "number" && typeof y1 === "number") {
+            for (var y = y0; y <= y1; y++) {
+                var o = document.createElement("option");
+                o.value = String(y);
+                o.textContent = noPaperYears[String(y)] ? String(y) + " (no papers)" : String(y);
+                sel.appendChild(o);
+            }
+        }
+        var u = document.createElement("option");
+        u.value = "__none__";
+        u.textContent = "Unspecified year";
+        sel.appendChild(u);
+        sel.addEventListener("change", function () {
+            G.renderPerformanceChart();
+        });
+    }
+
+    function syncTimelineSubjectTabs() {
+        var root = document.getElementById("perf-timeline-subject-tabs");
+        if (!root) return;
+        var cur = G._perfTimelineSubject || "Psychology";
+        var active = "perf-tl-subj px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide bg-slate-900 text-white shadow-sm";
+        var idle =
+            "perf-tl-subj px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide bg-slate-100 text-slate-600 hover:bg-slate-200";
+        root.querySelectorAll(".perf-tl-subj").forEach(function (btn) {
+            var s = btn.getAttribute("data-subject");
+            btn.className = s === cur ? active : idle;
+        });
+    }
+
     G.wirePerformanceTabs = function () {
-        var pBtn = document.getElementById("perf-tab-papers");
-        var cBtn = document.getElementById("perf-tab-combined");
-        if (pBtn && !pBtn._wired) {
-            pBtn._wired = true;
-            pBtn.addEventListener("click", function () {
-                G._perfViewMode = "papers";
-                updatePerfTabStyles();
+        ensurePerfYearFilter();
+
+        var yBtn = document.getElementById("perf-ux-year");
+        var tBtn = document.getElementById("perf-ux-timeline");
+        if (yBtn && !yBtn._wired) {
+            yBtn._wired = true;
+            yBtn.addEventListener("click", function () {
+                G._perfUXMode = "year";
+                if (perfChart) {
+                    perfChart.destroy();
+                    perfChart = null;
+                }
+                updatePerfUxTabStyles();
                 G.renderPerformanceChart();
             });
         }
-        if (cBtn && !cBtn._wired) {
-            cBtn._wired = true;
-            cBtn.addEventListener("click", function () {
-                G._perfViewMode = "combined";
-                updatePerfTabStyles();
+        if (tBtn && !tBtn._wired) {
+            tBtn._wired = true;
+            tBtn.addEventListener("click", function () {
+                G._perfUXMode = "timeline";
+                updatePerfUxTabStyles();
                 G.renderPerformanceChart();
             });
         }
-        updatePerfTabStyles();
+
+        var subRoot = document.getElementById("perf-timeline-subject-tabs");
+        if (subRoot && !subRoot._wired) {
+            subRoot._wired = true;
+            subRoot.querySelectorAll(".perf-tl-subj").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                    var s = btn.getAttribute("data-subject");
+                    if (!s) return;
+                    G._perfTimelineSubject = s;
+                    syncTimelineSubjectTabs();
+                    G.renderPerformanceChart();
+                });
+            });
+        }
+
+        updatePerfUxTabStyles();
+        syncTimelineSubjectTabs();
     };
 
     G.renderPerformanceChart = async function () {
@@ -219,18 +533,54 @@
         }
         G.wirePerformanceTabs();
 
+        var yearSel = document.getElementById("perf-year-filter");
+        var yearFilter = yearSel && yearSel.value ? yearSel.value : "all";
+
+        var allPapers = await G.fetchPapersSorted();
+        var boundaries = G.getBoundaries();
+
+        if (G._perfUXMode === "year") {
+            var cardsEl = document.getElementById("perf-year-cards");
+            var tlEmpty = document.getElementById("performance-empty-timeline");
+            if (tlEmpty) tlEmpty.classList.add("hidden");
+
+            renderYearSnapshotCards(cardsEl, allPapers, boundaries, yearFilter);
+            if (perfChart) {
+                perfChart.destroy();
+                perfChart = null;
+            }
+            var summaryEl = document.getElementById("performance-summary");
+            if (summaryEl) summaryEl.innerHTML = "";
+            return;
+        }
+
+        /* Timeline mode */
         var chartEl = document.getElementById("mainChart");
-        var emptyEl = document.getElementById("performance-empty");
+        var emptyTl = document.getElementById("performance-empty-timeline");
         var panelEl = document.getElementById("performance-chart-panel");
         var summaryEl = document.getElementById("performance-summary");
         if (!chartEl) return;
 
-        var items = await G.fetchGradedPapersSorted();
-        var hasAnyGraded = items.length > 0;
+        var ctx = chartEl.getContext("2d");
 
-        if (emptyEl) emptyEl.classList.toggle("hidden", hasAnyGraded);
-        if (panelEl) panelEl.classList.toggle("hidden", !hasAnyGraded);
+        var graded = allPapers.filter(function (p) {
+            return G.isGraded(p.status);
+        });
+        var hasAnyGraded = graded.length > 0;
+
+        var subj = G._perfTimelineSubject || "Psychology";
+        var psych = String(subj).indexOf("Psychology") >= 0;
+        var items = graded.filter(function (p) {
+            return psych ? String(p.subject || "").indexOf("Psychology") >= 0 : String(p.subject || "").indexOf("Psychology") < 0;
+        });
+
         if (!hasAnyGraded) {
+            if (panelEl) panelEl.classList.add("hidden");
+            if (emptyTl) {
+                emptyTl.classList.remove("hidden");
+                emptyTl.innerHTML =
+                    '<p class="text-sm text-slate-600">No graded papers yet. Mark a paper to see scores over time.</p>';
+            }
             if (summaryEl) summaryEl.innerHTML = "";
             if (perfChart) {
                 perfChart.destroy();
@@ -239,231 +589,124 @@
             return;
         }
 
+        if (panelEl) panelEl.classList.remove("hidden");
+        if (emptyTl) {
+            if (!items.length) {
+                emptyTl.classList.remove("hidden");
+                emptyTl.innerHTML =
+                    '<p class="text-sm text-slate-600">No graded papers for this subject yet.</p>';
+            } else {
+                emptyTl.classList.add("hidden");
+            }
+        }
+
+        if (!items.length) {
+            if (perfChart) {
+                perfChart.destroy();
+                perfChart = null;
+            }
+            if (panelEl) panelEl.classList.add("hidden");
+            if (summaryEl) summaryEl.innerHTML = "";
+            return;
+        }
+
+        if (panelEl) panelEl.classList.remove("hidden");
+
+        var k1 = psych ? T.PSY_P1 : T.BUS_P1;
+        var k2 = psych ? T.PSY_P2 : T.BUS_P2;
+        var c1 = psych ? "#1d4ed8" : "#047857";
+        var c2 = psych ? "#60a5fa" : "#34d399";
+
+        var pts1 = filterValidPoints(
+            items
+                .filter(function (p) {
+                    return normType(p) === k1;
+                })
+                .map(paperToPoint)
+        );
+        var pts2 = filterValidPoints(
+            items
+                .filter(function (p) {
+                    return normType(p) === k2;
+                })
+                .map(paperToPoint)
+        );
+
+        var ds = [];
+        if (pts1.length) {
+            ds.push({
+                label: psych ? "Psychology P1" : "Business P1",
+                data: pts1,
+                parsing: false,
+                borderColor: c1,
+                backgroundColor: "transparent",
+                pointBackgroundColor: c1,
+                pointBorderColor: "#fff",
+                pointBorderWidth: 2,
+                pointRadius: 6,
+                pointHoverRadius: 8,
+                tension: 0.2,
+                fill: false,
+                borderWidth: 2,
+                spanGaps: false,
+            });
+        }
+        if (pts2.length) {
+            ds.push({
+                label: psych ? "Psychology P2" : "Business P2",
+                data: pts2,
+                parsing: false,
+                borderColor: c2,
+                backgroundColor: "transparent",
+                pointBackgroundColor: c2,
+                pointBorderColor: "#fff",
+                pointBorderWidth: 2,
+                pointRadius: 6,
+                pointHoverRadius: 8,
+                tension: 0.2,
+                fill: false,
+                borderWidth: 2,
+                spanGaps: false,
+            });
+        }
+
         var xr = xRangeFromItems(items);
-        var ctx = chartEl.getContext("2d");
         if (perfChart) perfChart.destroy();
 
-        if (G._perfViewMode === "papers") {
-            var busP1 = filterValidPoints(
-                items.filter(function (p) {
-                    return normType(p) === T.BUS_P1;
-                }).map(paperToPoint)
-            );
-            var busP2 = filterValidPoints(
-                items.filter(function (p) {
-                    return normType(p) === T.BUS_P2;
-                }).map(paperToPoint)
-            );
-            var psyP1 = filterValidPoints(
-                items.filter(function (p) {
-                    return normType(p) === T.PSY_P1;
-                }).map(paperToPoint)
-            );
-            var psyP2 = filterValidPoints(
-                items.filter(function (p) {
-                    return normType(p) === T.PSY_P2;
-                }).map(paperToPoint)
-            );
-
-            var ds = [];
-            function addDs(label, data, border, bg, pt) {
-                if (!data.length) return;
-                ds.push({
-                    label: label,
-                    data: data,
-                    parsing: false,
-                    borderColor: border,
-                    backgroundColor: bg,
-                    pointBackgroundColor: pt,
-                    pointBorderColor: "#fff",
-                    pointBorderWidth: 2,
-                    pointRadius: 5,
-                    pointHoverRadius: 7,
-                    tension: 0.2,
-                    fill: false,
-                    borderWidth: 2,
-                    spanGaps: false,
-                });
-            }
-            addDs("Business P1", busP1, "#047857", "transparent", "#047857");
-            addDs("Business P2", busP2, "#34d399", "transparent", "#34d399");
-            addDs("Psychology P1", psyP1, "#1d4ed8", "transparent", "#1d4ed8");
-            addDs("Psychology P2", psyP2, "#60a5fa", "transparent", "#60a5fa");
-
-            if (!ds.length) {
-                if (summaryEl) {
-                    summaryEl.innerHTML =
-                        "No graded papers matched <strong>Business P1/P2</strong> or <strong>Psychology P1/P2</strong> types. Check each record&rsquo;s <code>paper_type</code> in PocketBase.";
-                }
-                perfChart = new Chart(ctx, {
-                    type: "line",
-                    data: { datasets: [] },
-                    options: Object.assign({}, baseChartOptions(xr.min, xr.max), {
-                        plugins: {
-                            legend: { display: false },
-                            title: {
-                                display: true,
-                                text: "No P1/P2 series to plot — paper_type must match Business P1, Business P2, Psychology P1, or Psychology P2.",
-                                color: "#94a3b8",
-                                font: { size: 13, weight: "600" },
-                                padding: { top: 24, bottom: 8 },
-                            },
-                        },
-                    }),
-                });
-                return;
-            }
-
+        if (!ds.length) {
             if (summaryEl) {
                 summaryEl.innerHTML =
-                    "<span class='text-slate-500'>Graded counts:</span> Business P1 <strong>" +
-                    busP1.length +
-                    "</strong>, P2 <strong>" +
-                    busP2.length +
-                    "</strong> · Psychology P1 <strong>" +
-                    psyP1.length +
-                    "</strong>, P2 <strong>" +
-                    psyP2.length +
-                    "</strong>. " +
-                    "<span class='text-slate-500'>Switch to <em>Subject combined</em> for P1+P2 averages.</span>";
+                    "Graded papers found, but none match <strong>" +
+                    (psych ? "Psychology" : "Business") +
+                    "</strong> P1/P2 <code>paper_type</code> values.";
             }
-
-            perfChart = new Chart(ctx, {
-                type: "line",
-                data: { datasets: ds },
-                options: Object.assign({}, baseChartOptions(xr.min, xr.max), {
-                    plugins: Object.assign({}, baseChartOptions(xr.min, xr.max).plugins, {
-                        tooltip: {
-                            backgroundColor: "rgba(15, 23, 42, 0.94)",
-                            padding: 12,
-                            cornerRadius: 8,
-                            callbacks: {
-                                title: function (items) {
-                                    if (!items.length) return "";
-                                    var raw = items[0].raw;
-                                    return raw && raw.paper_title ? raw.paper_title : "";
-                                },
-                                label: function (ctx) {
-                                    var raw = ctx.raw;
-                                    if (!raw || raw.y == null) return "";
-                                    var when = raw.scheduled_date ? fmtDate(parseScheduleTime(raw)) : "";
-                                    var typ = raw.paper_type ? " · " + raw.paper_type : "";
-                                    return " Score: " + raw.y + "% (" + when + typ + ")";
-                                },
-                            },
-                        },
-                    }),
-                }),
-            });
+            if (emptyTl) {
+                emptyTl.classList.remove("hidden");
+                emptyTl.innerHTML =
+                    '<p class="text-sm text-slate-600">No P1 or P2 plot points for this subject. Check <code>paper_type</code> in PocketBase.</p>';
+            }
+            if (panelEl) panelEl.classList.add("hidden");
+            if (perfChart) {
+                perfChart.destroy();
+                perfChart = null;
+            }
             return;
         }
-
-        /* Combined view */
-        var busB = buildCombinedSeries(items, T.BUS_P1, T.BUS_P2, "Business");
-        var psyB = buildCombinedSeries(items, T.PSY_P1, T.PSY_P2, "Psychology");
-
-        var busPoints = busB.points;
-        var psyPoints = psyB.points;
 
         if (summaryEl) {
-            var parts = [];
-            if (busB.latestP1 != null && busB.latestP2 != null) {
-                parts.push(
-                    "<span class='font-bold text-emerald-700'>Business combined</span> (P1+P2 avg): <strong>" +
-                        Math.round((busB.latestP1 + busB.latestP2) / 2) +
-                        "%</strong> <span class='text-slate-400'>— P1: " +
-                        busB.latestP1 +
-                        "%, P2: " +
-                        busB.latestP2 +
-                        "%</span>"
-                );
-            } else {
-                parts.push(
-                    "<span class='font-bold text-emerald-700'>Business combined</span>: <span class='text-amber-700'>not available</span> — grade both <strong>Business P1</strong> and <strong>Business P2</strong>."
-                );
-            }
-            if (psyB.latestP1 != null && psyB.latestP2 != null) {
-                parts.push(
-                    "<span class='font-bold text-blue-700'>Psychology combined</span> (P1+P2 avg): <strong>" +
-                        Math.round((psyB.latestP1 + psyB.latestP2) / 2) +
-                        "%</strong> <span class='text-slate-400'>— P1: " +
-                        psyB.latestP1 +
-                        "%, P2: " +
-                        psyB.latestP2 +
-                        "%</span>"
-                );
-            } else {
-                parts.push(
-                    "<span class='font-bold text-blue-700'>Psychology combined</span>: <span class='text-amber-700'>not available</span> — grade both <strong>Psychology P1</strong> and <strong>Psychology P2</strong>."
-                );
-            }
-            parts.push(
-                "<br><span class='text-slate-500 text-xs'>Trend points appear when the second paper of a pair is graded (or when you refresh the pair); the average uses the latest P1 and P2 scores to date.</span>"
-            );
-            summaryEl.innerHTML = parts.join("<br>");
+            summaryEl.innerHTML =
+                "<span class='text-slate-500'>Points plotted:</span> P1 <strong>" +
+                pts1.length +
+                "</strong>, P2 <strong>" +
+                pts2.length +
+                "</strong>. Each point is one graded paper at its scheduled date.";
         }
 
-        var combinedDatasets = [];
-        if (psyPoints.length) {
-            combinedDatasets.push({
-                label: "Psychology — average (P1 + P2)",
-                data: psyPoints,
-                parsing: false,
-                borderColor: "#2563eb",
-                backgroundColor: "rgba(37, 99, 235, 0.12)",
-                pointBackgroundColor: "#2563eb",
-                pointBorderColor: "#fff",
-                pointBorderWidth: 2,
-                pointRadius: 6,
-                pointHoverRadius: 8,
-                tension: 0.25,
-                fill: true,
-                borderWidth: 3,
-                spanGaps: false,
-            });
-        }
-        if (busPoints.length) {
-            combinedDatasets.push({
-                label: "Business — average (P1 + P2)",
-                data: busPoints,
-                parsing: false,
-                borderColor: "#059669",
-                backgroundColor: "rgba(5, 150, 105, 0.12)",
-                pointBackgroundColor: "#059669",
-                pointBorderColor: "#fff",
-                pointBorderWidth: 2,
-                pointRadius: 6,
-                pointHoverRadius: 8,
-                tension: 0.25,
-                fill: true,
-                borderWidth: 3,
-                spanGaps: false,
-            });
-        }
-
-        if (!combinedDatasets.length) {
-            perfChart = new Chart(ctx, {
-                type: "line",
-                data: { datasets: [] },
-                options: Object.assign({}, baseChartOptions(xr.min, xr.max), {
-                    plugins: {
-                        legend: { display: false },
-                        title: {
-                            display: true,
-                            text: "No combined scores yet — both P1 and P2 must be graded per subject.",
-                            color: "#94a3b8",
-                            font: { size: 14, weight: "600" },
-                            padding: { top: 24, bottom: 8 },
-                        },
-                    },
-                }),
-            });
-            return;
-        }
+        if (emptyTl) emptyTl.classList.add("hidden");
 
         perfChart = new Chart(ctx, {
             type: "line",
-            data: { datasets: combinedDatasets },
+            data: { datasets: ds },
             options: Object.assign({}, baseChartOptions(xr.min, xr.max), {
                 plugins: Object.assign({}, baseChartOptions(xr.min, xr.max).plugins, {
                     tooltip: {
@@ -473,27 +716,16 @@
                         callbacks: {
                             title: function (items) {
                                 if (!items.length) return "";
-                                return items[0].dataset.label || "";
+                                var raw = items[0].raw;
+                                return raw && raw.paper_title ? raw.paper_title : "";
                             },
-                                label: function (ctx) {
+                            label: function (ctx) {
                                 var raw = ctx.raw;
-                                if (!raw) return "";
+                                if (!raw || raw.y == null) return "";
                                 var when = raw.scheduled_date ? fmtDate(parseScheduleTime(raw)) : "";
-                                return (
-                                    " Combined: " +
-                                    raw.y +
-                                    "%  (P1: " +
-                                    raw.p1Score +
-                                    "%, P2: " +
-                                    raw.p2Score +
-                                    "%) · " +
-                                    when
-                                );
-                            },
-                            afterLabel: function (ctx) {
-                                var raw = ctx.raw;
-                                if (raw && raw.afterPaper) return "After: " + raw.afterPaper;
-                                return "";
+                                var typ = raw.paper_type ? " · " + raw.paper_type : "";
+                                var yr = raw.examYear ? " · exam year " + raw.examYear : "";
+                                return " Score: " + raw.y + "% (" + when + typ + yr + ")";
                             },
                         },
                     },

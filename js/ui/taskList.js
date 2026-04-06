@@ -19,18 +19,36 @@
         const accent = psych ? "bg-blue-500" : "bg-emerald-500";
         const showLog = opts.showLogButton !== false && !graded;
 
-        const statusBadge = `<span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-            graded ? "bg-emerald-100 text-emerald-800" : paper.status === "Completed" ? "bg-amber-100 text-amber-900" : "bg-slate-100 text-slate-600"
-        }">${esc(paper.status)}</span>`;
+        const ux = G.backlogUxStatus(paper);
+        const badgeTone =
+            ux === "Marked"
+                ? "bg-emerald-100 text-emerald-800"
+                : ux === "Complete"
+                  ? "bg-amber-100 text-amber-900"
+                  : ux === "Scheduled"
+                    ? "bg-sky-100 text-sky-900"
+                    : ux === "To be scheduled"
+                      ? "bg-orange-100 text-orange-950"
+                    : ux === "To be uploaded"
+                        ? "bg-slate-200 text-slate-700"
+                        : "bg-slate-100 text-slate-600";
+        const statusBadge = `<span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${badgeTone}">${esc(ux)}</span>`;
+
+        const showSetDate = !graded && G.isUnscheduledPaper(paper);
+        const setDateBtn = showSetDate
+            ? `<button type="button" class="js-set-sitting-date w-full sm:w-auto bg-white text-slate-900 border-2 border-slate-200 px-4 py-2 rounded-xl font-black text-xs uppercase hover:border-blue-500 hover:text-blue-600 shrink-0" data-id="${esc(paper.id)}">Set date</button>`
+            : "";
 
         const actionBlock = graded
             ? `<div class="text-right shrink-0">
             <p class="text-2xl font-black text-emerald-600">${paper.score ?? "—"}%</p>
             <p class="text-[10px] font-black text-slate-400 uppercase">Grade: ${gradeDisplay}</p>
           </div>`
-            : showLog
-              ? `<button type="button" class="js-log-result bg-slate-900 text-white px-5 py-2 rounded-xl font-black text-xs uppercase hover:bg-slate-800 shrink-0" data-id="${esc(paper.id)}">Log Result</button>`
-              : "";
+            : `<div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">${setDateBtn}${
+                  showLog
+                      ? `<button type="button" class="js-log-result bg-slate-900 text-white px-5 py-2 rounded-xl font-black text-xs uppercase hover:bg-slate-800" data-id="${esc(paper.id)}">Log Result</button>`
+                      : ""
+              }</div>`;
 
         const detailId = `detail-${paper.id}`;
         const hasYaml = graded && paper.full_yaml;
@@ -54,7 +72,12 @@
                         ${statusBadge}
                     </div>
                     <h3 class="font-bold text-slate-800 truncate">${esc(paper.paper_title)}</h3>
-                    <p class="text-[10px] text-slate-400">${esc(paper.scheduled_date || "")}</p>
+                    <p class="text-[10px] ${G.isUnscheduledPaper(paper) ? "text-amber-700 font-bold" : "text-slate-400"}">${
+                        G.isUnscheduledPaper(paper)
+                            ? "No sitting date yet · use Set date"
+                            : (paper.year != null && paper.year !== "" ? esc("Exam " + paper.year + " · ") : "") +
+                              esc(String(paper.scheduled_date || ""))
+                    }</p>
                     <div class="flex gap-3 mt-1">
                         ${paperUrl ? `<a href="${esc(paperUrl)}" target="_blank" rel="noopener" class="text-[10px] font-bold text-blue-500">PAPER</a>` : ""}
                         ${schemeUrl ? `<a href="${esc(schemeUrl)}" target="_blank" rel="noopener" class="text-[10px] font-bold text-emerald-500">SCHEME</a>` : ""}
