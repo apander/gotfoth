@@ -6,133 +6,233 @@
     <title>gotfoth. | Study Vault</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans">
     <div class="flex flex-col md:flex-row min-h-screen">
-        
+
         <aside class="w-full md:w-64 bg-slate-900 text-white p-6 flex flex-col fixed md:h-full z-10">
             <h1 class="text-2xl font-black tracking-tighter mb-8 text-blue-400">gotfoth.</h1>
             <nav class="space-y-2 flex-grow">
-                <button id="btn-tasks" onclick="showView('tasks')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all bg-slate-800 text-blue-400">
-                    🚀 Action Plan
+                <button type="button" id="btn-dashboard" onclick="showView('dashboard')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all bg-slate-800 text-blue-400">
+                    Dashboard
                 </button>
-                <button id="btn-vault" onclick="showView('vault')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all text-slate-400 hover:bg-slate-800">
-                    📁 Paper Vault
+                <button type="button" id="btn-action" onclick="showView('action')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all text-slate-400 hover:bg-slate-800">
+                    Action plan
                 </button>
-                <button id="btn-progress" onclick="showView('progress')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all text-slate-400 hover:bg-slate-800">
-                    📊 Performance
+                <button type="button" id="btn-vault" onclick="showView('vault')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all text-slate-400 hover:bg-slate-800">
+                    Paper vault
+                </button>
+                <button type="button" id="btn-progress" onclick="showView('progress')" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all text-slate-400 hover:bg-slate-800">
+                    Performance
                 </button>
             </nav>
-            
+
             <div class="pt-6 border-t border-slate-800">
-                <label class="text-[10px] font-black uppercase text-slate-500 mb-2 block">Focus Filter</label>
-                <select id="subjectFilter" onchange="loadTasks()" class="w-full bg-slate-800 border-none rounded-lg p-2 text-xs font-bold outline-none text-white">
-                    <option value="all">All Subjects</option>
+                <label class="text-[10px] font-black uppercase text-slate-500 mb-2 block">Focus filter</label>
+                <select id="subjectFilter" class="w-full bg-slate-800 border-none rounded-lg p-2 text-xs font-bold outline-none text-white">
+                    <option value="all">All subjects</option>
                     <option value="Psychology">Psychology</option>
                     <option value="Business Studies">Business Studies</option>
                 </select>
             </div>
         </aside>
 
-        <main class="flex-grow md:ml-64 p-4 md:p-6 pt-24 md:pt-6 w-full">
-            
-            <div id="view-tasks" class="view-content">
-                <div id="exam-timeline" class="flex gap-4 overflow-x-auto pb-6 no-scrollbar snap-x"></div>
-                
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
-                    <div class="lg:col-span-8 bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                        <div class="flex justify-between items-center mb-4 px-2">
-                            <h3 id="calendar-month" class="text-sm font-black uppercase tracking-widest text-slate-400">April 2026</h3>
-                            <div class="flex gap-4 text-[10px] font-bold text-slate-400 uppercase">
+        <main class="flex-grow md:ml-64 p-4 md:p-6 pt-24 md:pt-6 w-full max-w-6xl mx-auto">
+
+            <!-- Dashboard: countdowns + sprint only -->
+            <div id="view-dashboard" class="view-content hidden">
+                <h2 class="text-xl font-black text-slate-800 mb-4 tracking-tight">Dashboard</h2>
+                <div id="exam-timeline" class="flex gap-3 overflow-x-auto pb-4 no-scrollbar snap-x mb-8"></div>
+
+                <div class="bg-slate-900 p-6 rounded-3xl text-white shadow-lg mb-8">
+                    <h3 class="text-blue-400 font-black text-lg mb-1 text-center">Sprint status</h3>
+                    <p class="text-slate-400 text-[10px] text-center mb-6 uppercase tracking-widest">Focus: <span id="current-focus-label" class="text-white">All</span></p>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <div class="flex justify-between text-[10px] font-bold uppercase mb-1 text-slate-500">
+                                <span>Psychology graded</span>
+                                <span id="sprint-pct-psy" class="text-emerald-400">0%</span>
+                            </div>
+                            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                <div id="sprint-bar-psy" class="bg-blue-500 h-full transition-all duration-700" style="width:0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] font-bold uppercase mb-1 text-slate-500">
+                                <span>Business graded</span>
+                                <span id="sprint-pct-bus" class="text-emerald-400">0%</span>
+                            </div>
+                            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                <div id="sprint-bar-bus" class="bg-emerald-500 h-full transition-all duration-700" style="width:0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between text-[10px] font-bold uppercase mb-2">
+                        <span class="text-slate-500">Overall completion</span>
+                        <span id="sprint-progress-text" class="text-emerald-400">0%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-6">
+                        <div id="sprint-progress-bar" class="bg-emerald-500 h-full transition-all duration-700" style="width:0%"></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center text-sm">
+                        <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                            <p class="text-2xl font-black" id="sprint-remaining">0</p>
+                            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">To grade</p>
+                        </div>
+                        <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50" id="sprint-next-due-card">
+                            <p class="text-xs font-bold text-slate-300 leading-snug transition-colors" id="sprint-next-due">—</p>
+                            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1 transition-colors" id="sprint-next-due-label">Next due</p>
+                        </div>
+                        <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                            <p class="text-2xl font-black" id="sprint-week-due">0</p>
+                            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Due this week</p>
+                        </div>
+                    </div>
+                    <p class="text-center text-[10px] text-slate-500 mt-4">Nearest exam: <span id="sprint-nearest-exam" class="text-slate-300 font-bold">—</span></p>
+                </div>
+            </div>
+
+            <!-- Action plan: queue (left) + calendar (right) on large screens -->
+            <div id="view-action" class="view-content hidden">
+                <h2 class="text-xl font-black text-slate-800 mb-4 md:mb-6 tracking-tight">Action plan</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+                    <div class="lg:col-span-5 min-w-0">
+                        <h3 class="text-lg font-black text-slate-800 mb-3">Queue</h3>
+                        <div id="task-list"></div>
+                    </div>
+                    <div class="lg:col-span-7 min-w-0">
+                        <div class="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm w-full lg:sticky lg:top-6">
+                            <div class="flex items-center justify-between mb-3">
+                                <button type="button" id="cal-prev" class="px-3 py-1 rounded-lg bg-slate-100 text-xs font-bold hover:bg-slate-200" aria-label="Previous month">←</button>
+                                <div class="flex items-center gap-2">
+                                    <h3 id="calendar-month" class="text-xs font-black uppercase tracking-widest text-slate-500"></h3>
+                                    <button type="button" id="cal-today" class="text-[10px] font-bold text-blue-600 uppercase">Today</button>
+                                </div>
+                                <button type="button" id="cal-next" class="px-3 py-1 rounded-lg bg-slate-100 text-xs font-bold hover:bg-slate-200" aria-label="Next month">→</button>
+                            </div>
+                            <div class="grid grid-cols-7 gap-1 text-[9px] font-bold text-slate-400 uppercase text-center mb-1">
                                 <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
                             </div>
-                        </div>
-                        <div id="calendar-grid" class="grid grid-cols-7 gap-2"></div>
-                    </div>
-                    
-                    <div class="lg:col-span-4 bg-slate-900 p-6 rounded-3xl text-white flex flex-col justify-between shadow-lg">
-                        <div>
-                            <h3 class="text-blue-400 font-black text-lg mb-1 text-center">Sprint Status</h3>
-                            <p class="text-slate-400 text-[10px] text-center mb-4 uppercase tracking-widest">Focus: <span id="current-focus-label" class="text-white">All</span></p>
-                        </div>
-                        <div class="space-y-6">
-                            <div>
-                                <div class="flex justify-between text-[10px] font-bold uppercase mb-2">
-                                    <span class="text-slate-500">Completion</span>
-                                    <span id="progress-text" class="text-emerald-400">0%</span>
-                                </div>
-                                <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                    <div id="progress-bar" class="bg-emerald-500 h-full transition-all duration-700" style="width: 0%"></div>
-                                </div>
-                            </div>
-                            <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50 text-center">
-                                <p class="text-3xl font-black" id="pending-count">0</p>
-                                <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Papers Remaining</p>
-                            </div>
+                            <div id="calendar-grid"></div>
+                            <p class="text-[10px] text-slate-500 mt-3 leading-relaxed">
+                                <span class="font-bold text-violet-600">Violet ring</span> = official exam date from PocketBase settings.
+                                Coloured dots show multiple exams on the same day. Blue/sky = revision papers scheduled; green = all graded that day.
+                            </p>
                         </div>
                     </div>
                 </div>
-
-                <h2 class="text-xl font-black text-slate-800 mb-4 tracking-tight">Active Action Plan</h2>
-                <div id="task-list" class="grid gap-4"></div>
             </div>
 
+            <!-- Vault -->
             <div id="view-vault" class="view-content hidden">
-                <div class="max-w-2xl mx-auto pt-10">
-                    <h2 class="text-2xl font-black text-slate-800 mb-2">Paper Vault</h2>
-                    <p class="text-slate-400 text-sm mb-8 font-medium">Upload new exam materials to your local NAS storage.</p>
-                    
-                    <div class="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="space-y-1">
-                                <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Paper Title</label>
-                                <input type="text" id="paperTitle" placeholder="e.g. 2023 Paper 1" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:border-blue-500">
-                            </div>
-                            <div class="space-y-1">
-                                <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Subject</label>
-                                <select id="paperSub" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none">
-                                    <option value="Psychology">Psychology</option>
-                                    <option value="Business Studies">Business Studies</option>
-                                </select>
-                            </div>
-                        </div>
-                        
+                <h2 class="text-2xl font-black text-slate-800 mb-2">Paper vault</h2>
+                <p class="text-slate-400 text-sm mb-6 font-medium">Deposit materials to PocketBase on your NAS.</p>
+
+                <form id="vault-deposit-form" class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5 mb-10" onsubmit="event.preventDefault(); savePaper();">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div class="space-y-1">
-                            <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Target Date</label>
-                            <input type="date" id="paperDate" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm">
+                            <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Paper title</label>
+                            <input type="text" id="paperTitle" required placeholder="e.g. 2023 Paper 1" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:border-blue-500">
                         </div>
-
-                        <div class="space-y-4 pt-4 border-t border-slate-100">
-                            <div class="bg-slate-50 p-4 rounded-2xl">
-                                <label class="text-[10px] font-black text-slate-400 uppercase block mb-2">1. Question Paper (PDF)</label>
-                                <input type="file" id="filePaper" class="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-600 file:text-white font-bold cursor-pointer">
-                            </div>
-                            <div class="bg-slate-50 p-4 rounded-2xl">
-                                <label class="text-[10px] font-black text-slate-400 uppercase block mb-2">2. Mark Scheme (PDF)</label>
-                                <input type="file" id="fileScheme" class="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-emerald-600 file:text-white font-bold cursor-pointer">
-                            </div>
-                            <div class="bg-slate-50 p-4 rounded-2xl">
-                                <label class="text-[10px] font-black text-slate-400 uppercase block mb-2">3. Student Attempt (Scan)</label>
-                                <input type="file" id="fileAttempt" class="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-amber-600 file:text-white font-bold cursor-pointer">
-                            </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Subject</label>
+                            <select id="paperSub" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none">
+                                <option value="Psychology">Psychology</option>
+                                <option value="Business Studies">Business Studies</option>
+                            </select>
                         </div>
-
-                        <button onclick="savePaper()" class="w-full bg-slate-900 text-white p-4 rounded-2xl font-black uppercase tracking-widest hover:bg-blue-600 transition shadow-lg active:scale-95">
-                            Deposit to NAS Vault
-                        </button>
                     </div>
-                </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Paper</label>
+                            <select id="paperP" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none">
+                                <option value="P1">P1</option>
+                                <option value="P2">P2</option>
+                            </select>
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Target date</label>
+                            <input type="date" id="paperDate" required class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm">
+                        </div>
+                    </div>
+
+                    <div class="space-y-3 pt-2 border-t border-slate-100">
+                        <div class="bg-slate-50 p-4 rounded-2xl">
+                            <label class="text-[10px] font-black text-slate-400 block mb-2">1. Question paper (PDF)</label>
+                            <input type="file" id="filePaper" accept=".pdf,application/pdf" class="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-600 file:text-white font-bold cursor-pointer">
+                        </div>
+                        <div class="bg-slate-50 p-4 rounded-2xl">
+                            <label class="text-[10px] font-black text-slate-400 block mb-2">2. Mark scheme (PDF)</label>
+                            <input type="file" id="fileScheme" accept=".pdf,application/pdf" class="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-emerald-600 file:text-white font-bold cursor-pointer">
+                        </div>
+                        <div class="bg-slate-50 p-4 rounded-2xl">
+                            <label class="text-[10px] font-black text-slate-400 block mb-2">3. Student attempt (optional)</label>
+                            <input type="file" id="fileAttempt" class="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-amber-600 file:text-white font-bold cursor-pointer">
+                        </div>
+                    </div>
+
+                    <div class="bg-amber-50/80 p-4 rounded-2xl border border-amber-100">
+                        <label class="text-[10px] font-black text-amber-900 uppercase block mb-2">Historic: paste Gemini YAML (optional)</label>
+                        <p class="text-[11px] text-amber-900/80 mb-2">If set, record is created as graded in one step (backfill).</p>
+                        <textarea id="historicYaml" rows="5" placeholder="```yaml&#10;score: 72&#10;...&#10;```" class="w-full p-3 rounded-xl border border-amber-200 text-xs font-mono outline-none"></textarea>
+                    </div>
+
+                    <button type="submit" class="w-full bg-slate-900 text-white p-4 rounded-2xl font-black uppercase tracking-widest hover:bg-blue-600 transition shadow-lg active:scale-[0.99]">
+                        Deposit
+                    </button>
+                </form>
+
+                <h3 class="text-lg font-black text-slate-800 mb-3">Library</h3>
+                <div id="vault-paper-grid"></div>
             </div>
 
+            <!-- Performance -->
             <div id="view-progress" class="view-content hidden">
-                <h2 class="text-xl font-black mb-6 text-slate-800">Performance Tracking</h2>
-                <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                    <canvas id="mainChart"></canvas>
+                <h2 class="text-xl font-black mb-2 text-slate-800">Performance</h2>
+                <div class="flex flex-wrap gap-2 mb-3" id="performance-nav" role="tablist" aria-label="Performance chart view">
+                    <button type="button" id="perf-tab-papers" class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide bg-slate-900 text-white shadow-sm">
+                        By paper (P1 &amp; P2)
+                    </button>
+                    <button type="button" id="perf-tab-combined" class="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide bg-slate-100 text-slate-600 hover:bg-slate-200">
+                        Subject combined
+                    </button>
+                </div>
+                <p id="performance-help" class="text-sm text-slate-500 mb-3 max-w-3xl leading-relaxed"></p>
+                <div id="performance-empty" class="hidden bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-500 text-sm">
+                    No graded papers yet. Mark some papers to see trends here.
+                </div>
+                <div id="performance-chart-panel" class="bg-white p-4 md:p-6 rounded-3xl border border-slate-200 shadow-sm">
+                    <div class="relative h-72 md:h-80 w-full">
+                        <canvas id="mainChart"></canvas>
+                    </div>
+                    <p id="performance-summary" class="mt-4 text-xs md:text-sm text-slate-600 border-t border-slate-100 pt-4"></p>
                 </div>
             </div>
         </main>
     </div>
-    <script src="app.js"></script>
+    <!-- Classic scripts: ES modules fail on file:// in Chrome; this layout works opened from disk or via http:// -->
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/api/client.js"></script>
+    <script src="js/domain/grade.js"></script>
+    <script src="js/domain/paperStatus.js"></script>
+    <script src="js/domain/yamlMarking.js"></script>
+    <script src="js/services/boundaries.js"></script>
+    <script src="js/services/settings.js"></script>
+    <script src="js/services/papers.js"></script>
+    <script src="js/ui/router.js"></script>
+    <script src="js/ui/calendar.js"></script>
+    <script src="js/ui/dashboard.js"></script>
+    <script src="js/ui/sprint.js"></script>
+    <script src="js/ui/taskList.js"></script>
+    <script src="js/ui/chart.js"></script>
+    <script src="js/main.js"></script>
 </body>
 </html>

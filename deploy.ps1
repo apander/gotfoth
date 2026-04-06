@@ -8,7 +8,7 @@ Write-Host "🚀 Deploying to Command Center at $nasIP..." -ForegroundColor Cyan
 # Check if the NAS folder is accessible
 if (Test-Path $nasPath) {
     Copy-Item "index.html" -Destination $nasPath -Force
-    Copy-Item "app.js" -Destination $nasPath -Force
+    Copy-Item "js" -Destination $nasPath -Recurse -Force
     Write-Host "✅ Files pushed successfully!" -ForegroundColor Green
     Write-Host "👉 Refresh browser with Ctrl+F5 now." -ForegroundColor Yellow
 } else {
