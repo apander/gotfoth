@@ -1,0 +1,65 @@
+[
+  {
+    "name": "boundaries",
+    "type": "base",
+    "system": false,
+    "schema": [
+      {
+        "name": "subject",
+        "type": "text",
+        "required": true,
+        "unique": true,
+        "options": {
+          "min": null,
+          "max": null,
+          "pattern": ""
+        }
+      },
+      {
+        "name": "max_mark",
+        "type": "number",
+        "required": true,
+        "options": {
+          "min": null,
+          "max": null
+        }
+      },
+      {
+        "name": "a_star",
+        "type": "number",
+        "options": { "min": null, "max": null }
+      },
+      {
+        "name": "a",
+        "type": "number",
+        "options": { "min": null, "max": null }
+      },
+      {
+        "name": "b",
+        "type": "number",
+        "options": { "min": null, "max": null }
+      },
+      {
+        "name": "c",
+        "type": "number",
+        "options": { "min": null, "max": null }
+      },
+      {
+        "name": "d",
+        "type": "number",
+        "options": { "min": null, "max": null }
+      },
+      {
+        "name": "e",
+        "type": "number",
+        "options": { "min": null, "max": null }
+      }
+    ],
+    "listRule": "",
+    "viewRule": "",
+    "createRule": null,
+    "updateRule": null,
+    "deleteRule": null,
+    "indexes": []
+  }
+]
