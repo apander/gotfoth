@@ -1,3 +1,4 @@
+//Initialise vars
 const PB_URL = "http://mycloudex2ultra.local:8090";
 let myChart;
 let dbBoundaries = [];
