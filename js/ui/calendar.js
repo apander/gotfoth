@@ -26,6 +26,76 @@
             .replace(/</g, "&lt;");
     }
 
+    function paperTaskHref(p) {
+        const pdf = G.fileUrl(p, "file_paper");
+        if (pdf) return pdf;
+        return G.PB_URL + "/_/#/collections/papers/records/" + encodeURIComponent(String(p.id || ""));
+    }
+
+    function paperTaskTip(p) {
+        const parts = [];
+        parts.push(G.derivedPaperDisplayName ? G.derivedPaperDisplayName(p) : String(p.paper_type || "Paper"));
+        parts.push(G.isGraded(p.status) ? "Status: Marked" : "Status: To complete / mark");
+        if (p.score != null && G.isGraded(p.status)) parts.push("Score: " + p.score + "%");
+        return parts.join(" · ");
+    }
+
+    /**
+     * Full-width horizontal bar; anchor opens paper PDF or PocketBase record.
+     * @param {boolean} onDarkCell — emerald / exam+graded backgrounds (light text).
+     */
+    function paperBarHtml(p, onDarkCell) {
+        const graded = G.isGraded(p.status);
+        var barClass;
+        var textClass;
+        if (onDarkCell) {
+            barClass = graded
+                ? "bg-white/25 border border-white/45 hover:bg-white/35"
+                : "bg-sky-100/90 border border-white/50 hover:bg-sky-50";
+            textClass = "text-white";
+        } else {
+            barClass = graded
+                ? "bg-emerald-100/95 border border-emerald-800/30 hover:bg-emerald-50"
+                : "bg-sky-200/95 border border-sky-600/35 hover:bg-sky-100";
+            textClass = "text-slate-900";
+        }
+        const href = escAttr(paperTaskHref(p));
+        const tip = escAttr(paperTaskTip(p));
+        const label = escAttr(
+            (G.derivedPaperDisplayName ? G.derivedPaperDisplayName(p) : p.paper_type || "Paper").slice(0, 42)
+        );
+        return (
+            '<a href="' +
+            href +
+            '" target="_blank" rel="noopener" title="' +
+            tip +
+            '" class="cal-task-bar flex items-center min-h-[7px] w-full rounded-sm px-1 ' +
+            barClass +
+            ' shadow-sm">' +
+            '<span class="flex-1 min-w-0 truncate text-[6px] sm:text-[7px] font-bold ' +
+            textClass +
+            ' leading-none">' +
+            label +
+            "</span></a>"
+        );
+    }
+
+    function staticBarHtml(opts) {
+        const bg = opts.bgClass || "bg-slate-600";
+        const tip = escAttr(opts.title || opts.label || "");
+        const label = escAttr(String(opts.label || "").slice(0, 42));
+        return (
+            '<span title="' +
+            tip +
+            '" class="cal-task-bar flex items-center min-h-[7px] w-full rounded-sm px-1 ' +
+            bg +
+            ' text-white shadow-sm cursor-default">' +
+            '<span class="flex-1 min-w-0 truncate text-[6px] sm:text-[7px] font-bold leading-none">' +
+            label +
+            "</span></span>"
+        );
+    }
+
     /**
      * @param {string} [subjectFilter] "all" | "Psychology" | "Business Studies" — limits exam dots to that subject line.
      * @returns {Record<string, Array<{ label: string, color: string }>>}
@@ -125,8 +195,10 @@
         for (let i = 0; i < firstWeekday; i++) {
             cells.push(`<div class="aspect-square rounded-md bg-slate-100/80 border border-transparent"></div>`);
         }
+        const todayYmd = G.dateToYmdLocal(new Date());
         for (let day = 1; day <= daysInMonth; day++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+            const isToday = dateStr === todayYmd;
             const dayPapers = papers.filter(
                 (p) => typeof p.scheduled_date === "string" && p.scheduled_date.startsWith(dateStr)
             );
@@ -163,57 +235,57 @@
                 examBannerHtml =
                     '<span class="mt-0.5 mb-0.5 shrink-0 rounded px-1 py-0.5 text-[7px] sm:text-[8px] font-black uppercase tracking-wide text-white bg-violet-700 shadow-sm leading-none max-w-full truncate text-center" title="' +
                     examLabels +
-                    '">Exam</span>';
+                    '">Exam day</span>';
             }
 
-            const tipParts = [];
-            for (let e = 0; e < examsThisDay.length; e++) {
-                tipParts.push("Exam: " + examsThisDay[e].label);
-            }
-            for (let p = 0; p < dayPapers.length; p++) {
-                tipParts.push(String(dayPapers[p].paper_title || ""));
-            }
-            for (let g = 0; g < importedThisDay.length; g++) {
-                tipParts.push("Google: " + importedThisDay[g].label);
-            }
-            const titleAttr = tipParts.length ? ' title="' + escAttr(tipParts.join(" · ")) + '"' : "";
+            const todayLabelHtml = isToday
+                ? '<span class="mt-0.5 block text-center text-[6px] sm:text-[7px] font-black uppercase tracking-wide text-amber-950 bg-amber-200 rounded px-0.5 py-px leading-tight shadow-sm ring-1 ring-amber-500/60">Today</span>'
+                : "";
 
-            let examEntriesHtml = "";
-            if (examsThisDay.length) {
-                const maxEntries = 2;
-                const show = examsThisDay.slice(0, maxEntries);
-                for (let e = 0; e < show.length; e++) {
-                    examEntriesHtml +=
-                        '<div class="w-full px-1 py-0.5 rounded bg-violet-700/90 text-white text-[7px] sm:text-[8px] font-black truncate leading-none" title="' +
-                        escAttr(show[e].label) +
-                        '">' +
-                        escAttr(show[e].label) +
-                        "</div>";
-                }
-                if (examsThisDay.length > maxEntries) {
-                    examEntriesHtml +=
-                        '<div class="text-[7px] font-black text-violet-800 leading-none">+' +
-                        (examsThisDay.length - maxEntries) +
-                        " more</div>";
-                }
+            const onDarkPaperBars = allGraded && hasPapers;
+
+            let barsHtml = "";
+            const barStack = [];
+            for (let pi = 0; pi < dayPapers.length; pi++) {
+                barStack.push(paperBarHtml(dayPapers[pi], onDarkPaperBars));
             }
-            if (importedThisDay.length) {
-                const maxImported = 2;
-                const showImported = importedThisDay.slice(0, maxImported);
-                for (let g = 0; g < showImported.length; g++) {
-                    examEntriesHtml +=
-                        '<div class="w-full px-1 py-0.5 rounded bg-slate-700/85 text-white text-[7px] sm:text-[8px] font-bold truncate leading-none" title="' +
-                        escAttr(showImported[g].label) +
-                        '">' +
-                        escAttr(showImported[g].label) +
-                        "</div>";
-                }
-                if (importedThisDay.length > maxImported) {
-                    examEntriesHtml +=
-                        '<div class="text-[7px] font-black text-slate-700 leading-none">+' +
-                        (importedThisDay.length - maxImported) +
-                        " more</div>";
-                }
+            for (let gi = 0; gi < importedThisDay.length; gi++) {
+                barStack.push(
+                    staticBarHtml({
+                        label: importedThisDay[gi].label,
+                        title: "Google Calendar: " + importedThisDay[gi].label,
+                        bgClass: "bg-slate-700",
+                    })
+                );
+            }
+            for (let ei = 0; ei < examsThisDay.length; ei++) {
+                barStack.push(
+                    staticBarHtml({
+                        label: examsThisDay[ei].label,
+                        title: "Official exam: " + examsThisDay[ei].label,
+                        bgClass: "bg-violet-700",
+                    })
+                );
+            }
+            const maxBars = 4;
+            if (barStack.length) {
+                const show = barStack.slice(0, maxBars);
+                barsHtml =
+                    '<div class="flex flex-col gap-0.5 justify-end items-stretch w-full mt-auto px-0.5 flex-1 min-h-0 overflow-hidden">' +
+                    show.join("") +
+                    (barStack.length > maxBars
+                        ? '<span class="text-[6px] font-black text-slate-600 text-center leading-none">+' +
+                          (barStack.length - maxBars) +
+                          " more</span>"
+                        : "") +
+                    "</div>";
+            } else {
+                barsHtml = '<span class="h-1 min-h-[2px] block mt-auto"></span>';
+            }
+
+            let todayRingClass = "";
+            if (isToday) {
+                todayRingClass = hasExam ? " ring-2 ring-amber-300 ring-offset-1" : " ring-2 ring-amber-400 ring-offset-1";
             }
 
             const dayNumClass =
@@ -222,19 +294,19 @@
             cells.push(
                 '<div class="aspect-square rounded-lg text-[9px] font-bold flex flex-col items-stretch justify-between py-1 px-0.5 min-h-[2.75rem] sm:min-h-14 ' +
                     color +
-                    examExtraClass  +
-                    '"' +
-                    titleAttr +
-                    ">" +
+                    examExtraClass +
+                    todayRingClass +
+                    '">' +
+                    '<div class="shrink-0 flex flex-col items-stretch gap-0.5">' +
                     '<span class="' +
                     dayNumClass +
                     ' leading-none text-center font-black">' +
                     day +
                     "</span>" +
+                    todayLabelHtml +
+                    "</div>" +
                     examBannerHtml +
-                    (examEntriesHtml
-                        ? '<div class="flex flex-col gap-0.5 justify-center items-stretch w-full mt-auto px-0.5">' + examEntriesHtml + "</div>"
-                        : '<span class="h-1 min-h-[2px] block"></span>') +
+                    barsHtml +
                     "</div>"
             );
         }

@@ -1,6 +1,9 @@
 (function (w) {
     const G = w.GF;
 
+    var SETTINGS_GEAR_SVG =
+        '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>';
+
     function esc(s) {
         return String(s ?? "")
             .replace(/&/g, "&amp;")
@@ -42,7 +45,7 @@
             return (
                 '<button type="button" class="js-view-yaml-comments mt-2 w-full px-2 py-1.5 rounded-lg bg-emerald-700 text-white text-[9px] font-black uppercase tracking-wide hover:bg-emerald-600 transition shrink-0" data-id="' +
                 esc(String(p.id)) +
-                '">View comments</button>'
+                '">View marking</button>'
             );
         }
         return (
@@ -57,7 +60,7 @@
             p && G.isGraded(p.status) && p.score != null && !Number.isNaN(Number(p.score))
                 ? '<span class="font-black tabular-nums">' + esc(String(p.score)) + "%</span>"
                 : "—";
-        const title = p && p.paper_title ? esc(String(p.paper_title)) : "";
+        const title = p && G.derivedPaperDisplayName ? esc(G.derivedPaperDisplayName(p)) : "";
         const sub =
             '<div class="text-[10px] text-slate-500 truncate max-w-[220px]" title="' +
             title +
@@ -65,13 +68,24 @@
             (title || "\u00a0") +
             "</div>";
         var actionBtn = nextActionButton(p, ux, subject, year, paperNum, isNoPaperYear);
+        var settingsBtn =
+            p && !isNoPaperYear
+                ? '<button type="button" class="js-exam-settings -mr-0.5 -mt-0.5 p-1 rounded-lg text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition shrink-0" data-id="' +
+                  esc(String(p.id)) +
+                  '" title="Exam settings" aria-label="Exam settings">' +
+                  SETTINGS_GEAR_SVG +
+                  "</button>"
+                : "";
         return (
             '<td class="px-3 py-2 align-top">' +
+            '<div class="flex items-start justify-between gap-1">' +
             '<span class="inline-flex px-2 py-1 rounded-lg border text-[10px] font-black uppercase tracking-wide leading-tight ' +
             statusCellClass(ux) +
             '">' +
             esc(ux) +
             "</span>" +
+            settingsBtn +
+            "</div>" +
             '<div class="mt-1 text-[11px] font-bold text-slate-700">' +
             sc +
             "</div>" +

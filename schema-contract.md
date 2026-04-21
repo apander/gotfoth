@@ -8,17 +8,17 @@ The UI loads as **classic scripts** (not ES modules) so it runs when you open `i
 
 | Field | Type | Notes |
 |-------|------|--------|
-| `paper_title` | text | Required for deposit |
 | `subject` | select | e.g. `Psychology`, `Business Studies` |
 | `year` | text | Exam cohort year (e.g. `2023`), stored as text in PocketBase — used for backlog grid and performance (P1/P2 pairing). |
-| `paper_type` | select | Must match `boundaries.paper_key` (e.g. `Business P1`, not `Business Studies P1`) |
+| `paper_type` | select | Must match `boundaries.paper_key` (e.g. `Business P1`). The UI derives a display label: `{subject} Paper 1|2 {year}` via [`js/domain/paperMeta.js`](js/domain/paperMeta.js). |
 | `status` | select | `Planned` → `Completed` → graded terminal state |
 | `scheduled_date` | date | ISO with time. If omitted at deposit, the app sends `2099-12-31 …` as “not scheduled yet” until you set a real date in PocketBase. |
 | `score` | number | 0–100 when graded |
 | `max_score` | number | Optional |
 | `file_paper`, `file_scheme`, `file_attempt` | file | |
+| `file_marking_yaml` | file | Optional. When pasted YAML exceeds `full_yaml` max length (5000 chars in default rules), the app stores a short stub in `full_yaml` and uploads the full body here. Add this field in PocketBase Admin as **file**, not required. |
 | `ai_summary` | text | From YAML `feedback_summary` |
-| `full_yaml` | text | Raw Gemini YAML |
+| `full_yaml` | text | Raw marking YAML (or stub `_gotfoth_marking_yaml_storage: file` when overflow is in `file_marking_yaml`) |
 
 ### Status workflow
 
@@ -80,6 +80,8 @@ The schedule calendar shows this as **Last Google sync** above the month grid.
 ### Example cron entry (every 15 minutes)
 
 `*/15 * * * * /usr/bin/python /path/to/gotfoth/sync_google_ics.py >> /var/log/gcal_sync.log 2>&1`
+
+The SPA **Exams** view can **PATCH** records (multipart; new files optional) and **DELETE** records when PocketBase API rules allow it.
 
 ## Verification
 

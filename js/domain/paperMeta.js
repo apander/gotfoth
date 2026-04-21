@@ -17,6 +17,49 @@
         return null;
     };
 
+    /**
+     * Human-readable label without `paper_title` — subject + Paper 1|2 + year.
+     * Fallback when year or subject missing: still uses paper_type snippet if needed.
+     */
+    G.derivedPaperDisplayName = function (paper) {
+        if (!paper) return "";
+        var subject = String(paper.subject || "").trim();
+        var n = G.paperNumFromType(paper);
+        var paperPhrase = n === 1 ? "Paper 1" : n === 2 ? "Paper 2" : "";
+        var yRaw = paper.year;
+        var y =
+            yRaw != null && yRaw !== ""
+                ? String(yRaw).trim()
+                : G.parsePaperYear(paper) != null
+                  ? String(G.parsePaperYear(paper))
+                  : "";
+        var parts = [];
+        if (subject) parts.push(subject);
+        if (paperPhrase) parts.push(paperPhrase);
+        else {
+            var rawType = String(paper.paper_type || "").trim();
+            if (rawType) parts.push(rawType);
+        }
+        if (y) parts.push(y);
+        if (parts.length) return parts.join(" ");
+        var legacy = String(paper.paper_title || "").trim();
+        return legacy || "Paper";
+    };
+
+    /** Same as derivedPaperDisplayName from vault form parts (P1 / P2 from dropdown). */
+    G.derivedPaperDisplayNameFromVaultFields = function (subject, partCode, yearVal) {
+        var subj = String(subject || "").trim();
+        var part = String(partCode || "").toUpperCase();
+        var n = part === "P2" || part === "2" ? 2 : part === "P1" || part === "1" ? 1 : null;
+        var paperPhrase = n === 1 ? "Paper 1" : n === 2 ? "Paper 2" : "";
+        var y = yearVal != null && yearVal !== "" ? String(yearVal).trim() : "";
+        var parts = [];
+        if (subj) parts.push(subj);
+        if (paperPhrase) parts.push(paperPhrase);
+        if (y) parts.push(y);
+        return parts.length ? parts.join(" ") : "—";
+    };
+
     G.BACKLOG_SUBJECTS = ["Psychology", "Business Studies"];
 
     /**

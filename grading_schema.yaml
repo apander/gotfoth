@@ -1,0 +1,81 @@
+# ---------------------------------------------------------------------------
+# Exam marking YAML — stored with the paper and shown in "Your exam feedback"
+# ---------------------------------------------------------------------------
+# The student UI uses three layers (tabs):
+#   1 · Score     — total_percentage, letter grade, overall_summary, strengths/weaknesses, calm_message
+#   2 · Study plan — paper-level A (content) / B (technique) from study_guidance
+#   3 · Questions — jump links + per-question A/B and optional legacy improvement_tip
+#
+# All list fields accept either a YAML list of strings or a single string.
+
+# --- Required for parser warnings (0–100) ---
+total_percentage: 72
+
+# --- Tab 1: overview (one or both summary keys; feedback_summary is an alias) ---
+overall_summary: "One sentence: what this result means overall."
+# feedback_summary: "Optional alias for overall_summary."
+
+# Optional: date the exam was taken (ISO YYYY-MM-DD)
+test_taken_dt: "2026-04-01"
+
+# Optional supportive line (shown on the score tab). Prefer nesting under study_guidance below.
+# calm_message: "You prepared well; the gaps below are specific and fixable."
+
+# High-level lists (shown on score tab)
+strengths:
+  - "Accurate algebra in the long questions."
+weaknesses:
+  - "Definitions were too informal for 'state' questions."
+
+# --- Tab 2: study plan (paper-level A = content, B = technique) ---
+study_guidance:
+  # Optional; if set, overrides top-level calm_message for the score tab
+  calm_message: "Read one tab at a time. Small steps are enough."
+  topics_to_review:
+    - "Topic or subtopic name from the syllabus (be specific)."
+    - "Another content area linked to lost marks."
+  exam_technique_tips:
+    - "How to read the question stem (e.g. 'hence', 'show that')."
+    - "Time allocation or checking strategy under exam conditions."
+
+# Flat aliases (optional): same as study_guidance lists if you prefer not to nest
+# topics_to_review:
+#   - "..."
+# exam_technique_tips:
+#   - "..."
+
+# --- Tab 3: per-question navigation and A/B feedback ---
+questions:
+  - id: "Q1a"
+    score: 3
+    max: 5
+    question_text: "Stem text as shown to the student (optional but helpful)."
+    student_answer: "Short summary of what they wrote (optional)."
+    perfect_answer: "Ideal response / mark-scheme wording (optional)."
+
+    # A · Content to revisit (list or string)
+    topics_to_review:
+      - "Subtopic tied to this question."
+    # B · Exam technique for this question (list or string)
+    exam_technique_tips:
+      - "Technique tip based on their answer."
+
+    # Legacy: still supported; shown as "Feedback" or "Extra note" with A/B
+    improvement_tip: "Concrete step to reach full marks."
+
+    # Alternative: nest A/B under guidance (equivalent to flat keys above)
+    # guidance:
+    #   topics_to_review: ["..."]
+    #   exam_technique_tips: ["..."]
+
+  - id: "Q1b"
+    score: 5
+    max: 5
+    question_text: "..."
+    student_answer: "..."
+    perfect_answer: "..."
+
+# --- Optional QA block (used by teacher workflows / warnings) ---
+# qa:
+#   math_consistent: true
+#   raw_total_awarded: 8

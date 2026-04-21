@@ -27,7 +27,7 @@
         if (!data || typeof data !== "object") {
             return { data: null, error: "YAML did not parse to an object", warnings };
         }
-        const score = data.score;
+        const score = data.score != null ? data.score : data.total_percentage;
         if (score == null || Number.isNaN(Number(score))) {
             warnings.push("Missing or invalid score in YAML.");
         }
@@ -35,7 +35,14 @@
             warnings.push("QA flag: math_consistent is false — verify score before saving.");
         }
         if (data.qa && Array.isArray(data.questions) && data.questions.length) {
-            const sum = data.questions.reduce((s, q) => s + (Number(q.marks_awarded) || 0), 0);
+            const sum = data.questions.reduce(
+                (s, q) =>
+                    s +
+                    (Number(
+                        q && q.score != null ? q.score : q && q.marks_awarded != null ? q.marks_awarded : 0
+                    ) || 0),
+                0
+            );
             if (data.qa.raw_total_awarded != null) {
                 const qaAwarded = Number(data.qa.raw_total_awarded);
                 if (!Number.isNaN(qaAwarded) && Math.abs(qaAwarded - sum) > 0.01) {
@@ -48,11 +55,63 @@
     G.summaryFromParsed = function (data) {
         if (!data) return "";
         if (typeof data.feedback_summary === "string") return data.feedback_summary;
+        if (typeof data.overall_summary === "string") return data.overall_summary;
         return "";
     };
     G.scoreFromParsed = function (data) {
-        if (!data || data.score == null) return null;
-        const n = parseInt(String(data.score), 10);
+        if (!data) return null;
+        const raw = data.score != null ? data.score : data.total_percentage;
+        if (raw == null) return null;
+        const n = parseInt(String(raw), 10);
         return Number.isNaN(n) ? null : n;
+    };
+
+    /** Stored in `full_yaml` when the real body is uploaded as `file_marking_yaml` (PocketBase text limit). */
+    G.MARKING_YAML_STUB = "_gotfoth_marking_yaml_storage: file\n";
+
+    G.hasMarkingYamlContent = function (paper) {
+        return !!(paper && (paper.full_yaml || paper.file_marking_yaml));
+    };
+
+    /**
+     * @param {string} yamlText raw pasted YAML
+     * @param {{ hadMarkingFile?: boolean }} opts hadMarkingFile if record already has file_marking_yaml
+     * @returns {{ full_yaml: string, markingBlob: Blob|null, clearMarkingFile: boolean }}
+     */
+    G.packMarkingYamlForSave = function (yamlText, opts) {
+        opts = opts || {};
+        const hadFile = !!opts.hadMarkingFile;
+        const t = yamlText != null ? String(yamlText) : "";
+        const max = typeof G.FULL_YAML_TEXT_MAX === "number" ? G.FULL_YAML_TEXT_MAX : 5000;
+        if (t.length <= max) {
+            return {
+                full_yaml: t,
+                markingBlob: null,
+                clearMarkingFile: hadFile,
+            };
+        }
+        return {
+            full_yaml: G.MARKING_YAML_STUB,
+            markingBlob: new Blob([t], { type: "text/yaml;charset=utf-8" }),
+            clearMarkingFile: false,
+        };
+    };
+
+    /** Full marking YAML: attached file wins when present, else `full_yaml` text. */
+    G.resolveMarkingYamlText = async function (paper) {
+        if (!paper) return "";
+        if (paper.file_marking_yaml && typeof G.fileUrl === "function") {
+            const u = G.fileUrl(paper, "file_marking_yaml");
+            if (u) {
+                try {
+                    const r = await fetch(u);
+                    if (r.ok) {
+                        const txt = await r.text();
+                        if (txt) return txt;
+                    }
+                } catch (ignore) {}
+            }
+        }
+        return paper.full_yaml != null ? String(paper.full_yaml) : "";
     };
 })(window);

@@ -24,6 +24,9 @@
     /** PocketBase date when no sitting date yet (upload to vault without scheduling). */
     G.SCHEDULE_TBD_PREFIX = "2099-12-31";
 
+    /** Must match `papers.full_yaml` max length rule in PocketBase; overflow goes to `file_marking_yaml`. */
+    G.FULL_YAML_TEXT_MAX = 5000;
+
     G.isUnscheduledPaper = function (paper) {
         const d = paper && paper.scheduled_date;
         return !d || String(d).startsWith(G.SCHEDULE_TBD_PREFIX);

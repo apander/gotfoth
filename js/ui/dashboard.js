@@ -8,10 +8,10 @@
             if (!dt || Number.isNaN(dt.getTime())) continue;
             const diff = Math.ceil((dt - new Date()) / (1000 * 60 * 60 * 24));
             parts.push(`
-            <div class="min-w-[140px] p-3 rounded-xl bg-white border border-slate-200 shadow-sm snap-center shrink-0">
-                <div class="w-8 h-1 ${exam.color} rounded-full mb-2"></div>
-                <p class="text-[9px] font-black text-slate-400 uppercase">${exam.label}</p>
-                <p class="text-lg font-black text-slate-800">${diff}d</p>
+            <div class="flex items-center gap-2 py-1.5 border-b border-slate-100 last:border-b-0 first:pt-0">
+                <span class="w-1 self-stretch min-h-[2rem] rounded-full ${exam.color} shrink-0"></span>
+                <span class="text-[8px] font-black text-slate-600 uppercase leading-tight flex-1 min-w-0">${exam.label}</span>
+                <span class="text-sm font-black text-slate-900 tabular-nums shrink-0">${diff}d</span>
             </div>`);
         }
         if (parts.length === 0) {

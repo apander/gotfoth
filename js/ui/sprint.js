@@ -1,23 +1,6 @@
 (function (w) {
     const G = w.GF;
 
-    function startOfWeek(d) {
-        const x = new Date(d);
-        const day = x.getDay();
-        const diff = day === 0 ? -6 : 1 - day;
-        x.setDate(x.getDate() + diff);
-        x.setHours(0, 0, 0, 0);
-        return x;
-    }
-
-    function endOfWeek(d) {
-        const s = startOfWeek(d);
-        const e = new Date(s);
-        e.setDate(e.getDate() + 6);
-        e.setHours(23, 59, 59, 999);
-        return e;
-    }
-
     G.updateSprintPanel = function (items) {
         const total = items.length;
         const graded = items.filter((p) => G.isGraded(p.status)).length;
@@ -86,7 +69,7 @@
             } else {
                 const x = pending[0].p;
                 const due = pending[0].t;
-                nextEl.innerText = `${x.paper_title} · ${due.toLocaleDateString()}`;
+                nextEl.innerText = `${G.derivedPaperDisplayName(x)} · ${due.toLocaleDateString()}`;
                 const todayStart = startOfLocalDay(new Date());
                 const dueStart = startOfLocalDay(due);
                 setNextDueOverdue(dueStart < todayStart);
@@ -103,17 +86,5 @@
         }
         const examEl = document.getElementById("sprint-nearest-exam");
         if (examEl) examEl.innerText = nearestExamDays == null ? "—" : `${nearestExamDays}d`;
-
-        const ws = startOfWeek(now);
-        const we = endOfWeek(now);
-        const weekDue = items.filter((p) => {
-            if (G.isGraded(p.status)) return false;
-            if (G.isUnscheduledPaper(p)) return false;
-            const t = new Date(p.scheduled_date);
-            if (Number.isNaN(t.getTime())) return false;
-            return t >= ws && t <= we;
-        }).length;
-        const weekEl = document.getElementById("sprint-week-due");
-        if (weekEl) weekEl.innerText = String(weekDue);
     };
 })(window);

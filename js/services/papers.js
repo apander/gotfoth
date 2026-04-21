@@ -22,4 +22,22 @@
     G.patchPaperRecord = function (id, body) {
         return G.pbPatchJson("papers", id, body);
     };
+    G.patchPaperRecordMultipart = async function (id, formData) {
+        const res = await fetch(`${G.PB_URL}/api/collections/papers/records/${encodeURIComponent(String(id))}`, {
+            method: "PATCH",
+            body: formData,
+        });
+        if (!res.ok) {
+            const raw = await res.text();
+            const detail = G.pbErrorDetailFromRaw(raw);
+            throw new Error("PATCH papers/" + id + " HTTP " + res.status + (detail ? " — " + detail : ""));
+        }
+        return res.json();
+    };
+    G.deletePaperRecord = async function (id) {
+        const res = await fetch(`${G.PB_URL}/api/collections/papers/records/${encodeURIComponent(String(id))}`, {
+            method: "DELETE",
+        });
+        if (!res.ok) throw new Error("DELETE " + id + " " + res.status);
+    };
 })(window);

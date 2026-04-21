@@ -51,10 +51,17 @@
               }</div>`;
 
         const detailId = `detail-${paper.id}`;
-        const hasYaml = graded && paper.full_yaml;
+        const hasYaml = graded && (typeof G.hasMarkingYamlContent === "function" ? G.hasMarkingYamlContent(paper) : !!paper.full_yaml);
         const detailToggle = hasYaml
             ? `<button type="button" class="js-toggle-detail text-[10px] font-bold text-blue-600 mt-2" data-target="${esc(detailId)}">Marking detail</button>
            <div id="${esc(detailId)}" class="hidden mt-3 text-xs text-slate-600 border-t border-slate-100 pt-3 font-mono whitespace-pre-wrap break-words js-marking-detail"></div>`
+            : "";
+
+        const examAdmin = opts.examAdmin
+            ? `<div class="flex flex-wrap gap-2 mt-2">
+                <button type="button" class="js-exam-edit px-3 py-1.5 rounded-lg bg-slate-800 text-white text-[10px] font-black uppercase hover:bg-blue-600" data-id="${esc(paper.id)}">Edit</button>
+                <button type="button" class="js-exam-delete px-3 py-1.5 rounded-lg border-2 border-red-200 text-red-700 text-[10px] font-black uppercase hover:bg-red-50" data-id="${esc(paper.id)}">Delete</button>
+            </div>`
             : "";
 
         const wrap =
@@ -71,7 +78,7 @@
                         <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest">${esc(paper.paper_type || "No Type")}</p>
                         ${statusBadge}
                     </div>
-                    <h3 class="font-bold text-slate-800 truncate">${esc(paper.paper_title)}</h3>
+                    <h3 class="font-bold text-slate-800 truncate">${esc(G.derivedPaperDisplayName(paper))}</h3>
                     <p class="text-[10px] ${G.isUnscheduledPaper(paper) ? "text-amber-700 font-bold" : "text-slate-400"}">${
                         G.isUnscheduledPaper(paper)
                             ? "No sitting date yet · use Set date"
@@ -82,6 +89,7 @@
                         ${paperUrl ? `<a href="${esc(paperUrl)}" target="_blank" rel="noopener" class="text-[10px] font-bold text-blue-500">PAPER</a>` : ""}
                         ${schemeUrl ? `<a href="${esc(schemeUrl)}" target="_blank" rel="noopener" class="text-[10px] font-bold text-emerald-500">SCHEME</a>` : ""}
                     </div>
+                    ${examAdmin}
                     ${detailToggle}
                 </div>
             </div>
@@ -89,26 +97,32 @@
         </div>`;
     };
 
-    G.hydrateMarkingDetails = function (root, papersById) {
+    G.hydrateMarkingDetails = async function (root, papersById) {
         const yamlApi = G.resolveYamlApi();
-        root.querySelectorAll(".js-marking-detail").forEach((el) => {
-            const row = el.closest(".paper-row");
-            const id = row && row.getAttribute("data-paper-id");
-            if (!id) return;
-            const paper = papersById[id];
-            if (!paper || !paper.full_yaml) return;
-            const parsed = G.parseMarkingYaml(paper.full_yaml, yamlApi);
-            const bits = [];
-            if (parsed.error) bits.push(`Parse error: ${parsed.error}`);
-            parsed.warnings.forEach((w) => bits.push(`⚠ ${w}`));
-            const data = parsed.data;
-            if (data) {
-                if (data.questions && data.questions.length) bits.push(JSON.stringify(data.questions, null, 2));
-                if (data.qa) bits.push(`QA: ${JSON.stringify(data.qa, null, 2)}`);
-                if (Array.isArray(data.strengths)) bits.push(`Strengths: ${data.strengths.join("; ")}`);
-                if (Array.isArray(data.weaknesses)) bits.push(`Weaknesses: ${data.weaknesses.join("; ")}`);
-            }
-            el.textContent = bits.join("\n\n") || "(No structured detail)";
-        });
+        const els = root.querySelectorAll(".js-marking-detail");
+        await Promise.all(
+            Array.from(els).map(async (el) => {
+                const row = el.closest(".paper-row");
+                const id = row && row.getAttribute("data-paper-id");
+                if (!id) return;
+                const paper = papersById[id];
+                if (!paper) return;
+                const yamlText =
+                    typeof G.resolveMarkingYamlText === "function" ? await G.resolveMarkingYamlText(paper) : paper.full_yaml;
+                if (!yamlText) return;
+                const parsed = G.parseMarkingYaml(yamlText, yamlApi);
+                const bits = [];
+                if (parsed.error) bits.push(`Parse error: ${parsed.error}`);
+                parsed.warnings.forEach((w) => bits.push(`⚠ ${w}`));
+                const data = parsed.data;
+                if (data) {
+                    if (data.questions && data.questions.length) bits.push(JSON.stringify(data.questions, null, 2));
+                    if (data.qa) bits.push(`QA: ${JSON.stringify(data.qa, null, 2)}`);
+                    if (Array.isArray(data.strengths)) bits.push(`Strengths: ${data.strengths.join("; ")}`);
+                    if (Array.isArray(data.weaknesses)) bits.push(`Weaknesses: ${data.weaknesses.join("; ")}`);
+                }
+                el.textContent = bits.join("\n\n") || "(No structured detail)";
+            })
+        );
     };
 })(window);

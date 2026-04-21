@@ -2,8 +2,7 @@
     const G = w.GF;
     const viewLoaders = {
         schedule: null,
-        backlog: null,
-        vault: null,
+        exams: null,
         progress: null,
         history: null,
     };

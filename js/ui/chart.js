@@ -43,7 +43,7 @@
         return {
             x: x,
             y: Number(p.score),
-            paper_title: p.paper_title || "(Untitled)",
+            paper_title: G.derivedPaperDisplayName(p) || "(Untitled)",
             paper_type: p.paper_type || "",
             scheduled_date: p.scheduled_date,
             examYear: ey || undefined,

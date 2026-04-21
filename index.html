@@ -9,6 +9,8 @@
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .cal-task-bar { transition: filter 0.12s ease; }
+        .cal-task-bar:is(a):hover { filter: brightness(1.08); }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased">
@@ -21,11 +23,8 @@
                     <button type="button" id="btn-schedule" onclick="showView('schedule')" class="nav-btn w-full flex items-center gap-2 px-3 py-2.5 md:py-2 rounded-xl font-bold transition-all bg-slate-800 text-blue-400 text-left">
                         Schedule
                     </button>
-                    <button type="button" id="btn-backlog" onclick="showView('backlog')" class="nav-btn w-full flex items-center gap-2 px-3 py-2.5 md:py-2 rounded-xl font-bold transition-all text-slate-400 hover:bg-slate-800 text-left">
-                        Backlog
-                    </button>
-                    <button type="button" id="btn-vault" onclick="showView('vault')" class="nav-btn w-full flex items-center gap-2 px-3 py-2.5 md:py-2 rounded-xl font-bold transition-all text-slate-400 hover:bg-slate-800 text-left">
-                        Paper vault
+                    <button type="button" id="btn-exams" onclick="showExamsNav()" class="nav-btn w-full flex items-center gap-2 px-3 py-2.5 md:py-2 rounded-xl font-bold transition-all text-slate-400 hover:bg-slate-800 text-left">
+                        Exams
                     </button>
                     <button type="button" id="btn-progress" onclick="showView('progress')" class="nav-btn w-full flex items-center gap-2 px-3 py-2.5 md:py-2 rounded-xl font-bold transition-all text-slate-400 hover:bg-slate-800 text-left">
                         Performance
@@ -42,64 +41,63 @@
 
         <main class="flex-grow min-w-0 w-full md:ml-52 lg:ml-56 max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 py-4 md:py-5 lg:py-6 pt-[5.25rem] md:pt-5">
 
-            <!-- Schedule: countdowns + sprint + calendar -->
+            <!-- Schedule: single surface — vertical stats rail | calendar -->
             <div id="view-schedule" class="view-content hidden">
-                <h2 class="text-lg md:text-xl font-black text-slate-800 mb-3 md:mb-4 tracking-tight">Schedule</h2>
-                <div id="exam-timeline" class="flex gap-3 overflow-x-auto pb-4 no-scrollbar snap-x mb-8"></div>
-
-                <div class="bg-slate-900 p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl text-white shadow-lg mb-6 md:mb-8">
-                    <h3 class="text-blue-400 font-black text-base md:text-lg mb-1 text-center">Sprint status</h3>
-                    <p class="text-slate-400 text-[10px] text-center mb-4 md:mb-6 uppercase tracking-widest">Across all subjects</p>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
-                        <div>
-                            <div class="flex justify-between text-[10px] font-bold uppercase mb-1 text-slate-500">
-                                <span>Psychology graded</span>
-                                <span id="sprint-pct-psy" class="text-emerald-400">0%</span>
+                <h2 class="text-base md:text-lg font-black text-slate-800 mb-2 tracking-tight">Schedule</h2>
+                <div class="rounded-xl border border-slate-200 shadow-sm bg-white overflow-hidden">
+                    <div class="grid grid-cols-1 xl:grid-cols-12 xl:divide-x divide-slate-200 items-stretch min-h-0">
+                        <div class="xl:col-span-4 flex flex-col min-w-0 border-b xl:border-b-0 border-slate-200">
+                            <div class="p-2.5 sm:p-3 shrink-0">
+                                <p class="text-[8px] font-black uppercase text-slate-500 mb-1.5 tracking-wide">Exam countdowns</p>
+                                <div id="exam-timeline" class="flex flex-col min-h-0"></div>
                             </div>
-                            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                <div id="sprint-bar-psy" class="bg-blue-500 h-full transition-all duration-700" style="width:0%"></div>
+                            <div class="bg-slate-900 p-2.5 sm:p-3 text-white flex-1 flex flex-col gap-2 min-h-0 border-t border-slate-800">
+                                <div class="flex items-baseline justify-between gap-2 shrink-0">
+                                    <h3 class="text-blue-400 font-black text-xs leading-none">Sprint</h3>
+                                    <span class="text-[8px] font-bold text-slate-500 uppercase tracking-wider">All subjects</span>
+                                </div>
+                                <div class="flex flex-col gap-1.5 shrink-0">
+                                    <div>
+                                        <div class="flex justify-between text-[8px] font-bold uppercase text-slate-500 mb-0.5">
+                                            <span>Psy</span><span id="sprint-pct-psy" class="text-emerald-400">0%</span>
+                                        </div>
+                                        <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                            <div id="sprint-bar-psy" class="bg-blue-500 h-full transition-all duration-700" style="width:0%"></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between text-[8px] font-bold uppercase text-slate-500 mb-0.5">
+                                            <span>Bus</span><span id="sprint-pct-bus" class="text-emerald-400">0%</span>
+                                        </div>
+                                        <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                            <div id="sprint-bar-bus" class="bg-emerald-500 h-full transition-all duration-700" style="width:0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="shrink-0">
+                                    <div class="flex justify-between text-[8px] font-bold uppercase mb-0.5">
+                                        <span class="text-slate-500">Overall</span>
+                                        <span id="sprint-progress-text" class="text-emerald-400">0%</span>
+                                    </div>
+                                    <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                        <div id="sprint-progress-bar" class="bg-emerald-500 h-full transition-all duration-700" style="width:0%"></div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-1.5 shrink-0">
+                                    <div class="bg-slate-800/50 py-1.5 px-2 rounded-lg border border-slate-700/50 text-left">
+                                        <p class="text-xl font-black leading-none tabular-nums" id="sprint-remaining">0</p>
+                                        <p class="text-[7px] font-bold text-slate-500 uppercase mt-0.5">To grade</p>
+                                    </div>
+                                    <div class="bg-slate-800/50 py-1.5 px-2 rounded-lg border border-slate-700/50 text-left" id="sprint-next-due-card">
+                                        <p class="text-[9px] font-bold text-slate-300 leading-snug line-clamp-3 transition-colors" id="sprint-next-due">—</p>
+                                        <p class="text-[7px] font-bold text-slate-500 uppercase mt-0.5 transition-colors" id="sprint-next-due-label">Next</p>
+                                    </div>
+                                </div>
+                                <p class="text-[8px] text-slate-500 mt-auto pt-1 border-t border-slate-800 shrink-0">Nearest exam: <span id="sprint-nearest-exam" class="text-slate-300 font-bold">—</span></p>
                             </div>
                         </div>
-                        <div>
-                            <div class="flex justify-between text-[10px] font-bold uppercase mb-1 text-slate-500">
-                                <span>Business graded</span>
-                                <span id="sprint-pct-bus" class="text-emerald-400">0%</span>
-                            </div>
-                            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                <div id="sprint-bar-bus" class="bg-emerald-500 h-full transition-all duration-700" style="width:0%"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex justify-between text-[10px] font-bold uppercase mb-2">
-                        <span class="text-slate-500">Overall completion</span>
-                        <span id="sprint-progress-text" class="text-emerald-400">0%</span>
-                    </div>
-                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-6">
-                        <div id="sprint-progress-bar" class="bg-emerald-500 h-full transition-all duration-700" style="width:0%"></div>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center text-sm">
-                        <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
-                            <p class="text-2xl font-black" id="sprint-remaining">0</p>
-                            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">To grade</p>
-                        </div>
-                        <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50" id="sprint-next-due-card">
-                            <p class="text-xs font-bold text-slate-300 leading-snug transition-colors" id="sprint-next-due">—</p>
-                            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1 transition-colors" id="sprint-next-due-label">Next due</p>
-                        </div>
-                        <div class="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
-                            <p class="text-2xl font-black" id="sprint-week-due">0</p>
-                            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Due this week</p>
-                        </div>
-                    </div>
-                    <p class="text-center text-[10px] text-slate-500 mt-4">Nearest exam: <span id="sprint-nearest-exam" class="text-slate-300 font-bold">—</span></p>
-                </div>
-
-                <div class="bg-white p-3 sm:p-4 md:p-5 rounded-xl md:rounded-2xl border border-slate-200 shadow-sm w-full">
-                    <h3 class="text-base md:text-lg font-black text-slate-800 mb-2 md:mb-3">This month</h3>
-                    <div class="flex items-center justify-between mb-3">
+                        <div class="xl:col-span-8 p-3 sm:p-4 min-w-0 flex flex-col">
+                    <div class="flex items-center justify-between mb-2">
                         <button type="button" id="cal-prev" class="px-3 py-1 rounded-lg bg-slate-100 text-xs font-bold hover:bg-slate-200" aria-label="Previous month">←</button>
                         <div class="flex items-center gap-2">
                             <h3 id="calendar-month" class="text-xs font-black uppercase tracking-widest text-slate-500"></h3>
@@ -113,9 +111,34 @@
                     <p id="gcal-sync-status" class="mb-2 text-[10px] text-slate-500">Google sync: not available yet.</p>
                     <div id="calendar-exam-list" class="hidden"></div>
                     <div id="calendar-grid"></div>
-                    <p class="text-[10px] text-slate-500 mt-3 leading-relaxed">
-                        <span class="font-bold text-violet-700">Bold violet</span> days are official exams (from PocketBase settings). Exam names are shown inside each date cell. <span class="font-bold text-slate-700">Dark grey chips</span> are imported Google Calendar tasks. Blue = revision scheduled; green = all graded that day.
-                    </p>
+                    <div class="mt-2 rounded-lg border border-slate-200 bg-slate-50/90 p-2 text-[9px] text-slate-700 leading-snug">
+                        <p class="font-black uppercase tracking-wider text-slate-500 mb-1">Legend</p>
+                        <ul class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5">
+                            <li class="flex items-start gap-2">
+                                <span class="mt-0.5 h-3 w-8 shrink-0 rounded-sm ring-2 ring-amber-400 bg-slate-50 border border-slate-200" aria-hidden="true"></span>
+                                <span><strong>Today</strong> — amber ring + <strong>Today</strong> label (not the same as “all done”).</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="mt-0.5 h-3 w-8 shrink-0 rounded-sm bg-sky-100 border-2 border-sky-300" aria-hidden="true"></span>
+                                <span><strong>Revision due</strong> — at least one paper that day still to finish or mark. Bars: sky = to do, mint = marked; click opens PDF (or PocketBase record).</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="mt-0.5 h-3 w-8 shrink-0 rounded-sm bg-emerald-500 border-2 border-emerald-700" aria-hidden="true"></span>
+                                <span><strong>All marked</strong> — every paper scheduled that day is graded. Hover bars for detail; click to open.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="mt-0.5 h-3 w-8 shrink-0 rounded-sm bg-gradient-to-br from-violet-300 to-fuchsia-200 border-2 border-violet-700" aria-hidden="true"></span>
+                                <span><strong>Exam day</strong> — official exam date from PocketBase settings (violet). Bars list exam name; tooltip for detail.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="mt-0.5 h-3 w-8 shrink-0 rounded-sm bg-slate-700" aria-hidden="true"></span>
+                                <span><strong>Google</strong> — imported from your synced Google Calendar feed (see <code class="text-[9px]">GOOGLE_CALENDAR_SYNC.md</code>).</span>
+                            </li>
+                        </ul>
+                        <p class="mt-1.5 text-[8px] text-slate-500">Hover bars for detail. Paper bars open in a new tab.</p>
+                    </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -126,15 +149,11 @@
                 <div id="task-list"></div>
             </div>
 
-            <!-- Backlog: 2016–2024 study cohort grid -->
-            <div id="view-backlog" class="view-content hidden">
-                <h2 class="text-xl font-black text-slate-800 mb-2 tracking-tight">Study backlog</h2>
-                <p class="text-sm text-slate-500 mb-4 max-w-2xl">Past papers from 2016–2024 by subject and paper. <span class="font-bold text-slate-700">To be uploaded</span> = no PocketBase row;
-                    <span class="font-bold text-orange-800">To be scheduled</span> = uploaded but no sitting date;
-                    <span class="font-bold text-sky-800">Scheduled</span> (<span class="text-slate-500">Planned</span>);
-                    <span class="font-bold text-amber-900">Complete</span>;
-                    <span class="font-bold text-emerald-800">Marked</span>. Use the cell action button for the next step: <strong>Upload</strong>, <strong>Schedule</strong>, <strong>Grade</strong>, or <strong>View comments</strong>.</p>
-                <div class="flex flex-wrap gap-2 mb-6" id="backlog-subject-tabs" role="tablist" aria-label="Subject for backlog">
+            <!-- Exams: cohort grid + collapsible upload -->
+            <div id="view-exams" class="view-content hidden">
+                <h2 class="text-xl font-black text-slate-800 mb-2 tracking-tight">Exams</h2>
+                <p class="text-sm text-slate-500 mb-4 max-w-2xl">Past papers by subject and year. <span class="font-bold text-slate-700">To be uploaded</span> means no PocketBase row yet—choose <strong>Upload</strong> to open the deposit form. Other states use <strong>Schedule</strong>, <strong>Grade</strong>, or <strong>View marking</strong>. The gear control on a row opens edit (files and fields) or delete.</p>
+                <div class="flex flex-wrap gap-2 mb-6" id="backlog-subject-tabs" role="tablist" aria-label="Subject for exams grid">
                     <button type="button" class="backlog-tab px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide bg-slate-900 text-white shadow-sm transition-all" data-subject="Psychology">
                         Psychology
                     </button>
@@ -142,20 +161,21 @@
                         Business studies
                     </button>
                 </div>
-                <div id="backlog-grid"></div>
-            </div>
 
-            <!-- Vault -->
-            <div id="view-vault" class="view-content hidden">
-                <h2 class="text-2xl font-black text-slate-800 mb-2">Paper vault</h2>
-                <p class="text-slate-400 text-sm mb-6 font-medium">Upload materials to PocketBase on your NAS.</p>
-
-                <form id="vault-deposit-form" class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5 mb-10" onsubmit="event.preventDefault(); savePaper();">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div class="space-y-1">
-                            <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Paper title</label>
-                            <input type="text" id="paperTitle" required placeholder="e.g. 2023 Paper 1" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none focus:border-blue-500">
+                <div id="vault-upload-panel" class="hidden mb-6">
+                    <div class="rounded-3xl border-2 border-blue-400/35 bg-white shadow-lg overflow-hidden">
+                        <div class="flex items-center justify-between gap-3 px-4 py-3 bg-slate-900 text-white">
+                            <h3 class="text-sm font-black uppercase tracking-wide text-blue-300">Upload exam</h3>
+                            <button type="button" id="vault-upload-panel-close" class="px-3 py-1.5 rounded-lg bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 border border-slate-600/50">Close</button>
                         </div>
+                        <div class="p-4 sm:p-6">
+                <form id="vault-deposit-form" class="space-y-5" onsubmit="event.preventDefault(); savePaper();">
+                    <div class="space-y-1 mb-4">
+                        <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Display name</label>
+                        <p id="vault-derived-name" class="w-full p-3 bg-slate-100 rounded-xl border border-slate-200 text-sm font-bold text-slate-800">—</p>
+                        <p class="text-[10px] text-slate-500 ml-1">Built from Subject + Paper 1/2 + exam year (no separate title field).</p>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-1 gap-4">
                         <div class="space-y-1">
                             <label class="text-[10px] font-black text-slate-400 uppercase ml-1">Subject</label>
                             <select id="paperSub" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none">
@@ -207,19 +227,22 @@
                         </div>
                     </div>
 
-                    <div class="bg-amber-50/80 p-4 rounded-2xl border border-amber-100">
-                        <label class="text-[10px] font-black text-amber-900 uppercase block mb-2">Historic: paste Gemini YAML (optional)</label>
-                        <p class="text-[11px] text-amber-900/80 mb-2">If set, record is created as graded in one step (backfill).</p>
-                        <textarea id="historicYaml" rows="5" placeholder="```yaml&#10;score: 72&#10;...&#10;```" class="w-full p-3 rounded-xl border border-amber-200 text-xs font-mono outline-none"></textarea>
+                    <div class="bg-amber-50/80 p-4 rounded-2xl border border-amber-100 space-y-2">
+                        <label class="text-[10px] font-black text-amber-900 uppercase block">Historic grading YAML (optional)</label>
+                        <p class="text-[11px] text-amber-900/80">Supports large question-level output (see <code class="text-[10px]">grading_schema.yaml</code>). Upload file or paste.</p>
+                        <input type="file" id="historicYamlFile" accept=".yaml,.yml,text/yaml,text/plain" class="text-xs w-full">
+                        <textarea id="historicYaml" rows="10" placeholder="```yaml&#10;total_percentage: 72&#10;overall_summary: ...&#10;questions: ...&#10;```" class="w-full p-3 rounded-xl border border-amber-200 text-xs font-mono outline-none"></textarea>
                     </div>
 
                     <button type="submit" class="w-full bg-slate-900 text-white p-4 rounded-2xl font-black uppercase tracking-widest hover:bg-blue-600 transition shadow-lg active:scale-[0.99]">
                         Upload
                     </button>
                 </form>
+                        </div>
+                    </div>
+                </div>
 
-                <h3 class="text-lg font-black text-slate-800 mb-3">Library</h3>
-                <div id="vault-paper-grid"></div>
+                <div id="backlog-grid"></div>
             </div>
 
             <!-- Performance: year cohort snapshot vs time series -->
@@ -273,7 +296,7 @@
             <p class="text-sm text-slate-600 mb-5">Upload another exam now?</p>
             <div class="flex flex-col sm:flex-row gap-2 sm:justify-end">
                 <button type="button" id="upload-again-no" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-sm hover:bg-slate-50">
-                    No, go to History
+                    No
                 </button>
                 <button type="button" id="upload-again-yes" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-black text-sm hover:bg-blue-600">
                     Yes, upload another
@@ -282,14 +305,145 @@
         </div>
     </div>
 
-    <div id="yaml-comments-modal" class="hidden fixed inset-0 z-50 bg-slate-900/55 backdrop-blur-[1px] items-center justify-center p-4">
-        <div class="w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-slate-200 p-5">
-            <div class="flex items-start justify-between gap-3 mb-3">
+    <div id="exam-edit-modal" class="hidden fixed inset-0 z-50 bg-slate-900/55 backdrop-blur-[1px] items-center justify-center p-4 overflow-y-auto">
+        <div class="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200 p-5 my-4">
+            <h3 class="text-lg font-black text-slate-900 mb-1">Edit exam record</h3>
+            <p class="text-xs text-slate-500 mb-4">Change attributes or choose new files (leave a file empty to keep the current upload).</p>
+            <form id="exam-edit-form" class="space-y-3" onsubmit="event.preventDefault(); saveExamEdit();">
+                <input type="hidden" id="exam-edit-id" value="">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase" for="exam-edit-subject">Subject</label>
+                        <select id="exam-edit-subject" class="w-full p-2 rounded-xl border border-slate-200 text-sm">
+                            <option value="Psychology">Psychology</option>
+                            <option value="Business Studies">Business Studies</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase" for="exam-edit-year">Exam year</label>
+                        <select id="exam-edit-year" class="w-full p-2 rounded-xl border border-slate-200 text-sm">
+                            <option value="2016">2016</option>
+                            <option value="2017">2017</option>
+                            <option value="2018">2018</option>
+                            <option value="2019">2019</option>
+                            <option value="2020">2020</option>
+                            <option value="2021">2021</option>
+                            <option value="2022">2022</option>
+                            <option value="2023">2023</option>
+                            <option value="2024">2024</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase" for="exam-edit-part">Paper</label>
+                        <select id="exam-edit-part" class="w-full p-2 rounded-xl border border-slate-200 text-sm">
+                            <option value="P1">P1</option>
+                            <option value="P2">P2</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-black text-slate-400 uppercase" for="exam-edit-date">Sitting date</label>
+                        <input type="date" id="exam-edit-date" class="w-full p-2 rounded-xl border border-slate-200 text-sm">
+                    </div>
+                </div>
+                <div class="space-y-2 pt-2 border-t border-slate-100 text-[10px]">
+                    <p class="font-black text-slate-500 uppercase">Files (view current or overwrite)</p>
+                    <div class="rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-1.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-black text-slate-500 uppercase text-[10px]">Current exam paper</span>
+                            <a id="exam-edit-link-paper" href="#" target="_blank" rel="noopener" class="text-[10px] font-black text-blue-600 hover:underline hidden">Open current</a>
+                        </div>
+                        <input type="file" id="exam-edit-file-paper" accept=".pdf,application/pdf" class="text-xs w-full" title="Choose file to overwrite current exam paper">
+                    </div>
+                    <div class="rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-1.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-black text-slate-500 uppercase text-[10px]">Current mark scheme</span>
+                            <a id="exam-edit-link-scheme" href="#" target="_blank" rel="noopener" class="text-[10px] font-black text-emerald-600 hover:underline hidden">Open current</a>
+                        </div>
+                        <input type="file" id="exam-edit-file-scheme" accept=".pdf,application/pdf" class="text-xs w-full" title="Choose file to overwrite current mark scheme">
+                    </div>
+                    <div class="rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-1.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-black text-slate-500 uppercase text-[10px]">Current attempt/answers</span>
+                            <a id="exam-edit-link-attempt" href="#" target="_blank" rel="noopener" class="text-[10px] font-black text-amber-600 hover:underline hidden">Open current</a>
+                        </div>
+                        <input type="file" id="exam-edit-file-attempt" class="text-xs w-full" title="Choose file to overwrite current attempt/answers">
+                    </div>
+                </div>
+                <div class="space-y-2 pt-2 border-t border-slate-100 text-[10px]">
+                    <p class="font-black text-slate-500 uppercase">Grading YAML (optional)</p>
+                    <p class="text-[10px] text-slate-500">Paste from your LLM here. If it exceeds the database text limit, the app keeps the full text in an attached file automatically (requires a <code class="text-[10px]">file_marking_yaml</code> file field on <code class="text-[10px]">papers</code>).</p>
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-2 space-y-2">
+                        <label class="text-[10px] font-black text-slate-500 uppercase block" for="exam-edit-yaml">Paste or upload YAML</label>
+                        <input type="file" id="exam-edit-yaml-file" accept=".yaml,.yml,text/yaml,text/plain" class="text-xs w-full">
+                        <textarea id="exam-edit-yaml" rows="10" placeholder="Grading YAML saved with this paper when you save…" class="w-full p-2 rounded-xl border border-slate-200 text-xs font-mono"></textarea>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                    <button type="button" id="exam-edit-delete" class="px-4 py-2 rounded-xl border border-red-200 text-red-700 font-bold text-sm hover:bg-red-50 order-3 sm:order-1">Delete record</button>
+                    <div class="flex flex-col sm:flex-row gap-2 justify-end order-1 sm:order-2">
+                    <button type="button" id="exam-edit-cancel" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-sm">Cancel</button>
+                    <button type="button" id="exam-edit-retake" class="px-4 py-2 rounded-xl border border-blue-200 text-blue-700 font-black text-sm hover:bg-blue-50">Retake &amp; Regrade</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-black text-sm hover:bg-blue-600">Save changes</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="grade-yaml-modal" class="hidden fixed inset-0 z-50 bg-slate-900/55 backdrop-blur-[1px] items-center justify-center p-4 overflow-y-auto">
+        <div class="w-full max-w-3xl rounded-2xl bg-white shadow-2xl border border-slate-200 p-5 my-4">
+            <h3 class="text-lg font-black text-slate-900 mb-1">Grade exam</h3>
+            <p id="grade-yaml-title" class="text-xs text-slate-500 mb-3"></p>
+            <input type="hidden" id="grade-yaml-id" value="">
+            <div class="space-y-2">
+                <div class="space-y-1">
+                    <label for="grade-yaml-date" class="text-[10px] font-black text-slate-500 uppercase">Attempt date (optional)</label>
+                    <input type="date" id="grade-yaml-date" class="w-full p-2 rounded-xl border border-slate-200 text-sm">
+                </div>
+                <p class="text-[10px] text-slate-500">Paste from your LLM. Long YAML is saved to an attached file automatically when needed (PocketBase <code class="text-[10px]">papers.file_marking_yaml</code>).</p>
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-2 space-y-2">
+                    <label class="text-[10px] font-black text-slate-500 uppercase block" for="grade-yaml-text">Paste or upload YAML</label>
+                    <input type="file" id="grade-yaml-file" accept=".yaml,.yml,text/yaml,text/plain" class="text-xs w-full">
+                    <textarea id="grade-yaml-text" rows="16" placeholder="Grading YAML saved as feedback for this paper…" class="w-full p-2 rounded-xl border border-slate-200 text-xs font-mono"></textarea>
+                </div>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-2 justify-end mt-4">
+                <button type="button" id="grade-yaml-cancel" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-sm">Cancel</button>
+                <button type="button" id="grade-yaml-save" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-black text-sm hover:bg-blue-600">Save grade</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="yaml-comments-modal" class="hidden fixed inset-0 z-50 bg-slate-900/55 backdrop-blur-[1px] items-center justify-center p-4 overflow-y-auto">
+        <div id="yaml-comments-panel" class="w-full max-w-3xl rounded-2xl bg-white shadow-2xl border border-slate-200 p-5 my-4 max-h-[92vh] overflow-y-auto">
+            <div class="flex items-start justify-between gap-3 mb-3 sticky top-0 z-10 bg-white pb-2 border-b border-slate-100">
                 <div>
-                    <h3 class="text-lg font-black text-slate-900">Marking comments</h3>
+                    <h3 class="text-lg font-black text-slate-900">Your exam feedback</h3>
                     <p id="yaml-comments-title" class="text-xs text-slate-500 mt-0.5"></p>
                 </div>
                 <button type="button" id="yaml-comments-close" class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-50">Close</button>
+            </div>
+            <div id="yaml-viewer-controls" class="mb-3 hidden">
+                <p class="text-[10px] font-black uppercase text-slate-500 mb-1">Open file in app viewer</p>
+                <div class="flex flex-wrap gap-1.5">
+                    <button type="button" id="yaml-view-paper" class="px-2 py-1 rounded-md border text-[10px] font-black text-blue-700 border-blue-200 bg-blue-50 hover:bg-blue-100 hidden">Exam paper</button>
+                    <button type="button" id="yaml-view-scheme" class="px-2 py-1 rounded-md border text-[10px] font-black text-emerald-700 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hidden">Mark scheme</button>
+                    <button type="button" id="yaml-view-attempt" class="px-2 py-1 rounded-md border text-[10px] font-black text-amber-700 border-amber-200 bg-amber-50 hover:bg-amber-100 hidden">Answers/attempt</button>
+                </div>
+                <div id="yaml-file-viewer-wrap" class="overflow-hidden transition-all duration-300 max-h-0 opacity-0 mt-0">
+                    <div id="yaml-file-viewer-panel" class="mt-2 rounded-xl border border-slate-200 bg-slate-50">
+                        <div class="flex items-center justify-between gap-2 px-2 py-1 border-b border-slate-200">
+                            <p id="yaml-file-viewer-title" class="text-[10px] font-black uppercase text-slate-500">Viewer</p>
+                            <div class="flex items-center gap-1.5">
+                                <button type="button" id="yaml-file-viewer-fullscreen" class="px-2 py-1 rounded-md border border-slate-300 text-[10px] font-black text-slate-700 hover:bg-slate-100">Full screen</button>
+                                <button type="button" id="yaml-file-viewer-close" class="px-2 py-1 rounded-md border border-slate-300 text-[10px] font-black text-slate-700 hover:bg-slate-100">Hide viewer</button>
+                            </div>
+                        </div>
+                        <iframe id="yaml-file-viewer-frame" title="In-app file viewer" class="w-full h-[48vh] rounded-b-xl bg-white"></iframe>
+                    </div>
+                </div>
             </div>
             <div id="yaml-comments-body" class="max-h-[65vh] overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-4"></div>
         </div>
