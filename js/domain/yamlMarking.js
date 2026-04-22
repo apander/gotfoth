@@ -67,7 +67,16 @@
     G.MARKING_YAML_STUB = "_gotfoth_marking_yaml_storage: file\n";
 
     G.hasMarkingYamlContent = function (paper) {
-        return !!(paper && (paper.full_yaml || paper.file_marking_yaml));
+        if (!paper) return false;
+        const fy = paper.full_yaml != null ? String(paper.full_yaml) : "";
+        const stub = typeof G.MARKING_YAML_STUB === "string" ? String(G.MARKING_YAML_STUB).trim() : "";
+        const inline = fy.trim();
+        const hasRealInlineYaml = !!(inline && (!stub || inline !== stub));
+        const hasMarkingAttachment = !!(
+            (paper.file_marking_yaml_path && String(paper.file_marking_yaml_path).trim()) ||
+            (paper.file_marking_yaml && String(paper.file_marking_yaml).trim())
+        );
+        return hasRealInlineYaml || hasMarkingAttachment;
     };
 
     /**
@@ -97,7 +106,16 @@
     /** Full marking YAML: attached file wins when present, else `full_yaml` text. */
     G.resolveMarkingYamlText = async function (paper) {
         if (!paper) return "";
-        if (paper.file_marking_yaml && typeof G.fileUrl === "function") {
+        const fy = paper.full_yaml != null ? String(paper.full_yaml) : "";
+        const stub = typeof G.MARKING_YAML_STUB === "string" ? String(G.MARKING_YAML_STUB).trim() : "";
+        const inline = fy.trim();
+        const inlineIsStubOnly = !!(inline && stub && inline === stub);
+        const hasInlineRealYaml = !!(inline && (!stub || inline !== stub));
+
+        // If inline YAML already contains the real document, don't hit `/api/files` unnecessarily.
+        if (hasInlineRealYaml) return fy;
+
+        if ((paper.file_marking_yaml || paper.file_marking_yaml_path) && typeof G.fileUrl === "function") {
             const u = G.fileUrl(paper, "file_marking_yaml");
             if (u) {
                 try {
@@ -109,6 +127,7 @@
                 } catch (ignore) {}
             }
         }
+        if (inlineIsStubOnly) return "";
         return paper.full_yaml != null ? String(paper.full_yaml) : "";
     };
 })(window);
