@@ -395,8 +395,8 @@
     function normalizeYamlQuestion(item, idx) {
         const q = item || {};
         const rawLabel = q.id != null ? String(q.id) : q.question_no != null ? "Q" + q.question_no : "Q" + (idx + 1);
-        const rawScore = q.score != null ? q.score : q.marks_awarded;
-        const rawMax = q.max != null ? q.max : q.max_marks;
+        const rawScore = q.score;
+        const rawMax = q.max;
         const score = rawScore != null && !Number.isNaN(Number(rawScore)) ? Number(rawScore) : null;
         const max = rawMax != null && !Number.isNaN(Number(rawMax)) ? Number(rawMax) : null;
         const pct = score != null && max != null && max > 0 ? Math.round((score / max) * 100) : null;
@@ -406,24 +406,10 @@
             pct == null ? "bg-slate-100 text-slate-700 border-slate-200" : pct >= 70 ? "bg-emerald-100 text-emerald-800 border-emerald-200" : pct >= 50 ? "bg-amber-100 text-amber-900 border-amber-200" : "bg-rose-100 text-rose-800 border-rose-200";
         const gObj = q.guidance && typeof q.guidance === "object" ? q.guidance : null;
         const topicsList = yamlStrOrArrayToList(
-            gObj && gObj.topics_to_review != null
-                ? gObj.topics_to_review
-                : q.topics_to_review != null
-                  ? q.topics_to_review
-                  : q.study_topics != null
-                    ? q.study_topics
-                    : q.content_to_review != null
-                      ? q.content_to_review
-                      : null
+            gObj && gObj.topics_to_review != null ? gObj.topics_to_review : q.topics_to_review
         );
         const techniqueList = yamlStrOrArrayToList(
-            gObj && gObj.exam_technique_tips != null
-                ? gObj.exam_technique_tips
-                : q.exam_technique_tips != null
-                  ? q.exam_technique_tips
-                  : q.technique_tips != null
-                    ? q.technique_tips
-                    : null
+            gObj && gObj.exam_technique_tips != null ? gObj.exam_technique_tips : q.exam_technique_tips
         );
         return {
             key: "q-" + idx,
@@ -433,11 +419,8 @@
             tone: tone,
             questionText: q.question_text ? String(q.question_text) : "",
             answer: q.student_answer ? String(q.student_answer) : "",
-            perfectAnswer:
-                q.perfect_answer || q.model_answer || q.expected_answer
-                    ? String(q.perfect_answer || q.model_answer || q.expected_answer)
-                    : "",
-            note: q.improvement_tip || q.comment || q.feedback ? String(q.improvement_tip || q.comment || q.feedback) : "",
+            perfectAnswer: q.perfect_answer ? String(q.perfect_answer) : "",
+            note: q.improvement_tip ? String(q.improvement_tip) : "",
             topicsList: topicsList,
             techniqueList: techniqueList,
             isFullMarks: isFullMarks,
@@ -453,29 +436,18 @@
         const strengths = Array.isArray(d.strengths) ? d.strengths : [];
         const weaknesses = Array.isArray(d.weaknesses) ? d.weaknesses : [];
         const questions = Array.isArray(d.questions) ? d.questions : [];
-        const overallPctRaw = d.total_percentage != null ? d.total_percentage : d.score;
+        const overallPctRaw = d.total_percentage;
         const overallPct =
             overallPctRaw != null && !Number.isNaN(Number(overallPctRaw)) ? Math.round(Number(overallPctRaw)) : null;
         const grade =
             overallPct != null && paper && paper.subject
                 ? G.letterGradeFromPercent(overallPct, G.getBoundaries(), paper.subject)
                 : "N/A";
-        const summary =
-            typeof d.feedback_summary === "string"
-                ? d.feedback_summary
-                : typeof d.overall_summary === "string"
-                  ? d.overall_summary
-                  : "";
+        const summary = typeof d.overall_summary === "string" ? d.overall_summary : "";
         const sg = d.study_guidance && typeof d.study_guidance === "object" ? d.study_guidance : null;
-        const globalTopics = yamlStrOrArrayToList(
-            sg && sg.topics_to_review != null ? sg.topics_to_review : d.topics_to_review != null ? d.topics_to_review : null
-        );
+        const globalTopics = yamlStrOrArrayToList(sg && sg.topics_to_review != null ? sg.topics_to_review : null);
         const globalTechnique = yamlStrOrArrayToList(
-            sg && sg.exam_technique_tips != null
-                ? sg.exam_technique_tips
-                : d.exam_technique_tips != null
-                  ? d.exam_technique_tips
-                  : null
+            sg && sg.exam_technique_tips != null ? sg.exam_technique_tips : null
         );
         const calmMessage =
             sg && typeof sg.calm_message === "string" && sg.calm_message.trim()
@@ -1158,7 +1130,7 @@
         if (parsed.warnings.length && !w.confirm(parsed.warnings.join("\n") + "\n\nSave anyway?")) return;
         let score = parsed.data ? G.scoreFromParsed(parsed.data) : null;
         if (score == null) {
-            const m = ytext.match(/(?:score|total_percentage):\s*(\d+)/i);
+            const m = ytext.match(/total_percentage:\s*(\d+)/i);
             if (m) score = parseInt(m[1], 10);
         }
         if (

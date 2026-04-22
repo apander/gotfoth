@@ -27,7 +27,7 @@
         if (!data || typeof data !== "object") {
             return { data: null, error: "YAML did not parse to an object", warnings };
         }
-        const score = data.score != null ? data.score : data.total_percentage;
+        const score = data.total_percentage;
         if (score == null || Number.isNaN(Number(score))) {
             warnings.push("Missing or invalid score in YAML.");
         }
@@ -38,15 +38,13 @@
             const sum = data.questions.reduce(
                 (s, q) =>
                     s +
-                    (Number(
-                        q && q.score != null ? q.score : q && q.marks_awarded != null ? q.marks_awarded : 0
-                    ) || 0),
+                    (Number(q && q.score != null ? q.score : 0) || 0),
                 0
             );
             if (data.qa.raw_total_awarded != null) {
                 const qaAwarded = Number(data.qa.raw_total_awarded);
                 if (!Number.isNaN(qaAwarded) && Math.abs(qaAwarded - sum) > 0.01) {
-                    warnings.push("Question marks_awarded sum does not match qa.raw_total_awarded.");
+                    warnings.push("Question score sum does not match qa.raw_total_awarded.");
                 }
             }
         }
@@ -54,13 +52,12 @@
     };
     G.summaryFromParsed = function (data) {
         if (!data) return "";
-        if (typeof data.feedback_summary === "string") return data.feedback_summary;
         if (typeof data.overall_summary === "string") return data.overall_summary;
         return "";
     };
     G.scoreFromParsed = function (data) {
         if (!data) return null;
-        const raw = data.score != null ? data.score : data.total_percentage;
+        const raw = data.total_percentage;
         if (raw == null) return null;
         const n = parseInt(String(raw), 10);
         return Number.isNaN(n) ? null : n;

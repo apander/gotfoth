@@ -108,7 +108,6 @@
                     <div class="grid grid-cols-7 gap-1 text-[9px] font-bold text-slate-400 uppercase text-center mb-1">
                         <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
                     </div>
-                    <p id="gcal-sync-status" class="mb-2 text-[10px] text-slate-500">Google sync: not available yet.</p>
                     <div id="calendar-exam-list" class="hidden"></div>
                     <div id="calendar-grid"></div>
                     <div class="mt-2 rounded-lg border border-slate-200 bg-slate-50/90 p-2 text-[9px] text-slate-700 leading-snug">
@@ -120,7 +119,7 @@
                             </li>
                             <li class="flex items-start gap-2">
                                 <span class="mt-0.5 h-3 w-8 shrink-0 rounded-sm bg-sky-100 border-2 border-sky-300" aria-hidden="true"></span>
-                                <span><strong>Revision due</strong> — at least one paper that day still to finish or mark. Bars: sky = to do, mint = marked; click opens PDF (or PocketBase record).</span>
+                                <span><strong>Revision due</strong> — at least one paper that day still to finish or mark. Bars: sky = to do, mint = marked; click opens PDF.</span>
                             </li>
                             <li class="flex items-start gap-2">
                                 <span class="mt-0.5 h-3 w-8 shrink-0 rounded-sm bg-emerald-500 border-2 border-emerald-700" aria-hidden="true"></span>
@@ -129,10 +128,6 @@
                             <li class="flex items-start gap-2">
                                 <span class="mt-0.5 h-3 w-8 shrink-0 rounded-sm bg-gradient-to-br from-violet-300 to-fuchsia-200 border-2 border-violet-700" aria-hidden="true"></span>
                                 <span><strong>Exam day</strong> — official exam date from PocketBase settings (violet). Bars list exam name; tooltip for detail.</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <span class="mt-0.5 h-3 w-8 shrink-0 rounded-sm bg-slate-700" aria-hidden="true"></span>
-                                <span><strong>Google</strong> — imported from your synced Google Calendar feed (see <code class="text-[9px]">GOOGLE_CALENDAR_SYNC.md</code>).</span>
                             </li>
                         </ul>
                         <p class="mt-1.5 text-[8px] text-slate-500">Hover bars for detail. Paper bars open in a new tab.</p>

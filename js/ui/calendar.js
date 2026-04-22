@@ -116,59 +116,6 @@
     };
 
     /**
-     * Build day map from settings keys created by `sync_google_ics.py`.
-     * Key format: `${G.GCAL_EVENT_KEY_PREFIX}<hash>` and value JSON:
-     * {"date":"YYYY-MM-DD","label":"...","source":"google_ics"}
-     * @returns {Record<string, Array<{ label: string, color: string }>>}
-     */
-    G.buildImportedEventsByYmd = function () {
-        const map = {};
-        const settings = G.getSettings ? G.getSettings() : {};
-        const prefix = G.GCAL_EVENT_KEY_PREFIX || "gcal_evt_";
-        const keys = Object.keys(settings || {});
-        for (let i = 0; i < keys.length; i++) {
-            const k = keys[i];
-            if (String(k).indexOf(prefix) !== 0) continue;
-            const raw = settings[k];
-            if (!raw) continue;
-            try {
-                const obj = JSON.parse(String(raw));
-                if (!obj || !obj.date || !obj.label) continue;
-                const ymd = String(obj.date).slice(0, 10);
-                if (!map[ymd]) map[ymd] = [];
-                map[ymd].push({ label: String(obj.label), color: "bg-slate-500" });
-            } catch (e) {}
-        }
-        return map;
-    };
-
-    function renderGoogleSyncStatus() {
-        const el = document.getElementById("gcal-sync-status");
-        if (!el) return;
-        const settings = G.getSettings ? G.getSettings() : {};
-        const raw = settings[G.GCAL_SYNC_STATUS_KEY || "gcal_sync_status"];
-        if (!raw) {
-            el.className = "mb-2 text-[10px] text-slate-500";
-            el.textContent = "Google sync: not available yet.";
-            return;
-        }
-        try {
-            const obj = JSON.parse(String(raw));
-            const ts = obj && obj.last_sync ? new Date(String(obj.last_sync)) : null;
-            const count = obj && Number.isFinite(Number(obj.events_in_window)) ? Number(obj.events_in_window) : null;
-            if (ts && !Number.isNaN(ts.getTime())) {
-                var msg = "Google sync: last updated " + ts.toLocaleString();
-                if (count != null) msg += " (" + count + " events in window)";
-                el.className = "mb-2 text-[10px] text-slate-600";
-                el.textContent = msg;
-                return;
-            }
-        } catch (e) {}
-        el.className = "mb-2 text-[10px] text-slate-500";
-        el.textContent = "Google sync: status unreadable.";
-    }
-
-    /**
      * @param {HTMLElement|null} grid
      * @param {HTMLElement|null} monthLabel
      * @param {Array<Record<string, unknown>>} papers filtered papers (revision queue)
@@ -178,9 +125,7 @@
     G.renderCalendar = function (grid, monthLabel, papers, isGradedFn, subjectFilter) {
         if (!grid) return;
         const { year, month } = calView;
-        renderGoogleSyncStatus();
         const examByDate = G.buildExamDatesByYmd(subjectFilter || "all");
-        const importedByDate = G.buildImportedEventsByYmd();
         const examListEl = document.getElementById("calendar-exam-list");
 
         if (monthLabel) {
@@ -203,7 +148,6 @@
                 (p) => typeof p.scheduled_date === "string" && p.scheduled_date.startsWith(dateStr)
             );
             const examsThisDay = examByDate[dateStr] || [];
-            const importedThisDay = importedByDate[dateStr] || [];
             const hasPapers = dayPapers.length > 0;
             const hasExam = examsThisDay.length > 0;
             const allGraded = hasPapers && dayPapers.every((p) => isGradedFn(p));
@@ -248,15 +192,6 @@
             const barStack = [];
             for (let pi = 0; pi < dayPapers.length; pi++) {
                 barStack.push(paperBarHtml(dayPapers[pi], onDarkPaperBars));
-            }
-            for (let gi = 0; gi < importedThisDay.length; gi++) {
-                barStack.push(
-                    staticBarHtml({
-                        label: importedThisDay[gi].label,
-                        title: "Google Calendar: " + importedThisDay[gi].label,
-                        bgClass: "bg-slate-700",
-                    })
-                );
             }
             for (let ei = 0; ei < examsThisDay.length; ei++) {
                 barStack.push(
