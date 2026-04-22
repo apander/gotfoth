@@ -397,7 +397,7 @@
                     <label for="grade-yaml-date" class="text-[10px] font-black text-slate-500 uppercase">Attempt date (optional)</label>
                     <input type="date" id="grade-yaml-date" class="w-full p-2 rounded-xl border border-slate-200 text-sm">
                 </div>
-                <p class="text-[10px] text-slate-500">Paste from your LLM. Long YAML is saved to an attached file automatically when needed (PocketBase <code class="text-[10px]">papers.file_marking_yaml</code>).</p>
+                <p class="text-[10px] text-slate-500">Paste from your LLM. Long YAML is saved to an attached file automatically when needed (stored in Supabase Storage via <code class="text-[10px]">papers.file_marking_yaml</code>).</p>
                 <div class="rounded-xl border border-slate-200 bg-slate-50 p-2 space-y-2">
                     <label class="text-[10px] font-black text-slate-500 uppercase block" for="grade-yaml-text">Paste or upload YAML</label>
                     <input type="file" id="grade-yaml-file" accept=".yaml,.yml,text/yaml,text/plain" class="text-xs w-full">

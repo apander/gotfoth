@@ -23,7 +23,7 @@
         root.querySelectorAll(".js-log-result").forEach((btn) => {
             btn.addEventListener("click", function () {
                 const id = btn.getAttribute("data-id");
-                if (id) openGradeYamlModal(id);
+                if (id) void openGradeYamlModal(id);
             });
         });
         root.querySelectorAll(".js-toggle-detail").forEach((btn) => {
@@ -1088,7 +1088,7 @@
         await refreshPapersUi();
     }
 
-    function openGradeYamlModal(id) {
+    async function openGradeYamlModal(id) {
         const modal = document.getElementById("grade-yaml-modal");
         const title = document.getElementById("grade-yaml-title");
         const hid = document.getElementById("grade-yaml-id");
@@ -1101,16 +1101,24 @@
         if (title) title.textContent = paper && G.derivedPaperDisplayName ? G.derivedPaperDisplayName(paper) : "";
         hid.value = id || "";
         txt.value = "";
-        if (paper && typeof G.hasMarkingYamlContent === "function" && G.hasMarkingYamlContent(paper)) {
-            void G.resolveMarkingYamlText(paper).then(function (t) {
-                if (t) txt.value = t;
-            });
-        }
         if (dateEl) {
             const sd = paper && paper.scheduled_date ? String(paper.scheduled_date) : "";
             dateEl.value = sd && !sd.startsWith(G.SCHEDULE_TBD_PREFIX) ? sd.slice(0, 10) : "";
         }
         cloneReplaceFileInput("grade-yaml-file");
+
+        // Prefill YAML before showing the modal so a quick "Save grade" doesn't submit an empty textarea
+        // while async file/YAML resolution is still in flight.
+        if (paper && typeof G.hasMarkingYamlContent === "function" && G.hasMarkingYamlContent(paper) && typeof G.resolveMarkingYamlText === "function") {
+            try {
+                const t = await G.resolveMarkingYamlText(paper);
+                if (t) txt.value = t;
+            } catch (e) {
+                console.error(e);
+                w.alert("Could not load existing marking YAML yet. You can still paste YAML and save.");
+            }
+        }
+
         modal.classList.remove("hidden");
         modal.classList.add("flex");
     }
@@ -1173,16 +1181,36 @@
     async function saveGradeYamlModal() {
         const hid = document.getElementById("grade-yaml-id");
         const id = hid ? hid.value : "";
-        if (!id) return;
-        const dateEl = document.getElementById("grade-yaml-date");
-        const attemptDate = dateEl && dateEl.value ? String(dateEl.value).trim() : "";
-        const ytextPrimary = await collectYamlFromInputs("grade-yaml-text", "grade-yaml-file");
-        if (!ytextPrimary) {
-            w.alert("Paste YAML or choose a YAML file.");
+        if (!id) {
+            w.alert("Missing exam id — close this dialog and try again.");
             return;
         }
-        await logResult(id, ytextPrimary, attemptDate);
-        closeGradeYamlModal();
+        const saveBtn = document.getElementById("grade-yaml-save");
+        const prevDisabled = saveBtn ? !!saveBtn.disabled : false;
+        const prevText = saveBtn ? saveBtn.textContent : "";
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = "Saving…";
+        }
+        try {
+            const dateEl = document.getElementById("grade-yaml-date");
+            const attemptDate = dateEl && dateEl.value ? String(dateEl.value).trim() : "";
+            const ytextPrimary = await collectYamlFromInputs("grade-yaml-text", "grade-yaml-file");
+            if (!ytextPrimary) {
+                w.alert("Paste YAML or choose a YAML file.");
+                return;
+            }
+            await logResult(id, ytextPrimary, attemptDate);
+            closeGradeYamlModal();
+        } catch (e) {
+            console.error(e);
+            w.alert(e && e.message ? "Could not save grade:\n" + e.message : "Could not save grade.");
+        } finally {
+            if (saveBtn) {
+                saveBtn.disabled = prevDisabled;
+                saveBtn.textContent = prevText || "Save grade";
+            }
+        }
     }
 
     async function savePaper() {
@@ -1420,7 +1448,7 @@
             if (gradeBtn) {
                 ev.preventDefault();
                 const gid = gradeBtn.getAttribute("data-id");
-                if (gid) openGradeYamlModal(gid);
+                if (gid) void openGradeYamlModal(gid);
                 return;
             }
             const commentsBtn = ev.target && ev.target.closest && ev.target.closest(".js-view-yaml-comments");
