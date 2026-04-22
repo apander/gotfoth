@@ -173,6 +173,12 @@ def migrate_papers() -> Tuple[int, int]:
             "max_score": r.get("max_score"),
             "ai_summary": r.get("ai_summary"),
             "full_yaml": r.get("full_yaml"),
+            # PostgREST bulk inserts require every JSON object in the array to have the same keys.
+            # Always include file path columns (null when absent) so rows with/without attachments match.
+            "file_paper_path": None,
+            "file_scheme_path": None,
+            "file_attempt_path": None,
+            "file_marking_yaml_path": None,
             "created_at": r.get("created"),
             "updated_at": r.get("updated"),
         }

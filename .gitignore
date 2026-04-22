@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Local env files (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+.venv/
+venv/
+
+# Vercel / tooling
+.vercel/
