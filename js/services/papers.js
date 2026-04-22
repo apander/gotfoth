@@ -9,12 +9,16 @@
         return items.filter((p) => G.isGraded(p.status));
     };
     G.fileUrl = function (paper, field) {
+        if (!paper || !paper.id || !field) return null;
         const name = paper[field];
-        if (!name) return null;
-        return `${G.PB_URL}/api/files/${paper.collectionId}/${paper.id}/${name}`;
+        const pathField = field + "_path";
+        if (!name && !paper[pathField]) return null;
+        const base = G.API_BASE != null ? String(G.API_BASE) : "";
+        return `${base}/api/files/papers/${encodeURIComponent(String(paper.id))}/${encodeURIComponent(String(field))}`;
     };
     G.createPaperRecord = async function (formData) {
-        return fetch(`${G.PB_URL}/api/collections/papers/records`, {
+        const base = G.API_BASE != null ? String(G.API_BASE) : "";
+        return fetch(`${base}/api/collections/papers/records`, {
             method: "POST",
             body: formData,
         });
@@ -23,7 +27,8 @@
         return G.pbPatchJson("papers", id, body);
     };
     G.patchPaperRecordMultipart = async function (id, formData) {
-        const res = await fetch(`${G.PB_URL}/api/collections/papers/records/${encodeURIComponent(String(id))}`, {
+        const base = G.API_BASE != null ? String(G.API_BASE) : "";
+        const res = await fetch(`${base}/api/collections/papers/records/${encodeURIComponent(String(id))}`, {
             method: "PATCH",
             body: formData,
         });
@@ -35,7 +40,8 @@
         return res.json();
     };
     G.deletePaperRecord = async function (id) {
-        const res = await fetch(`${G.PB_URL}/api/collections/papers/records/${encodeURIComponent(String(id))}`, {
+        const base = G.API_BASE != null ? String(G.API_BASE) : "";
+        const res = await fetch(`${base}/api/collections/papers/records/${encodeURIComponent(String(id))}`, {
             method: "DELETE",
         });
         if (!res.ok) throw new Error("DELETE " + id + " " + res.status);

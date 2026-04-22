@@ -29,7 +29,7 @@
     function paperTaskHref(p) {
         const pdf = G.fileUrl(p, "file_paper");
         if (pdf) return pdf;
-        return G.PB_URL + "/_/#/collections/papers/records/" + encodeURIComponent(String(p.id || ""));
+        return "#";
     }
 
     function paperTaskTip(p) {
@@ -41,7 +41,7 @@
     }
 
     /**
-     * Full-width horizontal bar; anchor opens paper PDF or PocketBase record.
+     * Full-width horizontal bar; anchor opens paper PDF when available.
      * @param {boolean} onDarkCell — emerald / exam+graded backgrounds (light text).
      */
     function paperBarHtml(p, onDarkCell) {

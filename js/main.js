@@ -1007,12 +1007,12 @@
         const sections = [
             {
                 title: "Scheduled",
-                subtitle: "Paper and mark scheme on record (PocketBase: Planned). Add attempt when you sit the paper.",
+                subtitle: "Paper and mark scheme on record (status: Planned). Add attempt when you sit the paper.",
                 items: q.planned,
             },
             {
                 title: "Complete",
-                subtitle: "Attempt uploaded — use Log result when you have Gemini YAML (PocketBase: Completed).",
+                subtitle: "Attempt uploaded — use Log result when you have marking YAML (status: Completed).",
                 items: q.completed,
             },
             {
@@ -1024,7 +1024,7 @@
         if (q.other.length) {
             sections.push({
                 title: "Other status",
-                subtitle: "Needs a quick check in PocketBase.",
+                subtitle: "Needs a quick status review.",
                 items: q.other,
             });
         }
@@ -1365,7 +1365,7 @@
             if (del) {
                 del.addEventListener("click", function () {
                     const id = document.getElementById("exam-edit-id") && document.getElementById("exam-edit-id").value;
-                    if (!id || !w.confirm("Delete this exam record from PocketBase? This cannot be undone.")) return;
+                    if (!id || !w.confirm("Delete this exam record? This cannot be undone.")) return;
                     G.deletePaperRecord(id)
                         .then(function () {
                             closeExamEditModal();
@@ -1433,7 +1433,7 @@
             if (exDel) {
                 ev.preventDefault();
                 const did = exDel.getAttribute("data-id");
-                if (!did || !w.confirm("Delete this exam record from PocketBase? This cannot be undone.")) return;
+                if (!did || !w.confirm("Delete this exam record? This cannot be undone.")) return;
                 G.deletePaperRecord(did)
                     .then(function () {
                         return loadAllData();

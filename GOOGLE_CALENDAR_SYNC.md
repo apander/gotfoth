@@ -1,6 +1,13 @@
 # Google Calendar → Study Vault calendar sync
 
-This repo includes `sync_google_ics.py`, which pulls your Google Calendar **private iCal feed** (no OAuth) and writes events into PocketBase **`settings`**. The Schedule view then shows those items as **dark grey chips** in each date cell and displays **last sync** time.
+This repo includes two sync paths:
+
+1. **Legacy NAS/PocketBase:** `sync_google_ics.py`
+2. **Cloud (Vercel + Supabase):**
+   - API cron endpoint: `/api/cron/sync-google-ics`
+   - Optional script runner: `scripts/sync_google_ics_supabase.py`
+
+Both pull the Google Calendar **private iCal feed** (no OAuth) and write event rows into `settings` using `gcal_evt_*` keys. The Schedule view then shows those items as **dark grey chips** in each date cell and displays **last sync** time.
 
 ## Prerequisites
 

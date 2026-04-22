@@ -1,7 +1,10 @@
 (function (w) {
     w.GF = w.GF || {};
     const G = w.GF;
-    G.PB_URL = "http://mycloudex2ultra.local:8090";
+    /** Vercel-hosted API base (same-origin by default). */
+    G.API_BASE = "";
+    /** Legacy name retained for compatibility in older helpers. */
+    G.PB_URL = "";
     G.STATUS_GRADED = "Marked";
     G.STATUS_PLANNED = "Planned";
     G.STATUS_COMPLETED = "Completed";

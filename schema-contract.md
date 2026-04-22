@@ -1,4 +1,15 @@
-# PocketBase schema contract (Study Vault)
+# Data schema contract (Study Vault)
+
+## Cloud target (Vercel + Supabase)
+
+- The frontend now targets same-origin Vercel API routes (`/api/...`) instead of direct NAS PocketBase URLs.
+- Supabase is the system of record:
+  - Postgres tables: `papers`, `boundaries`, `settings`
+  - Storage buckets: `papers`, `schemes`, `attempts`, `marking-yaml`
+- Full SQL/RLS setup lives under [`supabase/migrations`](supabase/migrations).
+- CI/CD workflow lives under [`.github/workflows/vercel-supabase-cicd.yml`](.github/workflows/vercel-supabase-cicd.yml).
+
+## Legacy source (PocketBase on NAS)
 
 The database lives on the NAS; this file is the **source of truth** for the frontend. Update it when you change PocketBase Admin.
 

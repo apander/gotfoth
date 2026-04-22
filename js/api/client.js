@@ -23,12 +23,14 @@
     };
 
     G.pbGet = async function (path) {
-        const res = await fetch(`${G.PB_URL}${path}`);
+        const base = G.API_BASE != null ? String(G.API_BASE) : "";
+        const res = await fetch(`${base}${path}`);
         if (!res.ok) throw new Error(`${path} ${res.status}`);
         return res.json();
     };
     G.pbPatchJson = async function (collection, id, body) {
-        const res = await fetch(`${G.PB_URL}/api/collections/${collection}/records/${id}`, {
+        const base = G.API_BASE != null ? String(G.API_BASE) : "";
+        const res = await fetch(`${base}/api/collections/${collection}/records/${id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),

@@ -1,0 +1,31 @@
+const { dbSelect, storageSignedUrl } = require("../../../../_lib/supabase");
+const { sendError, methodNotAllowed } = require("../../../../_lib/http");
+
+const FIELD_TO_PATH = {
+  file_paper: "file_paper_path",
+  file_scheme: "file_scheme_path",
+  file_attempt: "file_attempt_path",
+  file_marking_yaml: "file_marking_yaml_path",
+};
+
+module.exports = async function handler(req, res) {
+  if (req.method !== "GET") return methodNotAllowed(res, ["GET"]);
+  const id = req.query && req.query.id ? String(req.query.id) : "";
+  const field = req.query && req.query.field ? String(req.query.field) : "";
+  const pathField = FIELD_TO_PATH[field];
+  if (!id || !pathField) return sendError(res, 400, "Invalid file request.");
+
+  try {
+    const rows = await dbSelect("papers", `select=${pathField}&id=eq.${encodeURIComponent(id)}&limit=1`);
+    const row = rows && rows[0] ? rows[0] : null;
+    const storagePath = row ? row[pathField] : null;
+    if (!storagePath) return sendError(res, 404, "File not found.");
+    const signed = await storageSignedUrl(storagePath);
+    if (!signed) return sendError(res, 404, "Could not sign file URL.");
+    res.statusCode = 302;
+    res.setHeader("Location", signed);
+    res.end();
+  } catch (e) {
+    return sendError(res, 500, e.message || "Failed to resolve file URL.");
+  }
+};
