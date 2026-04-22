@@ -1,7 +1,15 @@
 const fs = require("node:fs/promises");
-const formidable = require("formidable");
+// formidable v3+: default export may be nested when required from CJS.
+const formidableImport = require("formidable");
+const formidable =
+  typeof formidableImport === "function"
+    ? formidableImport
+    : formidableImport.formidable || formidableImport.default;
 
 function parseForm(req) {
+  if (typeof formidable !== "function") {
+    return Promise.reject(new Error("formidable parser could not be loaded."));
+  }
   return new Promise((resolve, reject) => {
     const form = formidable({
       multiples: false,
