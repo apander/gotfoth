@@ -114,8 +114,31 @@ async function storageSignedUrl(storagePath, expiresIn) {
     body: JSON.stringify({ expiresIn: expiresIn || signedUrlTtl }),
   });
   const json = await res.json();
-  if (!json || !json.signedURL) return null;
-  return `${url}/storage/v1${json.signedURL}`;
+
+  // Supabase versions differ slightly in JSON shape; support common variants.
+  const rawSigned =
+    (json && (json.signedURL || json.signedUrl || json.signed_url)) ||
+    (json && json.data && (json.data.signedURL || json.data.signedUrl || json.data.signed_url)) ||
+    null;
+
+  let signed = "";
+  if (typeof rawSigned === "string") signed = rawSigned;
+  else if (rawSigned && typeof rawSigned === "object") {
+    signed =
+      typeof rawSigned.signedUrl === "string"
+        ? rawSigned.signedUrl
+        : typeof rawSigned.signedURL === "string"
+          ? rawSigned.signedURL
+          : typeof rawSigned.url === "string"
+            ? rawSigned.url
+            : "";
+  }
+  if (!signed) return null;
+
+  // Sometimes `signedUrl` is already absolute; sometimes it's a path starting with `/object/sign/...`
+  if (signed.startsWith("http://") || signed.startsWith("https://")) return signed;
+  if (signed.startsWith("/")) return `${url}${signed}`;
+  return `${url}/storage/v1/${signed}`;
 }
 
 module.exports = {
