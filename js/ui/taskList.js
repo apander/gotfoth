@@ -97,8 +97,29 @@
         </div>`;
     };
 
-    G.hydrateMarkingDetails = async function (root, papersById) {
+    async function hydrateOneMarkingDetail(el, paper) {
+        if (!el || !paper || el.getAttribute("data-marking-hydrated") === "1") return;
         const yamlApi = G.resolveYamlApi();
+        const yamlText =
+            typeof G.resolveMarkingYamlText === "function" ? await G.resolveMarkingYamlText(paper) : paper.full_yaml;
+        if (!yamlText) return;
+        const parsed = G.parseMarkingYaml(yamlText, yamlApi);
+        const bits = [];
+        if (parsed.error) bits.push(`Parse error: ${parsed.error}`);
+        parsed.warnings.forEach((w) => bits.push(`⚠ ${w}`));
+        const data = parsed.data;
+        if (data) {
+            if (data.questions && data.questions.length) bits.push(JSON.stringify(data.questions, null, 2));
+            if (data.qa) bits.push(`QA: ${JSON.stringify(data.qa, null, 2)}`);
+            if (Array.isArray(data.strengths)) bits.push(`Strengths: ${data.strengths.join("; ")}`);
+            if (Array.isArray(data.weaknesses)) bits.push(`Weaknesses: ${data.weaknesses.join("; ")}`);
+        }
+        el.textContent = bits.join("\n\n") || "(No structured detail)";
+        el.setAttribute("data-marking-hydrated", "1");
+    }
+
+    /** @deprecated Prefer lazy hydration when expanding rows; kept for compatibility. */
+    G.hydrateMarkingDetails = async function (root, papersById) {
         const els = root.querySelectorAll(".js-marking-detail");
         await Promise.all(
             Array.from(els).map(async (el) => {
@@ -106,23 +127,10 @@
                 const id = row && row.getAttribute("data-paper-id");
                 if (!id) return;
                 const paper = papersById[id];
-                if (!paper) return;
-                const yamlText =
-                    typeof G.resolveMarkingYamlText === "function" ? await G.resolveMarkingYamlText(paper) : paper.full_yaml;
-                if (!yamlText) return;
-                const parsed = G.parseMarkingYaml(yamlText, yamlApi);
-                const bits = [];
-                if (parsed.error) bits.push(`Parse error: ${parsed.error}`);
-                parsed.warnings.forEach((w) => bits.push(`⚠ ${w}`));
-                const data = parsed.data;
-                if (data) {
-                    if (data.questions && data.questions.length) bits.push(JSON.stringify(data.questions, null, 2));
-                    if (data.qa) bits.push(`QA: ${JSON.stringify(data.qa, null, 2)}`);
-                    if (Array.isArray(data.strengths)) bits.push(`Strengths: ${data.strengths.join("; ")}`);
-                    if (Array.isArray(data.weaknesses)) bits.push(`Weaknesses: ${data.weaknesses.join("; ")}`);
-                }
-                el.textContent = bits.join("\n\n") || "(No structured detail)";
+                await hydrateOneMarkingDetail(el, paper);
             })
         );
     };
+
+    G.hydrateMarkingDetailPanel = hydrateOneMarkingDetail;
 })(window);

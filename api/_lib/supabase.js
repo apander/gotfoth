@@ -137,6 +137,9 @@ async function storageSignedUrl(storagePath, expiresIn) {
 
   // Sometimes `signedUrl` is already absolute; sometimes it's a path starting with `/object/sign/...`
   if (signed.startsWith("http://") || signed.startsWith("https://")) return signed;
+  if (signed.startsWith("/storage/v1")) return `${url}${signed}`;
+  // Hosted Supabase commonly returns `/object/sign/...` tokens; those must be under `/storage/v1`.
+  if (signed.startsWith("/object/")) return `${url}/storage/v1${signed}`;
   if (signed.startsWith("/")) return `${url}${signed}`;
   return `${url}/storage/v1/${signed}`;
 }

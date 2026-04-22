@@ -30,7 +30,23 @@
             btn.addEventListener("click", function () {
                 const tid = btn.getAttribute("data-target");
                 const panel = tid ? document.getElementById(tid) : null;
-                if (panel) panel.classList.toggle("hidden");
+                if (!panel) return;
+
+                const wasHidden = panel.classList.contains("hidden");
+                panel.classList.toggle("hidden");
+
+                const nowOpen = !panel.classList.contains("hidden");
+                if (!nowOpen || !wasHidden) return;
+                if (!panel.classList.contains("js-marking-detail")) return;
+
+                const row = btn.closest(".paper-row");
+                const id = row && row.getAttribute("data-paper-id");
+                if (!id) return;
+                const paper = allPapers.find(function (p) {
+                    return p.id === id;
+                });
+                if (!paper || typeof G.hydrateMarkingDetailPanel !== "function") return;
+                void G.hydrateMarkingDetailPanel(panel, paper);
             });
         });
     }
@@ -1058,7 +1074,6 @@
         const taskList = document.getElementById("task-list");
         if (taskList) {
             taskList.innerHTML = renderSegmentedPaperBlocks(items, boundaries, byId, "card");
-            void G.hydrateMarkingDetails(taskList, byId);
             bindPaperRowEvents(taskList);
         }
 
