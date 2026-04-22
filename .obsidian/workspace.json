@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "CLOUD_SETUP.md",
+                "file": "DATA_MIGRATION.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "CLOUD_SETUP"
+              "title": "DATA_MIGRATION"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "CLOUD_SETUP.md",
+                "file": "DATA_MIGRATION.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for CLOUD_SETUP"
+              "title": "Backlinks for DATA_MIGRATION"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "CLOUD_SETUP.md",
+                "file": "DATA_MIGRATION.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from CLOUD_SETUP"
+              "title": "Outgoing links from DATA_MIGRATION"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "CLOUD_SETUP.md",
+                "file": "DATA_MIGRATION.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of CLOUD_SETUP"
+              "title": "Outline of DATA_MIGRATION"
             }
           }
         ]
@@ -184,5 +184,12 @@
     }
   },
   "active": "fa4c7d20a3fbda28",
-  "lastOpenFiles": []
+  "lastOpenFiles": [
+    "requirements-ci.txt",
+    "sync_google_ics.py",
+    "scripts/sync_google_ics_supabase.py",
+    "api/cron/sync-google-ics.js",
+    "GOOGLE_CALENDAR_SYNC.md",
+    "CLOUD_SETUP.md"
+  ]
 }
