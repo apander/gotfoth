@@ -1,6 +1,6 @@
 # Gemini Marking Engine: Prompt & Implementation Guide
 
-This document defines the specialized "Marking Engine" prompt and the resulting YAML data structure. This "handshake" allows Gemini’s AI analysis to be parsed and injected directly into the NAS-based Study Vault database.
+This document defines the specialized "Marking Engine" prompt and the resulting YAML data structure. This "handshake" allows Gemini’s AI analysis to be parsed and injected directly into the NAS-based Study Vault database. 
 
 ---
 
