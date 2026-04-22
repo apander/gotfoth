@@ -16,3 +16,6 @@ venv/
 
 # Vercel / tooling
 .vercel/
+
+# Local database backups
+backups/

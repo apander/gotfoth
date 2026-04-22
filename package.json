@@ -8,7 +8,7 @@
   },
   "scripts": {
     "check:js": "node --check js/main.js && node --check js/api/client.js && node --check js/services/papers.js && node --check js/services/settings.js && node --check js/services/boundaries.js",
-    "check:python": "python -m py_compile seeder.py exam_dates.py scripts/migrate_pocketbase_to_supabase.py scripts/validate_supabase_parity.py scripts/smoke_check_cloud.py",
+    "check:python": "python -m py_compile seeder.py exam_dates.py scripts/migrate_pocketbase_to_supabase.py scripts/validate_supabase_parity.py scripts/smoke_check_cloud.py scripts/backup_supabase_db.py",
     "check": "npm run check:js && npm run check:python"
   },
   "dependencies": {
