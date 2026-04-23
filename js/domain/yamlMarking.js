@@ -1,5 +1,6 @@
 (function (w) {
     const G = w.GF;
+    const yamlFetchCache = new Map();
     G.extractYamlBlock = function (text) {
         const fence = text.match(/```(?:yaml)?\s*([\s\S]*?)```/i);
         return fence ? fence[1].trim() : text.trim();
@@ -111,9 +112,19 @@
         const inline = fy.trim();
         const inlineIsStubOnly = !!(inline && stub && inline === stub);
         const hasInlineRealYaml = !!(inline && (!stub || inline !== stub));
+        const cacheKey = [
+            paper.id || "",
+            paper.file_marking_yaml_path || "",
+            paper.file_marking_yaml || "",
+            inline,
+        ].join("|");
+        if (yamlFetchCache.has(cacheKey)) return yamlFetchCache.get(cacheKey);
 
         // If inline YAML already contains the real document, don't hit `/api/files` unnecessarily.
-        if (hasInlineRealYaml) return fy;
+        if (hasInlineRealYaml) {
+            yamlFetchCache.set(cacheKey, fy);
+            return fy;
+        }
 
         if ((paper.file_marking_yaml || paper.file_marking_yaml_path) && typeof G.fileUrl === "function") {
             const u = G.fileUrl(paper, "file_marking_yaml");
@@ -122,12 +133,20 @@
                     const r = await fetch(u);
                     if (r.ok) {
                         const txt = await r.text();
-                        if (txt) return txt;
+                        if (txt) {
+                            yamlFetchCache.set(cacheKey, txt);
+                            return txt;
+                        }
                     }
                 } catch (ignore) {}
             }
         }
-        if (inlineIsStubOnly) return "";
-        return paper.full_yaml != null ? String(paper.full_yaml) : "";
+        if (inlineIsStubOnly) {
+            yamlFetchCache.set(cacheKey, "");
+            return "";
+        }
+        const fallback = paper.full_yaml != null ? String(paper.full_yaml) : "";
+        yamlFetchCache.set(cacheKey, fallback);
+        return fallback;
     };
 })(window);

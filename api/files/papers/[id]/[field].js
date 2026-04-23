@@ -26,6 +26,14 @@ module.exports = async function handler(req, res) {
     res.setHeader("Location", signed);
     res.end();
   } catch (e) {
-    return sendError(res, 500, e.message || "Failed to resolve file URL.");
+    const msg = e && e.message ? e.message : String(e || "Failed to resolve file URL.");
+    try {
+      return sendError(res, 500, msg);
+    } catch (sendErr) {
+      // Last-resort guard: never let the route crash on error formatting.
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.end(JSON.stringify({ message: msg }));
+    }
   }
 };
