@@ -1,5 +1,9 @@
 function sendJson(res, status, payload) {
-  res.status(status).setHeader("Content-Type", "application/json; charset=utf-8");
+  if (typeof res.status === "function") res.status(status);
+  else res.statusCode = status;
+  if (typeof res.setHeader === "function") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+  }
   res.end(JSON.stringify(payload));
 }
 
