@@ -11,8 +11,11 @@ function authHeaders(contentType) {
   const { serviceRoleKey } = getConfig();
   const out = {
     apikey: serviceRoleKey,
-    Authorization: `Bearer ${serviceRoleKey}`,
   };
+  // Legacy keys are JWTs (eyJ...); new platform keys are opaque (sb_secret_...).
+  // Storage endpoints can fail when opaque keys are forced into Authorization bearer.
+  const looksLikeJwt = /^[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+$/.test(serviceRoleKey);
+  if (looksLikeJwt) out.Authorization = `Bearer ${serviceRoleKey}`;
   if (contentType) out["Content-Type"] = contentType;
   return out;
 }
