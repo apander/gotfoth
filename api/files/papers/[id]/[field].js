@@ -1,5 +1,5 @@
-const { dbSelect, storageSignedUrl } = require("../../../../_lib/supabase");
-const { sendError, methodNotAllowed } = require("../../../../_lib/http");
+const { dbSelect, storageSignedUrl } = require("../../../_lib/supabase");
+const { sendError, methodNotAllowed } = require("../../../_lib/http");
 
 const FIELD_TO_PATH = {
   file_paper: "file_paper_path",
