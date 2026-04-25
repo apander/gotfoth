@@ -216,6 +216,18 @@
             return;
         }
         a.href = u;
+        a.onclick = function (ev) {
+            ev.preventDefault();
+            fetch(u, { method: "HEAD", redirect: "follow" })
+                .then(function (res) {
+                    if (!res.ok) throw new Error("missing");
+                    const openUrl = res.url || u;
+                    w.open(openUrl, "_blank", "noopener");
+                })
+                .catch(function () {
+                    w.alert("This file is unavailable. Re-upload the file and save changes.");
+                });
+        };
         a.classList.remove("hidden");
     }
 
@@ -682,9 +694,22 @@
         body.setAttribute("data-qfilter-mode", "all");
         body.setAttribute("data-qonly-dropped", "0");
 
-        const filePaper = paper && G.fileUrl ? G.fileUrl(paper, "file_paper") : null;
-        const fileScheme = paper && G.fileUrl ? G.fileUrl(paper, "file_scheme") : null;
-        const fileAttempt = paper && G.fileUrl ? G.fileUrl(paper, "file_attempt") : null;
+        async function resolveFileForViewer(field) {
+            const u = paper && G.fileUrl ? G.fileUrl(paper, field) : null;
+            if (!u) return null;
+            try {
+                const res = await fetch(u, { method: "HEAD", redirect: "follow" });
+                if (!res.ok) return null;
+                return res.url || u;
+            } catch (_e) {
+                return null;
+            }
+        }
+        const [filePaper, fileScheme, fileAttempt] = await Promise.all([
+            resolveFileForViewer("file_paper"),
+            resolveFileForViewer("file_scheme"),
+            resolveFileForViewer("file_attempt"),
+        ]);
         if (controls) controls.classList.toggle("hidden", !filePaper && !fileScheme && !fileAttempt);
         if (btnPaper) btnPaper.classList.toggle("hidden", !filePaper);
         if (btnScheme) btnScheme.classList.toggle("hidden", !fileScheme);
@@ -710,7 +735,10 @@
         }
 
         function openViewer(url, label) {
-            if (!url || !viewerWrap || !viewerFrame) return;
+            if (!url || !viewerWrap || !viewerFrame) {
+                w.alert("That file is not available yet. Please re-upload it and save changes.");
+                return;
+            }
             if (viewerTitle) viewerTitle.textContent = label;
             viewerFrame.src = viewerSrcForUrl(url);
             viewerWrap.classList.remove("max-h-0", "opacity-0", "mt-0");
