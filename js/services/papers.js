@@ -21,6 +21,7 @@
         return fetch(`${base}/api/collections/papers/records`, {
             method: "POST",
             body: formData,
+            credentials: "include",
         });
     };
     G.patchPaperRecord = function (id, body) {
@@ -31,6 +32,7 @@
         const res = await fetch(`${base}/api/collections/papers/records/${encodeURIComponent(String(id))}`, {
             method: "PATCH",
             body: formData,
+            credentials: "include",
         });
         if (!res.ok) {
             const raw = await res.text();
@@ -43,6 +45,7 @@
         const base = G.API_BASE != null ? String(G.API_BASE) : "";
         const res = await fetch(`${base}/api/collections/papers/records/${encodeURIComponent(String(id))}`, {
             method: "DELETE",
+            credentials: "include",
         });
         if (!res.ok) throw new Error("DELETE " + id + " " + res.status);
     };

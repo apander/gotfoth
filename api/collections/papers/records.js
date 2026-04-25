@@ -3,6 +3,7 @@ const { dbInsert, dbSelect } = require("../../_lib/db");
 const { parseForm } = require("../../_lib/form");
 const { normalizePaperRow, fieldsToPaperPatch, uploadFilesAndBuildPatch } = require("../../_lib/papers");
 const { sendJson, sendError, methodNotAllowed } = require("../../_lib/http");
+const { requireAuth } = require("../../_lib/authSimple");
 
 module.exports = async function handler(req, res) {
   if (req.method === "GET") {
@@ -21,6 +22,8 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === "POST") {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     try {
       const { fields, files } = await parseForm(req);
       const id = randomUUID();

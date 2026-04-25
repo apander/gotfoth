@@ -1,11 +1,14 @@
 const { dbDelete, dbPatch } = require("../../../_lib/db");
 const { sendJson, sendError, methodNotAllowed } = require("../../../_lib/http");
+const { requireAuth } = require("../../../_lib/authSimple");
 
 module.exports = async function handler(req, res) {
   const id = req.query && req.query.id ? String(req.query.id) : "";
   if (!id) return sendError(res, 400, "Missing settings id.");
 
   if (req.method === "PATCH") {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     try {
       const patch = {};
       if (req.body && req.body.value !== undefined) patch.value = String(req.body.value);
@@ -18,6 +21,8 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === "DELETE") {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     try {
       await dbDelete("settings", id);
       return sendJson(res, 204, {});

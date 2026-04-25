@@ -22,6 +22,17 @@
     }
 
     function nextActionButton(p, ux, subject, year, paperNum, isNoPaperYear) {
+        var canWrite = typeof G.canWrite === "function" ? G.canWrite() : true;
+        if (!canWrite) {
+            if (p && ux === "Marked") {
+                return (
+                    '<button type="button" class="js-view-yaml-comments mt-2 w-full px-2 py-1.5 rounded-lg bg-emerald-700 text-white text-[9px] font-black uppercase tracking-wide hover:bg-emerald-600 transition shrink-0" data-id="' +
+                    esc(String(p.id)) +
+                    '">View marking</button>'
+                );
+            }
+            return "";
+        }
         if (isNoPaperYear) return "";
         if (!p) {
             return (
@@ -68,8 +79,9 @@
             (title || "\u00a0") +
             "</div>";
         var actionBtn = nextActionButton(p, ux, subject, year, paperNum, isNoPaperYear);
+        var canWrite = typeof G.canWrite === "function" ? G.canWrite() : true;
         var settingsBtn =
-            p && !isNoPaperYear
+            canWrite && p && !isNoPaperYear
                 ? '<button type="button" class="js-exam-settings -mr-0.5 -mt-0.5 p-1 rounded-lg text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition shrink-0" data-id="' +
                   esc(String(p.id)) +
                   '" title="Exam settings" aria-label="Exam settings">' +

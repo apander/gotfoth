@@ -24,7 +24,7 @@
 
     G.pbGet = async function (path) {
         const base = G.API_BASE != null ? String(G.API_BASE) : "";
-        const res = await fetch(`${base}${path}`);
+        const res = await fetch(`${base}${path}`, { credentials: "include" });
         if (!res.ok) throw new Error(`${path} ${res.status}`);
         return res.json();
     };
@@ -34,6 +34,7 @@
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
+            credentials: "include",
         });
         if (!res.ok) {
             const raw = await res.text();

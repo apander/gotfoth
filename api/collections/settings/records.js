@@ -1,5 +1,6 @@
 const { dbInsert, dbSelect } = require("../../_lib/db");
 const { sendJson, sendError, methodNotAllowed } = require("../../_lib/http");
+const { requireAuth } = require("../../_lib/authSimple");
 
 module.exports = async function handler(req, res) {
   if (req.method === "GET") {
@@ -13,6 +14,8 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === "POST") {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     try {
       const key = req.body && req.body.key ? String(req.body.key).trim() : "";
       const value = req.body && req.body.value != null ? String(req.body.value) : "";

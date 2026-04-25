@@ -25,6 +25,7 @@
 
     /** Must match `papers.full_yaml` max length rule in PocketBase; overflow goes to `file_marking_yaml`. */
     G.FULL_YAML_TEXT_MAX = 5000;
+    G.MOBILE_READONLY_MAX_WIDTH = 767;
 
     G.isUnscheduledPaper = function (paper) {
         const d = paper && paper.scheduled_date;

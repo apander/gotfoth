@@ -37,11 +37,21 @@
                     <button type="button" id="btn-history" onclick="showView('history')" class="nav-btn w-full flex items-center gap-2 px-3 py-2.5 md:py-2 rounded-xl font-bold transition-all text-slate-400 hover:bg-slate-800 text-left">
                         History
                     </button>
+                    <div class="mt-3 space-y-2">
+                        <p id="auth-user-label" class="text-[10px] text-slate-400">Not logged in</p>
+                        <div class="flex gap-2">
+                            <button type="button" id="auth-login-btn" class="flex-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-[10px] font-black uppercase hover:bg-blue-500">Login</button>
+                            <button type="button" id="auth-logout-btn" class="flex-1 px-3 py-2 rounded-lg border border-slate-700 text-slate-300 text-[10px] font-black uppercase hover:bg-slate-800 hidden">Logout</button>
+                        </div>
+                    </div>
                 </div>
             </nav>
         </aside>
 
         <main class="flex-grow min-w-0 w-full md:ml-52 lg:ml-56 max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 py-4 md:py-5 lg:py-6 pt-[5.25rem] md:pt-5">
+            <div id="mobile-readonly-banner" class="hidden mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                Mobile mode is read-only. Use desktop to upload, edit, delete, or save grades.
+            </div>
 
             <!-- Schedule: single surface — vertical stats rail | calendar -->
             <div id="view-schedule" class="view-content hidden">
@@ -444,6 +454,31 @@
             <div id="yaml-comments-body" class="max-h-[65vh] overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-4"></div>
         </div>
     </div>
+    <div id="auth-login-modal" class="hidden fixed inset-0 z-50 bg-slate-900/55 backdrop-blur-[1px] items-center justify-center p-4 overflow-y-auto">
+        <div class="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200 p-5 my-4">
+            <h3 class="text-lg font-black text-slate-900 mb-1">Login</h3>
+            <p class="text-xs text-slate-500 mb-4">Login is required for write actions on desktop.</p>
+            <form id="auth-login-form" class="space-y-3">
+                <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase block mb-1" for="auth-username">Username</label>
+                    <input id="auth-username" type="text" autocomplete="username" class="w-full p-2 rounded-xl border border-slate-200 text-sm" />
+                </div>
+                <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase block mb-1" for="auth-password">Password</label>
+                    <input id="auth-password" type="password" autocomplete="current-password" class="w-full p-2 rounded-xl border border-slate-200 text-sm" />
+                </div>
+                <label class="flex items-center gap-2 text-xs text-slate-700">
+                    <input id="auth-remember-me" type="checkbox" class="rounded border-slate-300" />
+                    Remember me
+                </label>
+                <p id="auth-login-error" class="hidden text-xs text-red-700"></p>
+                <div class="flex flex-col sm:flex-row gap-2 justify-end pt-1">
+                    <button id="auth-login-cancel" type="button" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-sm">Cancel</button>
+                    <button id="auth-login-submit" type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-black text-sm hover:bg-blue-600">Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <!-- Classic scripts: ES modules fail on file:// in Chrome; this layout works opened from disk or via http:// -->
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
     <script src="js/config.js"></script>
@@ -455,6 +490,7 @@
     <script src="js/services/boundaries.js"></script>
     <script src="js/services/settings.js"></script>
     <script src="js/services/papers.js"></script>
+    <script src="js/services/auth.js"></script>
     <script src="js/ui/router.js"></script>
     <script src="js/ui/calendar.js"></script>
     <script src="js/ui/dashboard.js"></script>
