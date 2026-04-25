@@ -1,4 +1,4 @@
-const { dbInsert, dbSelect } = require("../../_lib/supabase");
+const { dbInsert, dbSelect } = require("../../_lib/db");
 const { sendJson, sendError, methodNotAllowed } = require("../../_lib/http");
 
 module.exports = async function handler(req, res) {

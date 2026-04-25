@@ -1,5 +1,5 @@
 const { randomUUID } = require("node:crypto");
-const { dbInsert, dbSelect } = require("../../_lib/supabase");
+const { dbInsert, dbSelect } = require("../../_lib/db");
 const { parseForm } = require("../../_lib/form");
 const { normalizePaperRow, fieldsToPaperPatch, uploadFilesAndBuildPatch } = require("../../_lib/papers");
 const { sendJson, sendError, methodNotAllowed } = require("../../_lib/http");

@@ -1,4 +1,5 @@
-const { dbSelect, storageSignedUrl } = require("../../../_lib/supabase");
+const { dbSelect } = require("../../../_lib/db");
+const { storageSignedUrl } = require("../../../_lib/storage");
 const { sendError, methodNotAllowed } = require("../../../_lib/http");
 
 const FIELD_TO_PATH = {

@@ -1,4 +1,4 @@
-const { dbDelete, dbPatch, dbSelect } = require("../../../_lib/supabase");
+const { dbDelete, dbPatch, dbSelect } = require("../../../_lib/db");
 const { parseForm, readJsonBody } = require("../../../_lib/form");
 const { normalizePaperRow, fieldsToPaperPatch, uploadFilesAndBuildPatch, FILE_TO_PATH_FIELD } = require("../../../_lib/papers");
 const { sendJson, sendError, methodNotAllowed } = require("../../../_lib/http");

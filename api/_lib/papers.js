@@ -1,5 +1,5 @@
 const path = require("node:path");
-const { sanitizePathPart, storageUpload } = require("./supabase");
+const { sanitizePathPart, storageUpload } = require("./storage");
 const { fileToBuffer, firstField, firstFile } = require("./form");
 
 const FILE_TO_BUCKET = {

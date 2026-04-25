@@ -1,13 +1,13 @@
-# Vercel + Supabase Deploy and Cutover Checklist
+# Vercel + Neon + Vercel Blob Deploy and Cutover Checklist
 
-This document is the migration-day runbook for moving from NAS/PocketBase to Vercel + Supabase.
+This document is the migration-day runbook for moving from Supabase-backed runtime to Neon + Vercel Blob.
 
 ## 0) Scope
 
 - Frontend hosting: Vercel
 - Backend/API: Vercel API routes
-- Data store: Supabase Postgres + Storage
-- Source migration: PocketBase on NAS
+- Data store: Neon Postgres + Vercel Blob
+- Source migration: Supabase Postgres + Storage
 
 ---
 
@@ -17,10 +17,10 @@ Run on your admin machine (PowerShell):
 
 ```powershell
 $REPO="C:\Users\alasd\OneDrive\Documents\GitHub\gotfoth\gotfoth"
-$PB_URL="http://mycloudex2ultra.local:8090"
-$PB_AUTH_TOKEN=""  # optional
 $SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
 $SUPABASE_SERVICE_ROLE_KEY="YOUR_SERVICE_ROLE_KEY"
+$NEON_DATABASE_URL="postgresql://..."
+$BLOB_READ_WRITE_TOKEN="vercel_blob_rw_token"
 $APP_BASE_URL="https://YOUR_VERCEL_DOMAIN.vercel.app"
 ```
 
@@ -28,9 +28,10 @@ Confirm required files exist:
 
 ```powershell
 cd $REPO
-ls .\supabase\migrations\202604220001_initial_schema.sql
-ls .\scripts\migrate_pocketbase_to_supabase.py
-ls .\scripts\validate_supabase_parity.py
+ls .\scripts\apply_neon_schema.js
+ls .\scripts\migrate_supabase_to_neon.js
+ls .\scripts\migrate_supabase_files_to_blob.js
+ls .\scripts\validate_neon_parity.js
 ls .\scripts\smoke_check_cloud.py
 ```
 
@@ -38,10 +39,10 @@ ls .\scripts\smoke_check_cloud.py
 
 ## 2) Backup and freeze prep
 
-On NAS shell, create a pre-cutover backup:
+Create a Supabase snapshot/export before cutover:
 
 ```sh
-tar -czf /mnt/HD/HD_a2/gotfoth_data/pb_data_backup_$(date +%F_%H%M).tgz /mnt/HD/HD_a2/gotfoth_data/pb_data
+# Run in Supabase dashboard or preferred backup tool before migration
 ```
 
 Record backup filename and size in your cutover notes.
@@ -50,42 +51,51 @@ Record backup filename and size in your cutover notes.
 
 ## 3) Deploy script (schema + migration + parity)
 
-### Step A: Apply Supabase schema
-
-Apply:
-- `supabase/migrations/202604220001_initial_schema.sql`
-- `supabase/seed.sql`
-
-Use Supabase SQL Editor or your preferred migration tool.
-
-### Step B: Run migration
+### Step A: Apply Neon schema
 
 ```powershell
 cd $REPO
-$env:PB_URL=$PB_URL
-$env:PB_AUTH_TOKEN=$PB_AUTH_TOKEN
-$env:SUPABASE_URL=$SUPABASE_URL
-$env:SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY
-python .\scripts\migrate_pocketbase_to_supabase.py
+$env:NEON_DATABASE_URL=$NEON_DATABASE_URL
+node .\scripts\apply_neon_schema.js
 ```
 
-### Step C: Run parity check
+### Step B: Copy table data (Supabase -> Neon)
 
 ```powershell
 cd $REPO
-$env:PB_URL=$PB_URL
-$env:PB_AUTH_TOKEN=$PB_AUTH_TOKEN
 $env:SUPABASE_URL=$SUPABASE_URL
 $env:SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY
-python .\scripts\validate_supabase_parity.py
+$env:NEON_DATABASE_URL=$NEON_DATABASE_URL
+node .\scripts\migrate_supabase_to_neon.js
+```
+
+### Step C: Copy files (Supabase Storage -> Blob)
+
+```powershell
+cd $REPO
+$env:SUPABASE_URL=$SUPABASE_URL
+$env:SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY
+$env:NEON_DATABASE_URL=$NEON_DATABASE_URL
+$env:BLOB_READ_WRITE_TOKEN=$BLOB_READ_WRITE_TOKEN
+node .\scripts\migrate_supabase_files_to_blob.js
+```
+
+### Step D: Run parity check
+
+```powershell
+cd $REPO
+$env:SUPABASE_URL=$SUPABASE_URL
+$env:SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY
+$env:NEON_DATABASE_URL=$NEON_DATABASE_URL
+node .\scripts\validate_neon_parity.js
 ```
 
 Expected output:
 
-- `papers: OK (...)`
-- `boundaries: OK (...)`
-- `settings: OK (...)`
-- `Parity check passed.`
+- `papers: supabase=N neon=N OK`
+- `boundaries: supabase=N neon=N OK`
+- `settings: supabase=N neon=N OK`
+- `Parity validation passed.`
 
 ---
 
@@ -93,11 +103,10 @@ Expected output:
 
 Set Vercel project env vars for Preview + Production:
 
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `GCAL_ICS_URL`
-- `SYNC_CRON_TOKEN`
+- `DATA_BACKEND` (`neon`)
+- `FILE_BACKEND` (`blob`)
+- `NEON_DATABASE_URL`
+- `BLOB_READ_WRITE_TOKEN`
 - `SIGNED_URL_TTL_SECONDS`
 - `FULL_YAML_TEXT_MAX`
 
@@ -126,7 +135,7 @@ Invoke-RestMethod "$APP_BASE_URL/api/collections/settings/records?perPage=5"
 
 ### Reconciliation checks (manual/scripted)
 
-1. Count parity (already covered by `validate_supabase_parity.py`)
+1. Count parity (already covered by `validate_neon_parity.js`)
 2. Status distribution parity (Planned/Completed/Marked/Graded)
 3. Score sanity:
    - count non-null scores matches expected graded papers
@@ -141,15 +150,8 @@ Invoke-RestMethod "$APP_BASE_URL/api/collections/settings/records?perPage=5"
 6. YAML behavior:
    - normal YAML save
    - long YAML overflow save (over `FULL_YAML_TEXT_MAX`)
-7. Calendar/ICS:
-   - run cron endpoint once and verify `gcal_sync_status` and `gcal_evt_*` keys update
-
-### Optional: run cloud cron manually
-
-```powershell
-$token="YOUR_SYNC_CRON_TOKEN"
-Invoke-RestMethod -Method Post -Headers @{Authorization="Bearer $token"} "$APP_BASE_URL/api/cron/sync-google-ics"
-```
+7. Provider flags:
+   - verify runtime envs are `DATA_BACKEND=neon` and `FILE_BACKEND=blob`
 
 ---
 
@@ -159,10 +161,10 @@ Use this matrix as a sign-off sheet. Mark Pass/Fail with evidence links (screens
 
 | ID | Phase | Test | Command/Action | Expected Result | Pass/Fail | Evidence |
 |---|---|---|---|---|---|---|
-| M01 | Pre-cutover | NAS backup created | `tar -czf ...` | Archive created with non-zero size |  |  |
-| M02 | Pre-cutover | Supabase migration applied | SQL apply | Tables + buckets exist |  |  |
-| M03 | Migration | Full data migration | `python scripts/migrate_pocketbase_to_supabase.py` | Completes without exceptions |  |  |
-| M04 | Migration | Count parity | `python scripts/validate_supabase_parity.py` | `Parity check passed` |  |  |
+| M01 | Pre-cutover | Supabase snapshot created | Dashboard/export task | Snapshot exists with timestamp |  |  |
+| M02 | Pre-cutover | Neon schema applied | `node scripts/apply_neon_schema.js` | Tables exist in Neon |  |  |
+| M03 | Migration | Table migration | `node scripts/migrate_supabase_to_neon.js` | Completes without exceptions |  |  |
+| M04 | Migration | File migration | `node scripts/migrate_supabase_files_to_blob.js` | Files uploaded and paths updated |  |  |
 | M05 | Deploy | Production deploy | GitHub Actions workflow | Deploy succeeds |  |  |
 | M06 | Deploy | API health | `GET /api/health` | `ok: true` |  |  |
 | M07 | Functional | Paper upload flow | UI: upload paper/scheme/attempt | New record appears and status correct |  |  |
@@ -170,11 +172,11 @@ Use this matrix as a sign-off sheet. Mark Pass/Fail with evidence links (screens
 | M09 | Functional | View marking | UI: open feedback modal | YAML renders 3-depth view correctly |  |  |
 | M10 | Functional | Signed file access | Open paper/scheme/attempt links | File opens via signed URL redirect |  |  |
 | M11 | Functional | Long YAML overflow | Save > 5000 chars YAML | Save succeeds with file-based overflow |  |  |
-| M12 | Calendar | ICS sync | Trigger cron endpoint | `gcal_evt_*` + `gcal_sync_status` updated |  |  |
+| M12 | Runtime | Provider switch | Set env flags and deploy | App serves from Neon + Blob |  |  |
 | M13 | UX integrity | Backlog/Progress/Calendar | Browse app tabs | No runtime errors, expected data shown |  |  |
 | M14 | Reconciliation | Status distribution | Compare old/new counts by status | Matches expected mapping (`Marked`/`Graded`) |  |  |
 | M15 | Cutover | DNS/app switch | Open production URL | Users hit Vercel app successfully |  |  |
-| M16 | Post-cutover | NAS writes disabled | Ops action | No further writes to PocketBase |  |  |
+| M16 | Post-cutover | Supabase fallback retained | Ops action | Snapshot + env rollback path available |  |  |
 
 ---
 
@@ -182,8 +184,8 @@ Use this matrix as a sign-off sheet. Mark Pass/Fail with evidence links (screens
 
 1. Confirm matrix rows M01–M15 are pass.
 2. Announce cutover complete.
-3. Disable NAS write path.
-4. Retain NAS snapshot for rollback window.
+3. Keep Supabase fallback snapshot for rollback window.
+4. Document final provider flags in runbook notes.
 
 ---
 
@@ -192,7 +194,7 @@ Use this matrix as a sign-off sheet. Mark Pass/Fail with evidence links (screens
 If critical defect is found:
 
 1. Redeploy previous Vercel release.
-2. Restore Supabase snapshot if data integrity is affected.
-3. Re-enable NAS/PocketBase write path only after rollback confirmation.
+2. Set `DATA_BACKEND=supabase` and `FILE_BACKEND=supabase` in Vercel env.
+3. Redeploy previous stable version and confirm health checks.
 
 Keep rollback evidence in the same matrix sheet (timestamp + operator).
