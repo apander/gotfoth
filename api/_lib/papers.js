@@ -79,8 +79,8 @@ async function uploadFilesAndBuildPatch(recordId, files) {
     const stem = sanitizePathPart(path.basename(f.originalFilename || inputField, ext));
     const objectPath = `${recordId}/${inputField}/${Date.now()}_${stem || inputField}${ext || ""}`;
     const storagePath = `${bucket}/${objectPath}`;
-    await storageUpload(storagePath, bytes, f.mimetype || "application/octet-stream");
-    patch[pathField] = storagePath;
+    const storedRef = await storageUpload(storagePath, bytes, f.mimetype || "application/octet-stream");
+    patch[pathField] = storedRef || storagePath;
   }
   return patch;
 }

@@ -282,8 +282,7 @@
         clearExamEditFileInputs();
     }
 
-    async function saveExamEdit(opts) {
-        opts = opts || {};
+    async function saveExamEdit() {
         const id = document.getElementById("exam-edit-id") && document.getElementById("exam-edit-id").value;
         if (!id) return;
         const subj = document.getElementById("exam-edit-subject") && document.getElementById("exam-edit-subject").value;
@@ -304,11 +303,6 @@
             parsedPrimary = G.parseMarkingYaml(editYaml, yamlApi());
             if (parsedPrimary.error && !w.confirm("YAML issue: " + parsedPrimary.error + "\nSave anyway?")) return;
             if (parsedPrimary.warnings.length && !w.confirm(parsedPrimary.warnings.join("\n") + "\n\nSave anyway?")) return;
-        } else if (opts.retake) {
-            if (!fa) {
-                w.alert("Retake requires a new attempt file.");
-                return;
-            }
         }
 
         const scheduled =
@@ -345,17 +339,9 @@
                     if (sum) fd.append("ai_summary", sum);
                     if (sc != null) fd.append("score", String(sc));
                     fd.append("status", G.STATUS_GRADED);
-                } else if (opts.retake) {
-                    fd.append("status", G.STATUS_COMPLETED);
-                    fd.append("score", "");
-                    fd.append("full_yaml", "");
-                    fd.append("ai_summary", "");
                 }
                 await G.patchPaperRecordMultipart(id, fd);
                 if (yamlPack && yamlPack.clearMarkingFile && !yamlPack.markingBlob) {
-                    await G.patchPaperRecord(id, { file_marking_yaml: null });
-                }
-                if (opts.retake && existingPaper && existingPaper.file_marking_yaml) {
                     await G.patchPaperRecord(id, { file_marking_yaml: null });
                 }
             } else {
@@ -1370,12 +1356,6 @@
         (function wireExamEditModal() {
             const cancel = document.getElementById("exam-edit-cancel");
             if (cancel) cancel.addEventListener("click", closeExamEditModal);
-            const retake = document.getElementById("exam-edit-retake");
-            if (retake) {
-                retake.addEventListener("click", function () {
-                    saveExamEdit({ retake: true });
-                });
-            }
             const del = document.getElementById("exam-edit-delete");
             if (del) {
                 del.addEventListener("click", function () {
