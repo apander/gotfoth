@@ -19,6 +19,10 @@ async function storageUpload(storagePath, bytes, contentType) {
 }
 
 async function storageSignedUrl(storagePath, expiresIn) {
+  const raw = String(storagePath || "").trim();
+  // Mixed-migration safety: if DB already stores absolute URL, return it directly
+  // regardless of active backend selection.
+  if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
   return activeStorageProvider().storageSignedUrl(storagePath, expiresIn);
 }
 
