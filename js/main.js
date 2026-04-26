@@ -5,6 +5,10 @@
 (function (w) {
     const G = w.GF;
     let allPapers = [];
+    const authState = {
+        user: null,
+        loginOpen: false,
+    };
 
     function escHtml(s) {
         return String(s ?? "")
@@ -17,6 +21,79 @@
         const m = {};
         for (const p of papers) m[p.id] = p;
         return m;
+    }
+
+    function isMobileReadOnly() {
+        const maxWidth = Number(G.MOBILE_READONLY_MAX_WIDTH || 767);
+        return w.matchMedia && w.matchMedia("(max-width: " + maxWidth + "px)").matches;
+    }
+
+    function isAuthenticated() {
+        return !!(authState.user && authState.user.username);
+    }
+
+    function canWrite() {
+        return isAuthenticated() && !isMobileReadOnly();
+    }
+
+    function updateAccessUi() {
+        const banner = document.getElementById("mobile-readonly-banner");
+        if (banner) banner.classList.toggle("hidden", !isMobileReadOnly());
+        const userLabel = document.getElementById("auth-user-label");
+        if (userLabel) userLabel.textContent = isAuthenticated() ? "Logged in: " + authState.user.username : "Not logged in";
+        const loginBtn = document.getElementById("auth-login-btn");
+        const logoutBtn = document.getElementById("auth-logout-btn");
+        if (loginBtn) loginBtn.classList.toggle("hidden", isAuthenticated());
+        if (logoutBtn) logoutBtn.classList.toggle("hidden", !isAuthenticated());
+    }
+
+    function closeLoginModal() {
+        const modal = document.getElementById("auth-login-modal");
+        if (!modal) return;
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+        authState.loginOpen = false;
+    }
+
+    function openLoginModal(message) {
+        const modal = document.getElementById("auth-login-modal");
+        if (!modal) return;
+        const err = document.getElementById("auth-login-error");
+        if (err) {
+            if (message) {
+                err.textContent = String(message);
+                err.classList.remove("hidden");
+            } else {
+                err.classList.add("hidden");
+                err.textContent = "";
+            }
+        }
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+        authState.loginOpen = true;
+    }
+
+    function requireWriteAccess() {
+        if (isMobileReadOnly()) {
+            w.alert("Mobile mode is read-only. Please use desktop for edits.");
+            return false;
+        }
+        if (!isAuthenticated()) {
+            openLoginModal("Please login to continue.");
+            return false;
+        }
+        return true;
+    }
+
+    function handleWriteError(err, fallbackMessage) {
+        const msg = err && err.message ? String(err.message) : "";
+        if (msg.includes("401") || msg.toLowerCase().includes("authentication required")) {
+            authState.user = null;
+            updateAccessUi();
+            openLoginModal("Your session expired. Please login again.");
+            return;
+        }
+        w.alert(fallbackMessage + (msg ? "\n\n" + msg : ""));
     }
 
     function bindPaperRowEvents(root) {
@@ -146,6 +223,7 @@
     }
 
     function showVaultUploadPanel() {
+        if (!requireWriteAccess()) return;
         const el = document.getElementById("vault-upload-panel");
         if (!el) return;
         el.classList.remove("hidden");
@@ -295,6 +373,7 @@
     }
 
     async function saveExamEdit() {
+        if (!requireWriteAccess()) return;
         const id = document.getElementById("exam-edit-id") && document.getElementById("exam-edit-id").value;
         if (!id) return;
         const subj = document.getElementById("exam-edit-subject") && document.getElementById("exam-edit-subject").value;
@@ -378,10 +457,7 @@
             await loadAllData();
         } catch (e) {
             console.error(e);
-            w.alert(
-                "Could not save changes." +
-                    (e && e.message ? "\n\n" + e.message : "\n\nCheck the browser Network tab for the PATCH response.")
-            );
+            handleWriteError(e, "Could not save changes.");
         }
     }
 
@@ -1065,6 +1141,7 @@
     }
 
     async function refreshPapersUi() {
+        if (!canWrite()) hideVaultUploadPanel();
         const boundaries = G.getBoundaries();
         const items = allPapers;
 
@@ -1208,6 +1285,7 @@
     }
 
     async function saveGradeYamlModal() {
+        if (!requireWriteAccess()) return;
         const hid = document.getElementById("grade-yaml-id");
         const id = hid ? hid.value : "";
         if (!id) {
@@ -1233,7 +1311,7 @@
             closeGradeYamlModal();
         } catch (e) {
             console.error(e);
-            w.alert(e && e.message ? "Could not save grade:\n" + e.message : "Could not save grade.");
+            handleWriteError(e, "Could not save grade.");
         } finally {
             if (saveBtn) {
                 saveBtn.disabled = prevDisabled;
@@ -1243,6 +1321,7 @@
     }
 
     async function savePaper() {
+        if (!requireWriteAccess()) return;
         const form = document.getElementById("vault-deposit-form");
         const subjectEl = document.getElementById("paperSub");
         const subject = subjectEl ? subjectEl.value : "";
@@ -1318,6 +1397,12 @@
         } else {
             const t = await res.text();
             console.error(t);
+            if (res.status === 401) {
+                authState.user = null;
+                updateAccessUi();
+                openLoginModal("Please login to upload.");
+                return;
+            }
             w.alert("Upload failed.");
         }
     }
@@ -1344,11 +1429,78 @@
             });
     }
 
+    async function bootstrapAuth() {
+        if (typeof G.authMe !== "function") return;
+        try {
+            const me = await G.authMe();
+            authState.user = me && me.user ? me.user : null;
+        } catch (_e) {
+            authState.user = null;
+        }
+        updateAccessUi();
+    }
+
+    function wireAuthUi() {
+        const loginBtn = document.getElementById("auth-login-btn");
+        const logoutBtn = document.getElementById("auth-logout-btn");
+        const modal = document.getElementById("auth-login-modal");
+        const cancel = document.getElementById("auth-login-cancel");
+        const form = document.getElementById("auth-login-form");
+        if (loginBtn) {
+            loginBtn.addEventListener("click", function () {
+                openLoginModal("");
+            });
+        }
+        if (logoutBtn) {
+            logoutBtn.addEventListener("click", async function () {
+                try {
+                    if (typeof G.authLogout === "function") await G.authLogout();
+                } catch (_e) {}
+                authState.user = null;
+                updateAccessUi();
+                await refreshPapersUi();
+            });
+        }
+        if (cancel) cancel.addEventListener("click", closeLoginModal);
+        if (modal) {
+            modal.addEventListener("click", function (ev) {
+                if (ev.target === modal) closeLoginModal();
+            });
+        }
+        if (form) {
+            form.addEventListener("submit", async function (ev) {
+                ev.preventDefault();
+                const usernameEl = document.getElementById("auth-username");
+                const passwordEl = document.getElementById("auth-password");
+                const rememberEl = document.getElementById("auth-remember-me");
+                const username = usernameEl && usernameEl.value ? String(usernameEl.value).trim() : "";
+                const password = passwordEl && passwordEl.value ? String(passwordEl.value) : "";
+                const rememberMe = !!(rememberEl && rememberEl.checked);
+                try {
+                    const out = await G.authLogin(username, password, rememberMe);
+                    authState.user = out && out.user ? out.user : null;
+                    closeLoginModal();
+                    updateAccessUi();
+                    await refreshPapersUi();
+                } catch (e) {
+                    openLoginModal(e && e.message ? e.message : "Login failed.");
+                }
+            });
+        }
+        w.addEventListener("resize", function () {
+            updateAccessUi();
+            refreshPapersUi().catch(function () {});
+        });
+    }
+
     w.showView = G.showView;
     w.savePaper = savePaper;
     w.saveExamEdit = saveExamEdit;
     w.saveGradeYamlModal = saveGradeYamlModal;
     w.logResult = logResult;
+    G.isMobileReadOnly = isMobileReadOnly;
+    G.isAuthenticated = isAuthenticated;
+    G.canWrite = canWrite;
     w.showExamsNav = function () {
         hideVaultUploadPanel();
         G.showView("exams");
@@ -1387,6 +1539,7 @@
             const del = document.getElementById("exam-edit-delete");
             if (del) {
                 del.addEventListener("click", function () {
+                    if (!requireWriteAccess()) return;
                     const id = document.getElementById("exam-edit-id") && document.getElementById("exam-edit-id").value;
                     if (!id || !w.confirm("Delete this exam record? This cannot be undone.")) return;
                     G.deletePaperRecord(id)
@@ -1427,6 +1580,7 @@
             const setBtn = ev.target && ev.target.closest && ev.target.closest(".js-set-sitting-date");
             if (setBtn) {
                 ev.preventDefault();
+                if (!requireWriteAccess()) return;
                 const sid = setBtn.getAttribute("data-id");
                 if (sid) openSittingDatePicker(sid);
                 return;
@@ -1434,6 +1588,7 @@
             const uploadBtn = ev.target && ev.target.closest && ev.target.closest(".js-backlog-upload");
             if (uploadBtn) {
                 ev.preventDefault();
+                if (!requireWriteAccess()) return;
                 openExamsUploadWithPrefill(
                     uploadBtn.getAttribute("data-subject"),
                     uploadBtn.getAttribute("data-year"),
@@ -1445,6 +1600,7 @@
                 ev.target && ev.target.closest && ev.target.closest(".js-exam-edit, .js-exam-settings");
             if (exEdit) {
                 ev.preventDefault();
+                if (!requireWriteAccess()) return;
                 const eid = exEdit.getAttribute("data-id");
                 const rp = allPapers.find(function (p) {
                     return p.id === eid;
@@ -1455,6 +1611,7 @@
             const exDel = ev.target && ev.target.closest && ev.target.closest(".js-exam-delete");
             if (exDel) {
                 ev.preventDefault();
+                if (!requireWriteAccess()) return;
                 const did = exDel.getAttribute("data-id");
                 if (!did || !w.confirm("Delete this exam record? This cannot be undone.")) return;
                 G.deletePaperRecord(did)
@@ -1470,6 +1627,7 @@
             const gradeBtn = ev.target && ev.target.closest && ev.target.closest(".js-backlog-grade");
             if (gradeBtn) {
                 ev.preventDefault();
+                if (!requireWriteAccess()) return;
                 const gid = gradeBtn.getAttribute("data-id");
                 if (gid) void openGradeYamlModal(gid);
                 return;
@@ -1511,6 +1669,8 @@
         })();
 
         try {
+            wireAuthUi();
+            await bootstrapAuth();
             await loadAllData();
         } catch (e) {
             console.error(e);
