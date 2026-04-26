@@ -10,6 +10,9 @@
         loginOpen: false,
         showPassword: false,
     };
+    const navState = {
+        open: false,
+    };
 
     function escHtml(s) {
         return String(s ?? "")
@@ -39,13 +42,35 @@
 
     function updateAccessUi() {
         const banner = document.getElementById("mobile-readonly-banner");
-        if (banner) banner.classList.toggle("hidden", !isMobileReadOnly());
+        if (banner) banner.classList.add("hidden");
         const userLabel = document.getElementById("auth-user-label");
         if (userLabel) userLabel.textContent = isAuthenticated() ? "Logged in: " + authState.user.username : "Not logged in";
         const loginBtn = document.getElementById("auth-login-btn");
         const logoutBtn = document.getElementById("auth-logout-btn");
         if (loginBtn) loginBtn.classList.toggle("hidden", isAuthenticated());
         if (logoutBtn) logoutBtn.classList.toggle("hidden", !isAuthenticated());
+    }
+
+    function syncMobileNavUi() {
+        const panel = document.getElementById("mobile-nav-panel");
+        const toggle = document.getElementById("mobile-nav-toggle");
+        const mobile = isMobileReadOnly();
+        if (!panel) return;
+        if (!mobile) {
+            panel.classList.remove("hidden");
+            panel.classList.add("md:flex");
+            if (toggle) {
+                toggle.textContent = "Menu";
+                toggle.setAttribute("aria-expanded", "false");
+            }
+            navState.open = false;
+            return;
+        }
+        panel.classList.toggle("hidden", !navState.open);
+        if (toggle) {
+            toggle.textContent = navState.open ? "Close" : "Menu";
+            toggle.setAttribute("aria-expanded", navState.open ? "true" : "false");
+        }
     }
 
     function applyMobileModalLayout(modal, panel) {
@@ -1535,6 +1560,7 @@
         }
         w.addEventListener("resize", function () {
             updateAccessUi();
+            syncMobileNavUi();
             if (panel) applyMobileModalLayout(modal, panel);
             const examModal = document.getElementById("exam-edit-modal");
             const examPanel = examModal ? examModal.querySelector("div") : null;
@@ -1547,6 +1573,29 @@
             if (commentsModal && commentsPanel) applyMobileModalLayout(commentsModal, commentsPanel);
             refreshPapersUi().catch(function () {});
         });
+    }
+
+    function wireMobileNavUi() {
+        const panel = document.getElementById("mobile-nav-panel");
+        const toggle = document.getElementById("mobile-nav-toggle");
+        if (!panel || !toggle) return;
+        toggle.addEventListener("click", function () {
+            navState.open = !navState.open;
+            syncMobileNavUi();
+        });
+        document.addEventListener("gf:view-change", function () {
+            if (!isMobileReadOnly()) return;
+            navState.open = false;
+            syncMobileNavUi();
+        });
+        document.body.addEventListener("click", function (ev) {
+            if (!isMobileReadOnly() || !navState.open) return;
+            const navBtn = ev.target && ev.target.closest ? ev.target.closest(".nav-btn") : null;
+            if (!navBtn) return;
+            navState.open = false;
+            syncMobileNavUi();
+        });
+        syncMobileNavUi();
     }
 
     w.showView = G.showView;
@@ -1725,6 +1774,7 @@
         })();
 
         try {
+            wireMobileNavUi();
             wireAuthUi();
             await bootstrapAuth();
             await loadAllData();

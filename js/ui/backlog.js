@@ -126,9 +126,9 @@
                 ? esc(String(p.score)) + "%"
                 : "—";
         return (
-            '<article class="rounded-xl border border-slate-200 bg-white p-3">' +
-            '<div class="flex items-center justify-between gap-2 mb-1">' +
-            '<p class="text-[11px] font-black uppercase tracking-wide text-slate-500">' +
+            '<article class="rounded-lg border border-slate-200 bg-white p-2.5">' +
+            '<div class="flex items-center justify-between gap-2 mb-0.5">' +
+            '<p class="text-[10px] font-black uppercase tracking-wide text-slate-500">' +
             esc(label) +
             "</p>" +
             '<span class="inline-flex px-2 py-0.5 rounded-lg border text-[10px] font-black uppercase tracking-wide ' +
@@ -136,13 +136,13 @@
             '">' +
             esc(ux) +
             "</span></div>" +
-            '<p class="text-sm font-bold text-slate-800 leading-tight">' +
+            '<p class="text-xs font-bold text-slate-800 leading-tight">' +
             title +
             "</p>" +
-            '<p class="mt-1 text-[11px] text-slate-500">Score: <span class="font-black text-slate-700">' +
+            '<p class="mt-1 text-[10px] text-slate-500">Score: <span class="font-black text-slate-700">' +
             score +
             "</span></p>" +
-            (scheduleText ? '<p class="mt-1 text-[11px] font-bold text-sky-800">Scheduled: ' + esc(scheduleText) + "</p>" : "") +
+            (scheduleText ? '<p class="mt-1 text-[10px] font-bold text-sky-800">Scheduled: ' + esc(scheduleText) + "</p>" : "") +
             nextActionButton(p, ux, subject, year, paperNum, isNoPaperYear) +
             "</article>"
         );
@@ -159,8 +159,14 @@
             y0 = 2016;
             y1 = 2024;
         }
+        var hiddenYears = Array.isArray(G.BACKLOG_EXCLUDED_YEARS) ? G.BACKLOG_EXCLUDED_YEARS : [];
+        var hiddenSet = {};
+        for (var hi = 0; hi < hiddenYears.length; hi++) hiddenSet[String(hiddenYears[hi])] = true;
         var years = [];
-        for (var y = y0; y <= y1; y++) years.push(y);
+        for (var y = y0; y <= y1; y++) {
+            if (hiddenSet[String(y)]) continue;
+            years.push(y);
+        }
         return years;
     }
 
@@ -196,7 +202,7 @@
         var useMobileCards = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
 
         if (useMobileCards) {
-            var mobileHtml = '<div class="space-y-3">';
+            var mobileHtml = '<div class="space-y-2">';
             for (var myi = 0; myi < years.length; myi++) {
                 var my = years[myi];
                 var mobileNoPaperYear = !!noPaperYears[String(my)];
@@ -205,11 +211,11 @@
                 var mu1 = mobileNoPaperYear ? "No paper (COVID year)" : G.backlogUxStatus(mp1);
                 var mu2 = mobileNoPaperYear ? "No paper (COVID year)" : G.backlogUxStatus(mp2);
                 mobileHtml +=
-                    '<section class="rounded-2xl border border-slate-200 bg-slate-50 p-3">' +
-                    '<h4 class="text-sm font-black text-slate-800 mb-2">' +
+                    '<section class="rounded-xl border border-slate-200 bg-slate-50 p-2.5">' +
+                    '<h4 class="text-xs font-black text-slate-800 mb-1.5">' +
                     esc(String(my)) +
                     "</h4>" +
-                    '<div class="space-y-2">' +
+                    '<div class="grid grid-cols-1 gap-1.5">' +
                     mobilePaperCard(mp1, mu1, "Paper 1", subj, my, 1, mobileNoPaperYear) +
                     mobilePaperCard(mp2, mu2, "Paper 2", subj, my, 2, mobileNoPaperYear) +
                     "</div></section>";

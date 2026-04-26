@@ -17,8 +17,9 @@
     /** Past-paper cohort grid in Backlog view */
     G.BACKLOG_YEAR_MIN = 2016;
     G.BACKLOG_YEAR_MAX = 2024;
-    /** Years intentionally excluded from backlog/performance (e.g., no exam papers published). */
-    G.BACKLOG_NO_PAPERS_YEARS = [2021];
+    /** Years intentionally excluded from backlog/performance. */
+    G.BACKLOG_EXCLUDED_YEARS = [2021];
+    G.BACKLOG_NO_PAPERS_YEARS = [];
 
     /** PocketBase date when no sitting date yet (upload to vault without scheduling). */
     G.SCHEDULE_TBD_PREFIX = "2099-12-31";

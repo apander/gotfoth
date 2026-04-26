@@ -237,6 +237,16 @@
         return out;
     }
 
+    function excludedYearsSet() {
+        var ys = Array.isArray(G.BACKLOG_EXCLUDED_YEARS) ? G.BACKLOG_EXCLUDED_YEARS : [];
+        var out = {};
+        for (var i = 0; i < ys.length; i++) {
+            var y = parseInt(ys[i], 10);
+            if (Number.isFinite(y)) out[String(y)] = true;
+        }
+        return out;
+    }
+
     function renderYearSnapshotCards(container, allPapers, boundaries, yearFilterRaw) {
         if (!container) return;
 
@@ -431,7 +441,14 @@
         if (yearFilterWrap) yearFilterWrap.classList.toggle("hidden", mode === "timeline");
 
         var help = document.getElementById("performance-help");
+        var mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
         if (help) {
+            if (mobile) {
+                help.classList.add("hidden");
+                help.innerHTML = "";
+                return;
+            }
+            help.classList.remove("hidden");
             help.innerHTML =
                 mode === "year"
                     ? "<strong>Year snapshot:</strong> choose an <em>exam year</em> for that cohort, or <strong>All years</strong> for <em>mean scores</em> across every graded P1/P2. <span class='text-red-700 font-bold'>Red</span> = nothing graded; <span class='text-amber-700 font-bold'>amber</span> = one paper type graded; <span class='text-emerald-700 font-bold'>green</span> = both. The large grade is from the subject average % vs the mark scheme."
@@ -451,8 +468,10 @@
         var y0 = G.BACKLOG_YEAR_MIN;
         var y1 = G.BACKLOG_YEAR_MAX;
         var noPaperYears = noPaperYearsSet();
+        var excludedYears = excludedYearsSet();
         if (typeof y0 === "number" && typeof y1 === "number") {
             for (var y = y0; y <= y1; y++) {
+                if (excludedYears[String(y)]) continue;
                 var o = document.createElement("option");
                 o.value = String(y);
                 o.textContent = noPaperYears[String(y)] ? String(y) + " (no papers)" : String(y);
