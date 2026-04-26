@@ -40,12 +40,16 @@
         return parts.join(" · ");
     }
 
+    function isMarkedPaper(p) {
+        return !!(p && typeof G.isGraded === "function" && G.isGraded(p.status));
+    }
+
     /**
      * Full-width horizontal bar; anchor opens paper PDF when available.
      * @param {boolean} onDarkCell — emerald / exam+graded backgrounds (light text).
      */
     function paperBarHtml(p, onDarkCell) {
-        const graded = G.isGraded(p.status);
+        const graded = isMarkedPaper(p);
         var barClass;
         var textClass;
         if (onDarkCell) {
@@ -64,14 +68,23 @@
         const label = escAttr(
             (G.derivedPaperDisplayName ? G.derivedPaperDisplayName(p) : p.paper_type || "Paper").slice(0, 42)
         );
+        const markedOpenAttrs = graded
+            ? ' href="#" data-id="' +
+              escAttr(String(p.id || "")) +
+              '" class="js-view-yaml-comments cal-task-bar flex items-center min-h-[7px] w-full rounded-sm px-1 ' +
+              barClass +
+              ' shadow-sm"'
+            : ' href="' +
+              href +
+              '" target="_blank" rel="noopener" class="cal-task-bar flex items-center min-h-[7px] w-full rounded-sm px-1 ' +
+              barClass +
+              ' shadow-sm"';
         return (
-            '<a href="' +
-            href +
-            '" target="_blank" rel="noopener" title="' +
+            "<a" +
+            markedOpenAttrs +
+            ' title="' +
             tip +
-            '" class="cal-task-bar flex items-center min-h-[7px] w-full rounded-sm px-1 ' +
-            barClass +
-            ' shadow-sm">' +
+            '">' +
             '<span class="flex-1 min-w-0 truncate text-[6px] sm:text-[7px] font-bold ' +
             textClass +
             ' leading-none">' +
