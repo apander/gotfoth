@@ -8,6 +8,7 @@
     const authState = {
         user: null,
         loginOpen: false,
+        showPassword: false,
     };
 
     function escHtml(s) {
@@ -47,16 +48,41 @@
         if (logoutBtn) logoutBtn.classList.toggle("hidden", !isAuthenticated());
     }
 
+    function applyMobileModalLayout(modal, panel) {
+        if (!modal || !panel) return;
+        const mobile = w.matchMedia && w.matchMedia("(max-width: 767px)").matches;
+        modal.classList.toggle("items-end", mobile);
+        modal.classList.toggle("items-center", !mobile);
+        panel.classList.toggle("w-full", mobile);
+        panel.classList.toggle("max-h-[92vh]", mobile);
+        panel.classList.toggle("rounded-b-none", mobile);
+        panel.classList.toggle("rounded-2xl", !mobile);
+    }
+
+    function syncPasswordMaskUi() {
+        const passwordEl = document.getElementById("auth-password");
+        const toggleEl = document.getElementById("auth-password-toggle");
+        if (!passwordEl || !toggleEl) return;
+        passwordEl.type = authState.showPassword ? "text" : "password";
+        toggleEl.textContent = authState.showPassword ? "Hide" : "Show";
+        toggleEl.setAttribute("aria-label", authState.showPassword ? "Hide password" : "Show password");
+    }
+
     function closeLoginModal() {
         const modal = document.getElementById("auth-login-modal");
+        const panel = modal ? modal.querySelector("div") : null;
         if (!modal) return;
         modal.classList.add("hidden");
         modal.classList.remove("flex");
+        if (panel) applyMobileModalLayout(modal, panel);
+        authState.showPassword = false;
+        syncPasswordMaskUi();
         authState.loginOpen = false;
     }
 
     function openLoginModal(message) {
         const modal = document.getElementById("auth-login-modal");
+        const panel = modal ? modal.querySelector("div") : null;
         if (!modal) return;
         const err = document.getElementById("auth-login-error");
         if (err) {
@@ -70,6 +96,9 @@
         }
         modal.classList.remove("hidden");
         modal.classList.add("flex");
+        if (panel) applyMobileModalLayout(modal, panel);
+        authState.showPassword = false;
+        syncPasswordMaskUi();
         authState.loginOpen = true;
     }
 
@@ -335,6 +364,7 @@
 
     function openExamEditModal(paper) {
         const modal = document.getElementById("exam-edit-modal");
+        const panel = modal ? modal.querySelector("div") : null;
         if (!modal || !paper) return;
         document.getElementById("exam-edit-id").value = paper.id;
         const sub = document.getElementById("exam-edit-subject");
@@ -362,13 +392,16 @@
         }
         modal.classList.remove("hidden");
         modal.classList.add("flex");
+        if (panel) applyMobileModalLayout(modal, panel);
     }
 
     function closeExamEditModal() {
         const modal = document.getElementById("exam-edit-modal");
+        const panel = modal ? modal.querySelector("div") : null;
         if (!modal) return;
         modal.classList.add("hidden");
         modal.classList.remove("flex");
+        if (panel) applyMobileModalLayout(modal, panel);
         clearExamEditFileInputs();
     }
 
@@ -799,6 +832,7 @@
 
         modal.classList.remove("hidden");
         modal.classList.add("flex");
+        if (commentsPanel) applyMobileModalLayout(modal, commentsPanel);
 
         function viewerSrcForUrl(url) {
             if (!url) return "";
@@ -1196,6 +1230,7 @@
 
     async function openGradeYamlModal(id) {
         const modal = document.getElementById("grade-yaml-modal");
+        const panel = modal ? modal.querySelector("div") : null;
         const title = document.getElementById("grade-yaml-title");
         const hid = document.getElementById("grade-yaml-id");
         const txt = document.getElementById("grade-yaml-text");
@@ -1227,13 +1262,16 @@
 
         modal.classList.remove("hidden");
         modal.classList.add("flex");
+        if (panel) applyMobileModalLayout(modal, panel);
     }
 
     function closeGradeYamlModal() {
         const modal = document.getElementById("grade-yaml-modal");
+        const panel = modal ? modal.querySelector("div") : null;
         if (!modal) return;
         modal.classList.add("hidden");
         modal.classList.remove("flex");
+        if (panel) applyMobileModalLayout(modal, panel);
     }
 
     async function logResult(id, providedYaml, attemptDate) {
@@ -1444,8 +1482,10 @@
         const loginBtn = document.getElementById("auth-login-btn");
         const logoutBtn = document.getElementById("auth-logout-btn");
         const modal = document.getElementById("auth-login-modal");
+        const panel = modal ? modal.querySelector("div") : null;
         const cancel = document.getElementById("auth-login-cancel");
         const form = document.getElementById("auth-login-form");
+        const passwordToggle = document.getElementById("auth-password-toggle");
         if (loginBtn) {
             loginBtn.addEventListener("click", function () {
                 openLoginModal("");
@@ -1462,6 +1502,12 @@
             });
         }
         if (cancel) cancel.addEventListener("click", closeLoginModal);
+        if (passwordToggle) {
+            passwordToggle.addEventListener("click", function () {
+                authState.showPassword = !authState.showPassword;
+                syncPasswordMaskUi();
+            });
+        }
         if (modal) {
             modal.addEventListener("click", function (ev) {
                 if (ev.target === modal) closeLoginModal();
@@ -1489,6 +1535,16 @@
         }
         w.addEventListener("resize", function () {
             updateAccessUi();
+            if (panel) applyMobileModalLayout(modal, panel);
+            const examModal = document.getElementById("exam-edit-modal");
+            const examPanel = examModal ? examModal.querySelector("div") : null;
+            if (examModal && examPanel) applyMobileModalLayout(examModal, examPanel);
+            const gradeModal = document.getElementById("grade-yaml-modal");
+            const gradePanel = gradeModal ? gradeModal.querySelector("div") : null;
+            if (gradeModal && gradePanel) applyMobileModalLayout(gradeModal, gradePanel);
+            const commentsModal = document.getElementById("yaml-comments-modal");
+            const commentsPanel = document.getElementById("yaml-comments-panel");
+            if (commentsModal && commentsPanel) applyMobileModalLayout(commentsModal, commentsPanel);
             refreshPapersUi().catch(function () {});
         });
     }

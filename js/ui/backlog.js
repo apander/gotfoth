@@ -78,6 +78,13 @@
             '">' +
             (title || "\u00a0") +
             "</div>";
+        const scheduledText =
+            p && ux === "Scheduled" && typeof G.formatScheduledDateForUi === "function"
+                ? G.formatScheduledDateForUi(p)
+                : "";
+        const scheduleLine = scheduledText
+            ? '<div class="mt-1 text-[10px] font-bold text-sky-800">Scheduled: ' + esc(scheduledText) + "</div>"
+            : "";
         var actionBtn = nextActionButton(p, ux, subject, year, paperNum, isNoPaperYear);
         var canWrite = typeof G.canWrite === "function" ? G.canWrite() : true;
         var settingsBtn =
@@ -102,8 +109,42 @@
             sc +
             "</div>" +
             sub +
+            scheduleLine +
             actionBtn +
             "</td>"
+        );
+    }
+
+    function mobilePaperCard(p, ux, label, subject, year, paperNum, isNoPaperYear) {
+        const title = p && G.derivedPaperDisplayName ? esc(G.derivedPaperDisplayName(p)) : "No paper uploaded";
+        const scheduleText =
+            p && ux === "Scheduled" && typeof G.formatScheduledDateForUi === "function"
+                ? G.formatScheduledDateForUi(p)
+                : "";
+        const score =
+            p && G.isGraded(p.status) && p.score != null && !Number.isNaN(Number(p.score))
+                ? esc(String(p.score)) + "%"
+                : "—";
+        return (
+            '<article class="rounded-xl border border-slate-200 bg-white p-3">' +
+            '<div class="flex items-center justify-between gap-2 mb-1">' +
+            '<p class="text-[11px] font-black uppercase tracking-wide text-slate-500">' +
+            esc(label) +
+            "</p>" +
+            '<span class="inline-flex px-2 py-0.5 rounded-lg border text-[10px] font-black uppercase tracking-wide ' +
+            statusCellClass(ux) +
+            '">' +
+            esc(ux) +
+            "</span></div>" +
+            '<p class="text-sm font-bold text-slate-800 leading-tight">' +
+            title +
+            "</p>" +
+            '<p class="mt-1 text-[11px] text-slate-500">Score: <span class="font-black text-slate-700">' +
+            score +
+            "</span></p>" +
+            (scheduleText ? '<p class="mt-1 text-[11px] font-bold text-sky-800">Scheduled: ' + esc(scheduleText) + "</p>" : "") +
+            nextActionButton(p, ux, subject, year, paperNum, isNoPaperYear) +
+            "</article>"
         );
     }
 
@@ -152,6 +193,31 @@
         var band = psych ? "border-blue-200" : "border-emerald-200";
         var years = yearRange();
         var noPaperYears = noPaperYearsSet();
+        var useMobileCards = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+
+        if (useMobileCards) {
+            var mobileHtml = '<div class="space-y-3">';
+            for (var myi = 0; myi < years.length; myi++) {
+                var my = years[myi];
+                var mobileNoPaperYear = !!noPaperYears[String(my)];
+                var mp1 = mobileNoPaperYear ? null : G.findPaperForCohortSlot(list, my, subj, 1);
+                var mp2 = mobileNoPaperYear ? null : G.findPaperForCohortSlot(list, my, subj, 2);
+                var mu1 = mobileNoPaperYear ? "No paper (COVID year)" : G.backlogUxStatus(mp1);
+                var mu2 = mobileNoPaperYear ? "No paper (COVID year)" : G.backlogUxStatus(mp2);
+                mobileHtml +=
+                    '<section class="rounded-2xl border border-slate-200 bg-slate-50 p-3">' +
+                    '<h4 class="text-sm font-black text-slate-800 mb-2">' +
+                    esc(String(my)) +
+                    "</h4>" +
+                    '<div class="space-y-2">' +
+                    mobilePaperCard(mp1, mu1, "Paper 1", subj, my, 1, mobileNoPaperYear) +
+                    mobilePaperCard(mp2, mu2, "Paper 2", subj, my, 2, mobileNoPaperYear) +
+                    "</div></section>";
+            }
+            mobileHtml += "</div>";
+            container.innerHTML = mobileHtml;
+            return;
+        }
 
         var html =
             '<div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">' +

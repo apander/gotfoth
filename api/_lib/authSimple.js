@@ -73,11 +73,20 @@ function tokenHash(token) {
 }
 
 async function loadUserByUsername(username) {
-  const rows = await dbSelect(
-    "app_users",
-    `select=id,username,password_hash,is_active&username=eq.${encodeURIComponent(String(username || "").toLowerCase())}&limit=1`
-  );
-  return rows && rows[0] ? rows[0] : null;
+  const uname = encodeURIComponent(String(username || "").toLowerCase());
+  try {
+    const rows = await dbSelect(
+      "app_users",
+      `select=id,username,password_plaintext,password_hash,is_active&username=eq.${uname}&limit=1`
+    );
+    return rows && rows[0] ? rows[0] : null;
+  } catch (_e) {
+    const rows = await dbSelect(
+      "app_users",
+      `select=id,username,password_hash,is_active&username=eq.${uname}&limit=1`
+    );
+    return rows && rows[0] ? rows[0] : null;
+  }
 }
 
 async function ensureBootstrapUser() {
@@ -86,20 +95,23 @@ async function ensureBootstrapUser() {
   const username = String(process.env.SIMPLE_AUTH_USERNAME || "").trim().toLowerCase();
   const password = String(process.env.SIMPLE_AUTH_PASSWORD || "");
   if (!username || !password) return;
-  await dbInsert(
-    "app_users",
-    [
-      {
-        id: randomBytes(16).toString("hex"),
-        username,
-        password_hash: hashPassword(password),
-        is_active: true,
-        created_at: nowIso(),
-        updated_at: nowIso(),
-      },
-    ],
-    "return=minimal"
-  );
+  const baseRow = {
+    id: randomBytes(16).toString("hex"),
+    username,
+    password_plaintext: password,
+    password_hash: password,
+    is_active: true,
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  };
+  try {
+    await dbInsert("app_users", [baseRow], "return=minimal");
+  } catch (_e) {
+    const fallback = { ...baseRow };
+    delete fallback.password_plaintext;
+    fallback.password_hash = password;
+    await dbInsert("app_users", [fallback], "return=minimal");
+  }
 }
 
 async function loadSessionByToken(token) {
@@ -179,7 +191,25 @@ async function loginWithPassword(res, username, password, rememberMe) {
   if (!AUTH_ENABLED) return { user: { id: "auth-disabled", username: "auth-disabled" } };
   await ensureBootstrapUser();
   const user = await loadUserByUsername(username);
-  if (!user || user.is_active === false || !verifyPassword(password, user.password_hash || "")) return null;
+  if (!user || user.is_active === false) return null;
+  const hasPlain = !!(user.password_plaintext && String(user.password_plaintext).length);
+  let ok = false;
+  if (hasPlain) {
+    ok = String(user.password_plaintext) === String(password);
+  } else if (user.password_hash) {
+    ok = verifyPassword(password, user.password_hash || "");
+    if (ok) {
+      try {
+        await dbPatch(
+          "app_users",
+          user.id,
+          { password_plaintext: String(password), password_hash: String(password), updated_at: nowIso() },
+          "return=minimal"
+        );
+      } catch (_e) {}
+    }
+  }
+  if (!ok) return null;
   const s = await createSession(user.id, rememberMe);
   setSessionCookie(res, s.token, s.ttl);
   return { user: { id: user.id, username: user.username }, rememberMe: !!rememberMe };

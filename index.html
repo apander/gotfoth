@@ -18,8 +18,8 @@
 <body class="bg-slate-50 text-slate-900 font-sans antialiased">
     <div class="flex flex-col md:flex-row min-h-screen">
 
-        <aside class="w-full md:w-52 lg:w-56 shrink-0 bg-slate-900 text-white p-4 md:p-4 lg:p-5 flex flex-col fixed top-0 left-0 right-0 md:right-auto z-20 md:h-screen md:max-h-screen overflow-y-auto border-b border-slate-800 md:border-b-0">
-            <h1 class="text-xl md:text-2xl font-black tracking-tighter mb-5 md:mb-6 text-blue-400">gotfoth.</h1>
+        <aside class="w-full md:w-52 lg:w-56 shrink-0 bg-slate-900 text-white p-4 md:p-4 lg:p-5 flex flex-col sticky top-0 z-20 md:h-screen md:max-h-screen overflow-y-auto border-b border-slate-800 md:border-b-0">
+            <h1 class="text-2xl md:text-2xl font-black tracking-tighter mb-3 md:mb-6 text-blue-400">gotfoth.</h1>
             <nav class="flex flex-col flex-grow gap-0 min-h-0 text-[13px] md:text-sm">
                 <div class="flex flex-col gap-1.5 flex-grow">
                     <button type="button" id="btn-schedule" onclick="showView('schedule')" class="nav-btn w-full flex items-center gap-2 px-3 py-2.5 md:py-2 rounded-xl font-bold transition-all bg-slate-800 text-blue-400 text-left">
@@ -48,7 +48,7 @@
             </nav>
         </aside>
 
-        <main class="flex-grow min-w-0 w-full md:ml-52 lg:ml-56 max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 py-4 md:py-5 lg:py-6 pt-[5.25rem] md:pt-5">
+        <main class="flex-grow min-w-0 w-full md:ml-52 lg:ml-56 max-w-6xl mx-auto px-2 sm:px-4 md:px-5 lg:px-6 py-3 md:py-5 lg:py-6">
             <div id="mobile-readonly-banner" class="hidden mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 Mobile mode is read-only. Use desktop to upload, edit, delete, or save grades.
             </div>
@@ -160,7 +160,7 @@
             <div id="view-exams" class="view-content hidden">
                 <h2 class="text-xl font-black text-slate-800 mb-2 tracking-tight">Exams</h2>
                 <p class="text-sm text-slate-500 mb-4 max-w-2xl">Past papers by subject and year. <span class="font-bold text-slate-700">To be uploaded</span> means no PocketBase row yet—choose <strong>Upload</strong> to open the deposit form. Other states use <strong>Schedule</strong>, <strong>Grade</strong>, or <strong>View marking</strong>. The gear control on a row opens edit (files and fields) or delete.</p>
-                <div class="flex flex-wrap gap-2 mb-6" id="backlog-subject-tabs" role="tablist" aria-label="Subject for exams grid">
+                <div class="grid grid-cols-1 sm:flex sm:flex-wrap gap-2 mb-4" id="backlog-subject-tabs" role="tablist" aria-label="Subject for exams grid">
                     <button type="button" class="backlog-tab px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide bg-slate-900 text-white shadow-sm transition-all" data-subject="Psychology">
                         Psychology
                     </button>
@@ -463,9 +463,10 @@
                     <label class="text-[10px] font-black text-slate-400 uppercase block mb-1" for="auth-username">Username</label>
                     <input id="auth-username" type="text" autocomplete="username" class="w-full p-2 rounded-xl border border-slate-200 text-sm" />
                 </div>
-                <div>
+                <div class="relative">
                     <label class="text-[10px] font-black text-slate-400 uppercase block mb-1" for="auth-password">Password</label>
-                    <input id="auth-password" type="password" autocomplete="current-password" class="w-full p-2 rounded-xl border border-slate-200 text-sm" />
+                    <input id="auth-password" type="password" autocomplete="current-password" class="w-full p-2 pr-12 rounded-xl border border-slate-200 text-sm" />
+                    <button id="auth-password-toggle" type="button" aria-label="Show password" class="absolute right-2 top-[1.55rem] px-2 py-1 rounded-md border border-slate-200 text-[10px] font-bold text-slate-600 hover:bg-slate-100">Show</button>
                 </div>
                 <label class="flex items-center gap-2 text-xs text-slate-700">
                     <input id="auth-remember-me" type="checkbox" class="rounded border-slate-300" />

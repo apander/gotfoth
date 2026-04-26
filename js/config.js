@@ -32,6 +32,17 @@
         return !d || String(d).startsWith(G.SCHEDULE_TBD_PREFIX);
     };
 
+    G.formatScheduledDateForUi = function (paper) {
+        if (!paper || G.isUnscheduledPaper(paper)) return "";
+        const raw = String(paper.scheduled_date || "");
+        if (!raw) return "";
+        const ymd = raw.slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return raw;
+        const dt = new Date(ymd + "T12:00:00Z");
+        if (Number.isNaN(dt.getTime())) return ymd;
+        return dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    };
+
     /** Local calendar YYYY-MM-DD (settings / exams shown on action-plan calendar). */
     G.dateToYmdLocal = function (d) {
         return (

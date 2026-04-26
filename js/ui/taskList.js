@@ -19,6 +19,8 @@
         const accent = psych ? "bg-blue-500" : "bg-emerald-500";
         const showLog = opts.showLogButton !== false && !graded;
         const canWrite = typeof G.canWrite === "function" ? G.canWrite() : true;
+        const scheduledLabel =
+            typeof G.formatScheduledDateForUi === "function" ? G.formatScheduledDateForUi(paper) : String(paper.scheduled_date || "");
 
         const ux = G.backlogUxStatus(paper);
         const badgeTone =
@@ -80,11 +82,11 @@
                         ${statusBadge}
                     </div>
                     <h3 class="font-bold text-slate-800 truncate">${esc(G.derivedPaperDisplayName(paper))}</h3>
-                    <p class="text-[10px] ${G.isUnscheduledPaper(paper) ? "text-amber-700 font-bold" : "text-slate-400"}">${
+                    <p class="text-[10px] ${G.isUnscheduledPaper(paper) ? "text-amber-700 font-bold" : "text-slate-500"}">${
                         G.isUnscheduledPaper(paper)
                             ? "No sitting date yet · use Set date"
                             : (paper.year != null && paper.year !== "" ? esc("Exam " + paper.year + " · ") : "") +
-                              esc(String(paper.scheduled_date || ""))
+                              esc(scheduledLabel)
                     }</p>
                     <div class="flex gap-3 mt-1">
                         ${paperUrl ? `<a href="${esc(paperUrl)}" target="_blank" rel="noopener" class="text-[10px] font-bold text-blue-500">PAPER</a>` : ""}
