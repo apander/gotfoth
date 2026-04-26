@@ -1,6 +1,6 @@
 # Gemini Marking Engine: Prompt & Implementation Guide
 
-This document defines the specialized "Marking Engine" prompt and the resulting YAML data structure. This "handshake" allows Gemini’s AI analysis to be parsed and injected directly into the NAS-based Study Vault database. 
+This document defines the specialized "Marking Engine" prompt and the resulting YAML data structure. This "handshake" allows Gemini’s AI analysis to be parsed and injected directly into the Study Vault database.
 
 ---
 
@@ -49,7 +49,7 @@ The YAML block acts as the API bridge. The app parses it with **js-yaml** in [`j
 | Field | Type | Function |
 | :--- | :--- | :--- |
 | `score` | **Integer** | Percentage 0–100; stored on `papers.score`. |
-| `feedback_summary` | **String** | Mapped to PocketBase `ai_summary`. |
+| `feedback_summary` | **String** | Mapped to `ai_summary`. |
 | `strengths` | **Array** | Shown in marking detail panel. |
 | `weaknesses` | **Array** | Shown in marking detail panel. |
 | `questions` | **Array** | Per-question marks and rationale (displayed in UI). |
@@ -63,7 +63,7 @@ When you paste Gemini's output into **Log result** (or the vault **historic YAML
 
 1. **Parse:** YAML is extracted from a fenced block if present, then parsed with js-yaml.
 2. **QA:** Warnings if `qa.math_consistent` is false or question totals disagree with `qa.raw_total_awarded`.
-3. **Database patch:** `score`, `status` (graded terminal state — see [`schema-contract.md`](schema-contract.md)), `full_yaml`, `ai_summary` are sent to PocketBase `papers`.
+3. **Database patch:** `score`, `status` (graded terminal state — see [`schema-contract.md`](schema-contract.md)), `full_yaml`, `ai_summary` are sent to `papers`.
 4. **Boundary cross-check:** Letter grade uses `paper_type` → `boundaries.paper_key` and raw mark thresholds.
 5. **UI:** Heatmap and performance chart treat the paper as graded; marking detail expands from parsed `questions` / `qa`.
 

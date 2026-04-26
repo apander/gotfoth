@@ -3,8 +3,6 @@
     const G = w.GF;
     /** Vercel-hosted API base (same-origin by default). */
     G.API_BASE = "";
-    /** Legacy name retained for compatibility in older helpers. */
-    G.PB_URL = "";
     G.STATUS_GRADED = "Marked";
     G.STATUS_PLANNED = "Planned";
     G.STATUS_COMPLETED = "Completed";
@@ -21,10 +19,10 @@
     G.BACKLOG_EXCLUDED_YEARS = [2021];
     G.BACKLOG_NO_PAPERS_YEARS = [];
 
-    /** PocketBase date when no sitting date yet (upload to vault without scheduling). */
+    /** Sentinel date when no sitting date yet (upload to vault without scheduling). */
     G.SCHEDULE_TBD_PREFIX = "2099-12-31";
 
-    /** Must match `papers.full_yaml` max length rule in PocketBase; overflow goes to `file_marking_yaml`. */
+    /** Must match `papers.full_yaml` max length rule; overflow goes to `file_marking_yaml`. */
     G.FULL_YAML_TEXT_MAX = 5000;
     G.MOBILE_READONLY_MAX_WIDTH = 767;
 

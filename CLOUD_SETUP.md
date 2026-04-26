@@ -1,44 +1,51 @@
 # Cloud Setup (Vercel + Neon + Vercel Blob)
 
-## 1) Neon project setup
+## 1) Neon setup
 
-1. Create a Neon project/database.
-2. Copy `NEON_DATABASE_URL` into local and Vercel env.
-3. Apply schema and seed:
+1. Create two Neon databases/branches:
+   - `preview` (or dev)
+   - `production`
+2. Set connection strings:
+   - `DEV_NEON_DATABASE_URL`
+   - `PROD_NEON_DATABASE_URL`
+   - `NEON_DATABASE_URL` (runtime DB used by deployed app per environment)
+3. Apply schema:
    - `node scripts/apply_neon_schema.js`
-4. Keep Supabase credentials available during migration-only tasks.
 
 ## 2) Vercel Blob setup
 
-1. Enable Blob in the Vercel project.
+1. Enable Blob for the Vercel project.
 2. Add:
    - `BLOB_READ_WRITE_TOKEN`
-   - optional `BLOB_PUBLIC_BASE_URL` (only needed when storing key-only paths)
+   - Optional: `BLOB_PUBLIC_BASE_URL`
 
-## 3) Vercel project setup
+## 3) Vercel project environment
 
-1. Import this repository in Vercel.
-2. Ensure `vercel.json` is detected.
-3. Configure env vars for `Production`, `Preview`, and `Development`:
-   - `DATA_BACKEND` (`supabase` during transition, then `neon`)
-   - `FILE_BACKEND` (`supabase` during transition, then `blob`)
-   - `NEON_DATABASE_URL`
-   - `BLOB_READ_WRITE_TOKEN`
-   - `SIGNED_URL_TTL_SECONDS` (optional, default 3600)
-   - `FULL_YAML_TEXT_MAX` (optional, default 5000)
-4. Transition-only vars:
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_ROLE_KEY`
+Required env vars (Production + Preview):
 
-## 4) Security defaults
+- `NEON_DATABASE_URL`
+- `BLOB_READ_WRITE_TOKEN`
+- `DATA_BACKEND=neon`
+- `FILE_BACKEND=blob`
+- `AUTH_ENABLED=true`
+- `SIMPLE_AUTH_USERNAME`
+- `SIMPLE_AUTH_PASSWORD`
+- Optional:
+  - `SIGNED_URL_TTL_SECONDS` (default `3600`)
+  - `FULL_YAML_TEXT_MAX` (default `5000`)
 
-- Keep `NEON_DATABASE_URL` and `BLOB_READ_WRITE_TOKEN` server-side only.
-- Access files through `/api/files/papers/:id/:field` (no direct client write tokens).
-- Preserve rollback by keeping `DATA_BACKEND`/`FILE_BACKEND` switchable.
+## 4) Local ops tooling
 
-## 5) Runtime and dependencies
+- Install PostgreSQL CLI (`pg_dump`, `pg_restore`, `psql`) or set:
+  - `PG_BIN_DIR`
+- Optional:
+  - `BACKUP_DIR=./backups`
 
-- API functions are in `api/`.
-- DB driver: `pg`.
-- Blob client: `@vercel/blob`.
-- Multipart handling: `formidable`.
+## 5) Safety and access
+
+- Keep DB and Blob tokens server-side only.
+- File access should go through `/api/files/papers/:id/:field`.
+- Use DB operations scripts before any production cutover:
+  - `scripts/backup_prod_snapshot.js`
+  - `scripts/promote_dev_to_prod.js`
+  - `scripts/refresh_dev_from_prod.js`

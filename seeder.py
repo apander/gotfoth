@@ -1,7 +1,8 @@
+import os
 import requests
 
-# Change this to your NAS IP
-NAS_URL = "http://192.168.1.XX:8090/api/collections/papers/records"
+API_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:3000").rstrip("/")
+PAPERS_URL = f"{API_BASE_URL}/api/collections/papers/records"
 
 papers = [
     {
@@ -26,6 +27,6 @@ papers = [
 ]
 
 for p in papers:
-    r = requests.post(NAS_URL, json=p)
+    r = requests.post(PAPERS_URL, json=p)
     label = f"{p.get('subject')} {p.get('paper_type')} {p.get('year', '')}"
     print(f"{'OK' if r.ok else 'FAIL'} {label}")

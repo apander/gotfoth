@@ -1,7 +1,7 @@
 (function (w) {
     const G = w.GF;
 
-    /** PocketBase error JSON: flatten `data` field messages for alerts and logs. */
+    /** API error JSON: flatten `data` field messages for alerts and logs. */
     G.pbErrorDetailFromRaw = function (raw) {
         if (!raw || typeof raw !== "string") return "";
         const t = raw.trim();

@@ -64,7 +64,7 @@
         return Number.isNaN(n) ? null : n;
     };
 
-    /** Stored in `full_yaml` when the real body is uploaded as `file_marking_yaml` (PocketBase text limit). */
+    /** Stored in `full_yaml` when the real body is uploaded as `file_marking_yaml` (text field limit). */
     G.MARKING_YAML_STUB = "_gotfoth_marking_yaml_storage: file\n";
 
     G.hasMarkingYamlContent = function (paper) {

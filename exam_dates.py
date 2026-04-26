@@ -1,6 +1,8 @@
+import os
 import requests
 
-NAS_URL = "http://mycloudex2ultra.local:8090/api/collections/settings/records"
+API_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:3000").rstrip("/")
+SETTINGS_URL = f"{API_BASE_URL}/api/collections/settings/records"
 
 exams = [
     {"key": "bus_p1_date", "value": "2026-05-06 09:00:00.000Z"},
@@ -10,5 +12,5 @@ exams = [
 ]
 
 for e in exams:
-    r = requests.post(NAS_URL, json=e)
+    r = requests.post(SETTINGS_URL, json=e)
     print(f"{'✅' if r.ok else '❌'} Added {e['key']}")

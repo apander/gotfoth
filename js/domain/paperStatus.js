@@ -13,7 +13,7 @@
     };
 
     /**
-     * Backlog / History labels (PocketBase still uses Planned, Completed, Marked).
+     * Backlog / History labels for status values.
      * @param {Record<string, unknown> | null} paper
      * @returns {"To be uploaded"|"To be scheduled"|"Scheduled"|"Complete"|"Marked"}
      */

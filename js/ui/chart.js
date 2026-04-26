@@ -702,7 +702,7 @@
             if (emptyTl) {
                 emptyTl.classList.remove("hidden");
                 emptyTl.innerHTML =
-                    '<p class="text-sm text-slate-600">No P1 or P2 plot points for this subject. Check <code>paper_type</code> in PocketBase.</p>';
+                    '<p class="text-sm text-slate-600">No P1 or P2 plot points for this subject. Check <code>paper_type</code> values.</p>';
             }
             if (panelEl) panelEl.classList.add("hidden");
             if (perfChart) {

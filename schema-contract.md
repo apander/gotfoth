@@ -1,102 +1,77 @@
 # Data schema contract (Study Vault)
 
-## Cloud target (Vercel + Supabase)
+## Runtime target (Vercel + Neon + Vercel Blob)
 
-- The frontend now targets same-origin Vercel API routes (`/api/...`) instead of direct NAS PocketBase URLs.
-- Supabase is the system of record:
-  - Postgres tables: `papers`, `boundaries`, `settings`
-  - Storage buckets: `papers`, `schemes`, `attempts`, `marking-yaml`
-- Full SQL/RLS setup lives under [`supabase/migrations`](supabase/migrations).
-- CI/CD workflow lives under [`.github/workflows/vercel-supabase-cicd.yml`](.github/workflows/vercel-supabase-cicd.yml).
+- Frontend calls same-origin API routes under `/api/...`.
+- Database system of record: Neon Postgres.
+- File storage: Vercel Blob.
+- Schema source: [`neon/migrations`](neon/migrations) + [`neon/seed.sql`](neon/seed.sql).
 
-## Legacy source (PocketBase on NAS)
+## Tables
 
-The database lives on the NAS; this file is the **source of truth** for the frontend. Update it when you change PocketBase Admin.
-
-The UI loads as **classic scripts** (not ES modules) so it runs when you open `index.html` from disk (`file://`) as well as from a static host. PocketBase `fetch` calls still require your browser to reach the NAS URL in `js/config.js`.
-
-## `papers`
+### `papers`
 
 | Field | Type | Notes |
-|-------|------|--------|
-| `subject` | select | e.g. `Psychology`, `Business Studies` |
-| `year` | text | Exam cohort year (e.g. `2023`), stored as text in PocketBase — used for backlog grid and performance (P1/P2 pairing). |
-| `paper_type` | select | Must match `boundaries.paper_key` (e.g. `Business P1`). The UI derives a display label: `{subject} Paper 1|2 {year}` via [`js/domain/paperMeta.js`](js/domain/paperMeta.js). |
-| `status` | select | `Planned` → `Completed` → graded terminal state |
-| `scheduled_date` | date | ISO with time. If omitted at deposit, the app sends `2099-12-31 …` as “not scheduled yet” until you set a real date in PocketBase. |
-| `score` | number | 0–100 when graded |
-| `max_score` | number | Optional |
-| `file_paper`, `file_scheme`, `file_attempt` | file | |
-| `file_marking_yaml` | file | Optional. When pasted YAML exceeds `full_yaml` max length (5000 chars in default rules), the app stores a short stub in `full_yaml` and uploads the full body here. Add this field in PocketBase Admin as **file**, not required. |
-| `ai_summary` | text | From YAML `feedback_summary` |
-| `full_yaml` | text | Raw marking YAML (or stub `_gotfoth_marking_yaml_storage: file` when overflow is in `file_marking_yaml`) |
+|-------|------|-------|
+| `id` | text | Primary key (uuid/text) |
+| `subject` | text | `Psychology` or `Business Studies` |
+| `year` | text | Exam cohort year |
+| `paper_type` | text | e.g. `Psychology P1`, `Business P2` |
+| `status` | text | `Planned`, `Completed`, `Marked` |
+| `scheduled_date` | timestamp | Date/time used in calendar and schedule |
+| `score` | numeric | Percentage score when graded |
+| `max_score` | numeric | Optional |
+| `file_paper` | text | Blob URL/key |
+| `file_scheme` | text | Blob URL/key |
+| `file_attempt` | text | Blob URL/key |
+| `file_marking_yaml` | text | Blob URL/key for large YAML bodies |
+| `full_yaml` | text | YAML text or storage stub |
+| `ai_summary` | text | Feedback summary |
 
-### Status workflow
+### `boundaries`
 
-1. **Planned** — Paper + scheme deposited; no attempt (or no grading payload).
-2. **Completed** — Attempt uploaded; awaiting **Log result**.
-3. **Graded terminal state** — In PocketBase this may still be named **`Marked`**. The app sets `STATUS_GRADED` in [`js/config.js`](js/config.js) (default `Marked`). After you add **`Graded`** as an option and migrate rows, change that constant to `Graded`.
+| Field | Type | Notes |
+|-------|------|-------|
+| `paper_key` | text | Joins to `papers.paper_type` |
+| `max_mark`, `a`...`e`, `a_star` | numeric | Grade boundaries |
 
-The app treats **`Marked` and `Graded` both as graded** for charts and heatmaps.
+### `settings`
 
-## `boundaries`
+| Field | Type | Notes |
+|-------|------|-------|
+| `key` | text | e.g. `psy_p1_date`, `bus_p2_date` |
+| `value` | text/timestamp | App settings values |
 
-| Field | Role |
-|-------|------|
-| `paper_key` | Joins to `papers.paper_type` |
-| `max_mark`, `a`…`e`, `a_star` | Raw mark thresholds |
+### `app_users`
 
-## `settings`
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | text | Primary key |
+| `username` | text | Login username |
+| `password_plaintext` | text | Stored plaintext per current auth model |
+| `password_hash` | text | Legacy compatibility field |
+| `is_active` | boolean | Active login flag |
 
-| Field | Role |
-|-------|------|
-| `key` | e.g. `psy_p1_date`, `bus_p1_date` |
-| `value` | DateTime |
+### `app_sessions`
 
-Used for the Diary exam countdown strip (`EXAM_SETTING_KEYS` in `js/config.js`).
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | text | Primary key |
+| `user_id` | text | FK to `app_users.id` |
+| `token_hash` | text | Server-side session token hash |
+| `remember_me` | boolean | Session persistence flag |
+| `expires_at` | timestamp | Session expiry |
+| `revoked_at` | timestamp | Session revocation |
 
-### Optional Google Calendar import keys
+## Status flow
 
-If you run `sync_google_ics.py`, it writes additional rows in `settings`:
+1. `Planned`: paper/scheme set, attempt pending.
+2. `Completed`: attempt uploaded, not yet graded.
+3. `Marked`: grading YAML saved, score present.
 
-- `key`: `gcal_evt_<hash>`
-- `value`: JSON string, e.g. `{"date":"2026-04-07","label":"Business homework","uid":"..."}`.
+## Verification checklist
 
-The frontend calendar renders these as **dark-grey chips** inside date cells. This is a read-only import path from Google iCal feed URL (no OAuth).
-
-It also writes:
-
-- `key`: `gcal_sync_status`
-- `value`: JSON string, e.g. `{"last_sync":"...","events_total":18,"events_in_window":9,"source":"google_ics"}`
-
-The schedule calendar shows this as **Last Google sync** above the month grid.
-
-## Cron sync script
-
-`sync_google_ics.py` reads a Google Calendar iCal URL and upserts the above `gcal_evt_` keys.
-
-### Required env var
-
-- `GCAL_ICS_URL` = Google "Secret address in iCal format" URL
-
-### Optional env vars
-
-- `PB_URL` (default `http://mycloudex2ultra.local:8090`)
-- `PB_SETTINGS_COLLECTION` (default `settings`)
-- `PB_AUTH_TOKEN` (if your PocketBase rules require auth)
-- `GCAL_EVENT_KEY_PREFIX` (default `gcal_evt_`)
-- `GCAL_SYNC_PAST_DAYS` (default `30`)
-- `GCAL_SYNC_FUTURE_DAYS` (default `365`)
-
-### Example cron entry (every 15 minutes)
-
-`*/15 * * * * /usr/bin/python /path/to/gotfoth/sync_google_ics.py >> /var/log/gcal_sync.log 2>&1`
-
-The SPA **Exams** view can **PATCH** records (multipart; new files optional) and **DELETE** records when PocketBase API rules allow it.
-
-## Verification
-
-1. Deposit paper+scheme only → `Planned`.
-2. Deposit with attempt → `Completed`.
-3. Log result → terminal graded status + `full_yaml` + `ai_summary`.
-4. Deposit with historic YAML → graded in one POST.
+1. Create paper record (`Planned`).
+2. Upload attempt and transition to `Completed`.
+3. Save grading YAML and verify `Marked` with score/summary.
+4. Open file routes for paper/scheme/attempt/marking YAML.

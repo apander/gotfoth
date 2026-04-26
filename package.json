@@ -8,8 +8,9 @@
   },
   "scripts": {
     "check:js": "node --check js/main.js && node --check js/api/client.js && node --check js/services/papers.js && node --check js/services/settings.js && node --check js/services/boundaries.js",
-    "check:python": "python -m py_compile seeder.py exam_dates.py scripts/migrate_pocketbase_to_supabase.py scripts/validate_supabase_parity.py scripts/smoke_check_cloud.py scripts/backup_supabase_db.py",
-    "check": "npm run check:js && npm run check:python"
+    "check:python": "python -m py_compile seeder.py exam_dates.py scripts/smoke_check_cloud.py",
+    "check:ops": "node --check scripts/apply_neon_schema.js && node --check scripts/smoke_check_neon_blob.js && node --check scripts/backup_prod_snapshot.js && node --check scripts/promote_dev_to_prod.js && node --check scripts/refresh_dev_from_prod.js",
+    "check": "npm run check:js && npm run check:python && npm run check:ops"
   },
   "dependencies": {
     "@vercel/blob": "^1.1.1",

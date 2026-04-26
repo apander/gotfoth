@@ -1,4 +1,4 @@
-name: vercel-supabase-cicd
+name: vercel-neon-cicd
 
 on:
   pull_request:
@@ -32,7 +32,7 @@ jobs:
 
       - name: Verify migration files present
         run: |
-          test -f supabase/migrations/202604220001_initial_schema.sql
+          test -f neon/migrations/202604250001_initial_schema.sql
           test -f vercel.json
 
   preview-deploy:
@@ -74,31 +74,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements-ci.txt
-
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
-
-      - name: Pre-deploy parity check (optional when secrets provided)
-        env:
-          PB_URL: ${{ secrets.PB_URL }}
-          PB_AUTH_TOKEN: ${{ secrets.PB_AUTH_TOKEN }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          if [ -n "$PB_URL" ] && [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            python scripts/validate_supabase_parity.py
-          else
-            echo "Skipping parity check (required secrets missing)."
-          fi
 
       - name: Pull Vercel Environment (Production)
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
@@ -113,4 +90,4 @@ jobs:
         env:
           APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
         run: |
-          python scripts/smoke_check_cloud.py
+          node scripts/smoke_check_neon_blob.js

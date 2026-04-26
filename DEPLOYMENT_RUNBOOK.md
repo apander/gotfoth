@@ -3,43 +3,39 @@
 ## Required GitHub secrets
 
 - `VERCEL_TOKEN`
-- `APP_BASE_URL` (production app URL for health checks)
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `NEON_DATABASE_URL`
-- `BLOB_READ_WRITE_TOKEN`
+- `APP_BASE_URL` (production URL for smoke checks)
 
 ## Required Vercel environment variables
 
-- `DATA_BACKEND` (`neon` in target state)
-- `FILE_BACKEND` (`blob` in target state)
-- `NEON_DATABASE_URL` (serverless only)
-- `BLOB_READ_WRITE_TOKEN` (serverless only)
-- `SIGNED_URL_TTL_SECONDS`
-- `FULL_YAML_TEXT_MAX`
-- Transition-only rollback vars:
-  - `SUPABASE_URL`
-  - `SUPABASE_SERVICE_ROLE_KEY`
+- `NEON_DATABASE_URL`
+- `BLOB_READ_WRITE_TOKEN`
+- `DATA_BACKEND=neon`
+- `FILE_BACKEND=blob`
+- `AUTH_ENABLED=true`
+- `SIMPLE_AUTH_USERNAME`
+- `SIMPLE_AUTH_PASSWORD`
+- Optional:
+  - `SIGNED_URL_TTL_SECONDS`
+  - `FULL_YAML_TEXT_MAX`
 
-## Cutover checklist
+## Standard production flow
 
-1. Apply Neon schema:
-   - `node scripts/apply_neon_schema.js`
-2. Run Supabase -> Neon table migration:
-   - `node scripts/migrate_supabase_to_neon.js`
-3. Run Supabase Storage -> Blob migration:
-   - `node scripts/migrate_supabase_files_to_blob.js`
-4. Run parity validation:
-   - `node scripts/validate_neon_parity.js`
-5. Merge to `main` (triggers production workflow).
-6. Confirm:
-   - `/api/health` returns `{ ok: true }`
-   - file open/view works for paper/scheme/attempt/marking YAML
-   - create/edit/grade/delete flows work.
-7. Keep fallback by preserving Supabase snapshot and env rollback settings.
+1. Ensure `main` is current and CI green.
+2. Take prod backup:
+   - `node scripts/backup_prod_snapshot.js`
+3. If required, promote dev DB to prod:
+   - `node scripts/promote_dev_to_prod.js`
+4. Deploy `main` to production (Vercel).
+5. Run smoke checks:
+   - `APP_BASE_URL=https://<prod-domain> node scripts/smoke_check_neon_blob.js`
+6. Manually verify:
+   - Login succeeds
+   - Calendar, exams list, and feedback modal load
+   - File open routes work
 
 ## Rollback
 
-1. Revert to previous Vercel deployment from Vercel dashboard.
-2. Switch env vars to `DATA_BACKEND=supabase` and `FILE_BACKEND=supabase`.
-3. Redeploy and validate health + file routes.
+1. Re-deploy previous stable Vercel deployment.
+2. Restore production DB from latest dump in `backups/`:
+   - `pg_restore --dbname=\"$PROD_NEON_DATABASE_URL\" --clean --if-exists --no-owner --no-privileges backups/<snapshot>.dump`
+3. Re-run smoke checks.

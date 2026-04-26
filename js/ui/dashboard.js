@@ -27,7 +27,7 @@
         }
         if (parts.length === 0) {
             container.innerHTML =
-                '<p class="text-sm text-slate-400">Add exam dates in PocketBase <code class="text-xs">settings</code>.</p>';
+                '<p class="text-sm text-slate-400">Add exam dates in <code class="text-xs">settings</code>.</p>';
             return;
         }
         container.innerHTML = mobile ? '<div class="grid grid-cols-1 gap-1.5">' + parts.join("") + "</div>" : parts.join("");

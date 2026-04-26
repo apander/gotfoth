@@ -11,7 +11,7 @@ $$;
 
 create table if not exists public.papers (
   id uuid primary key default gen_random_uuid(),
-  legacy_pocketbase_id text unique,
+  legacy_source_id text unique,
   subject text not null check (subject in ('Psychology', 'Business Studies')),
   year text,
   paper_type text not null,

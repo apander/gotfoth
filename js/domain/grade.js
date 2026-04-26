@@ -1,7 +1,7 @@
 (function (w) {
     const G = w.GF;
 
-    /** First boundaries row for a subject (P1; falls back to P2). Rows are the same per subject in PocketBase. */
+    /** First boundaries row for a subject (P1; falls back to P2). */
     G.boundaryRowForSubject = function (boundaries, subjectStr) {
         const psych = String(subjectStr || "").includes("Psychology");
         const keys = psych ? ["Psychology P1", "Psychology P2"] : ["Business P1", "Business P2"];
