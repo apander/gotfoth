@@ -22,6 +22,17 @@
     }
 
     function nextActionButton(p, ux, subject, year, paperNum, isNoPaperYear) {
+        var canWrite = typeof G.canWrite === "function" ? G.canWrite() : true;
+        if (!canWrite) {
+            if (p && ux === "Marked") {
+                return (
+                    '<button type="button" class="js-view-yaml-comments mt-2 w-full px-2 py-1.5 rounded-lg bg-emerald-700 text-white text-[9px] font-black uppercase tracking-wide hover:bg-emerald-600 transition shrink-0" data-id="' +
+                    esc(String(p.id)) +
+                    '">View marking</button>'
+                );
+            }
+            return "";
+        }
         if (isNoPaperYear) return "";
         if (!p) {
             return (
@@ -67,9 +78,17 @@
             '">' +
             (title || "\u00a0") +
             "</div>";
+        const scheduledText =
+            p && ux === "Scheduled" && typeof G.formatScheduledDateForUi === "function"
+                ? G.formatScheduledDateForUi(p)
+                : "";
+        const scheduleLine = scheduledText
+            ? '<div class="mt-1 text-[10px] font-bold text-sky-800">Scheduled: ' + esc(scheduledText) + "</div>"
+            : "";
         var actionBtn = nextActionButton(p, ux, subject, year, paperNum, isNoPaperYear);
+        var canWrite = typeof G.canWrite === "function" ? G.canWrite() : true;
         var settingsBtn =
-            p && !isNoPaperYear
+            canWrite && p && !isNoPaperYear
                 ? '<button type="button" class="js-exam-settings -mr-0.5 -mt-0.5 p-1 rounded-lg text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition shrink-0" data-id="' +
                   esc(String(p.id)) +
                   '" title="Exam settings" aria-label="Exam settings">' +
@@ -90,8 +109,42 @@
             sc +
             "</div>" +
             sub +
+            scheduleLine +
             actionBtn +
             "</td>"
+        );
+    }
+
+    function mobilePaperCard(p, ux, label, subject, year, paperNum, isNoPaperYear) {
+        const title = p && G.derivedPaperDisplayName ? esc(G.derivedPaperDisplayName(p)) : "No paper uploaded";
+        const scheduleText =
+            p && ux === "Scheduled" && typeof G.formatScheduledDateForUi === "function"
+                ? G.formatScheduledDateForUi(p)
+                : "";
+        const score =
+            p && G.isGraded(p.status) && p.score != null && !Number.isNaN(Number(p.score))
+                ? esc(String(p.score)) + "%"
+                : "—";
+        return (
+            '<article class="rounded-lg border border-slate-200 bg-white p-2.5">' +
+            '<div class="flex items-center justify-between gap-2 mb-0.5">' +
+            '<p class="text-[10px] font-black uppercase tracking-wide text-slate-500">' +
+            esc(label) +
+            "</p>" +
+            '<span class="inline-flex px-2 py-0.5 rounded-lg border text-[10px] font-black uppercase tracking-wide ' +
+            statusCellClass(ux) +
+            '">' +
+            esc(ux) +
+            "</span></div>" +
+            '<p class="text-xs font-bold text-slate-800 leading-tight">' +
+            title +
+            "</p>" +
+            '<p class="mt-1 text-[10px] text-slate-500">Score: <span class="font-black text-slate-700">' +
+            score +
+            "</span></p>" +
+            (scheduleText ? '<p class="mt-1 text-[10px] font-bold text-sky-800">Scheduled: ' + esc(scheduleText) + "</p>" : "") +
+            nextActionButton(p, ux, subject, year, paperNum, isNoPaperYear) +
+            "</article>"
         );
     }
 
@@ -106,8 +159,14 @@
             y0 = 2016;
             y1 = 2024;
         }
+        var hiddenYears = Array.isArray(G.BACKLOG_EXCLUDED_YEARS) ? G.BACKLOG_EXCLUDED_YEARS : [];
+        var hiddenSet = {};
+        for (var hi = 0; hi < hiddenYears.length; hi++) hiddenSet[String(hiddenYears[hi])] = true;
         var years = [];
-        for (var y = y0; y <= y1; y++) years.push(y);
+        for (var y = y0; y <= y1; y++) {
+            if (hiddenSet[String(y)]) continue;
+            years.push(y);
+        }
         return years;
     }
 
@@ -140,6 +199,31 @@
         var band = psych ? "border-blue-200" : "border-emerald-200";
         var years = yearRange();
         var noPaperYears = noPaperYearsSet();
+        var useMobileCards = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+
+        if (useMobileCards) {
+            var mobileHtml = '<div class="space-y-2">';
+            for (var myi = 0; myi < years.length; myi++) {
+                var my = years[myi];
+                var mobileNoPaperYear = !!noPaperYears[String(my)];
+                var mp1 = mobileNoPaperYear ? null : G.findPaperForCohortSlot(list, my, subj, 1);
+                var mp2 = mobileNoPaperYear ? null : G.findPaperForCohortSlot(list, my, subj, 2);
+                var mu1 = mobileNoPaperYear ? "No paper (COVID year)" : G.backlogUxStatus(mp1);
+                var mu2 = mobileNoPaperYear ? "No paper (COVID year)" : G.backlogUxStatus(mp2);
+                mobileHtml +=
+                    '<section class="rounded-xl border border-slate-200 bg-slate-50 p-2.5">' +
+                    '<h4 class="text-xs font-black text-slate-800 mb-1.5">' +
+                    esc(String(my)) +
+                    "</h4>" +
+                    '<div class="grid grid-cols-1 gap-1.5">' +
+                    mobilePaperCard(mp1, mu1, "Paper 1", subj, my, 1, mobileNoPaperYear) +
+                    mobilePaperCard(mp2, mu2, "Paper 2", subj, my, 2, mobileNoPaperYear) +
+                    "</div></section>";
+            }
+            mobileHtml += "</div>";
+            container.innerHTML = mobileHtml;
+            return;
+        }
 
         var html =
             '<div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">' +

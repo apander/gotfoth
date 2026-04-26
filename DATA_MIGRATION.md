@@ -1,43 +1,56 @@
-# PocketBase to Supabase migration
+# Supabase to Neon + Vercel Blob migration
 
 ## Scope
 
-- Collections: `papers`, `boundaries`, `settings`
-- Files: `file_paper`, `file_scheme`, `file_attempt`, `file_marking_yaml`
+- Tables: `papers`, `boundaries`, `settings`
+- Files: `file_paper`, `file_scheme`, `file_attempt`, `file_marking_yaml` (from Supabase Storage to Blob)
 
-## Script
+## Migration scripts
 
-Use:
+Apply schema and seed to Neon:
 
 ```bash
-python scripts/migrate_pocketbase_to_supabase.py
+node scripts/apply_neon_schema.js
+```
+
+Copy table rows from Supabase to Neon:
+
+```bash
+node scripts/migrate_supabase_to_neon.js
+```
+
+Copy file objects from Supabase Storage to Vercel Blob and patch `papers.file_*_path`:
+
+```bash
+node scripts/migrate_supabase_files_to_blob.js
 ```
 
 ## Required environment variables
 
-- `PB_URL`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `NEON_DATABASE_URL`
+- `BLOB_READ_WRITE_TOKEN` (for file migration only)
+- `DATA_BACKEND` / `FILE_BACKEND` (for app cutover flags)
 
 Optional:
 
-- `PB_AUTH_TOKEN`
-- `MIGRATION_HTTP_TIMEOUT_SEC`
+- `BLOB_PUBLIC_BASE_URL`
 
-## What the script does
+## What the migration does
 
-1. Reads all rows from PocketBase collections.
-2. Creates stable UUID ids in Supabase (deterministic from PocketBase id).
-3. Downloads each PocketBase file and uploads it into matching Supabase bucket.
-4. Writes storage paths into `papers.file_*_path` columns.
-5. Upserts table rows into Supabase.
+1. Replays SQL migrations/seed onto Neon.
+2. Reads all table rows from Supabase REST (`boundaries`, `settings`, `papers`).
+3. Upserts rows into Neon using `id` conflict handling.
+4. Downloads Supabase Storage objects referenced by `papers.file_*_path`.
+5. Uploads to Vercel Blob and rewrites those path fields to Blob URLs.
 
 ## Validation
 
 Run:
 
 ```bash
-python scripts/validate_supabase_parity.py
+node scripts/validate_neon_parity.js
 ```
 
-This checks table counts between PocketBase and Supabase for `papers`, `boundaries`, `settings`.
+This checks row-count parity between Supabase and Neon for `papers`, `boundaries`, `settings`.

@@ -1,4 +1,5 @@
-const { dbSelect, storageSignedUrl } = require("../../../_lib/supabase");
+const { dbSelect } = require("../../../_lib/db");
+const { storageSignedUrl } = require("../../../_lib/storage");
 const { sendError, methodNotAllowed } = require("../../../_lib/http");
 
 const FIELD_TO_PATH = {
@@ -9,7 +10,7 @@ const FIELD_TO_PATH = {
 };
 
 module.exports = async function handler(req, res) {
-  if (req.method !== "GET") return methodNotAllowed(res, ["GET"]);
+  if (req.method !== "GET" && req.method !== "HEAD") return methodNotAllowed(res, ["GET", "HEAD"]);
   const id = req.query && req.query.id ? String(req.query.id) : "";
   const field = req.query && req.query.field ? String(req.query.field) : "";
   const pathField = FIELD_TO_PATH[field];

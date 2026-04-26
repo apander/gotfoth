@@ -19,3 +19,5 @@ venv/
 
 # Local database backups
 backups/
+.vercel
+.env*.local

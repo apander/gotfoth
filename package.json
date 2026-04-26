@@ -12,6 +12,11 @@
     "check": "npm run check:js && npm run check:python"
   },
   "dependencies": {
-    "formidable": "^3.5.4"
+    "@vercel/blob": "^1.1.1",
+    "formidable": "^3.5.4",
+    "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "vercel": "^52.0.0"
   }
 }

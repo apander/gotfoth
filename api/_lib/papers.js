@@ -1,5 +1,5 @@
 const path = require("node:path");
-const { sanitizePathPart, storageUpload } = require("./supabase");
+const { sanitizePathPart, storageUpload } = require("./storage");
 const { fileToBuffer, firstField, firstFile } = require("./form");
 
 const FILE_TO_BUCKET = {
@@ -79,8 +79,8 @@ async function uploadFilesAndBuildPatch(recordId, files) {
     const stem = sanitizePathPart(path.basename(f.originalFilename || inputField, ext));
     const objectPath = `${recordId}/${inputField}/${Date.now()}_${stem || inputField}${ext || ""}`;
     const storagePath = `${bucket}/${objectPath}`;
-    await storageUpload(storagePath, bytes, f.mimetype || "application/octet-stream");
-    patch[pathField] = storagePath;
+    const storedRef = await storageUpload(storagePath, bytes, f.mimetype || "application/octet-stream");
+    patch[pathField] = storedRef || storagePath;
   }
   return patch;
 }

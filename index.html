@@ -18,9 +18,12 @@
 <body class="bg-slate-50 text-slate-900 font-sans antialiased">
     <div class="flex flex-col md:flex-row min-h-screen">
 
-        <aside class="w-full md:w-52 lg:w-56 shrink-0 bg-slate-900 text-white p-4 md:p-4 lg:p-5 flex flex-col fixed top-0 left-0 right-0 md:right-auto z-20 md:h-screen md:max-h-screen overflow-y-auto border-b border-slate-800 md:border-b-0">
-            <h1 class="text-xl md:text-2xl font-black tracking-tighter mb-5 md:mb-6 text-blue-400">gotfoth.</h1>
-            <nav class="flex flex-col flex-grow gap-0 min-h-0 text-[13px] md:text-sm">
+        <aside class="w-full md:w-52 lg:w-56 shrink-0 bg-slate-900 text-white p-4 md:p-4 lg:p-5 flex flex-col sticky top-0 z-20 md:h-screen md:max-h-screen overflow-y-auto border-b border-slate-800 md:border-b-0">
+            <div class="flex items-center justify-between mb-2 md:mb-6">
+                <h1 class="text-2xl md:text-2xl font-black tracking-tighter text-blue-400">gotfoth.</h1>
+                <button type="button" id="mobile-nav-toggle" class="md:hidden px-2.5 py-1.5 rounded-lg border border-slate-700 text-[10px] font-black uppercase text-slate-200 hover:bg-slate-800">Menu</button>
+            </div>
+            <nav id="mobile-nav-panel" class="hidden md:flex flex-col flex-grow gap-0 min-h-0 text-[13px] md:text-sm">
                 <div class="flex flex-col gap-1.5 flex-grow">
                     <button type="button" id="btn-schedule" onclick="showView('schedule')" class="nav-btn w-full flex items-center gap-2 px-3 py-2.5 md:py-2 rounded-xl font-bold transition-all bg-slate-800 text-blue-400 text-left">
                         Schedule
@@ -34,14 +37,22 @@
                 </div>
 
                 <div class="mt-auto pt-3 border-t border-slate-800/80">
-                    <button type="button" id="btn-history" onclick="showView('history')" class="nav-btn w-full flex items-center gap-2 px-3 py-2.5 md:py-2 rounded-xl font-bold transition-all text-slate-400 hover:bg-slate-800 text-left">
+                    <button type="button" id="btn-history" onclick="showView('history')" class="nav-btn hidden md:flex w-full items-center gap-2 px-3 py-2.5 md:py-2 rounded-xl font-bold transition-all text-slate-400 hover:bg-slate-800 text-left">
                         History
                     </button>
+                    <div class="mt-3 space-y-2">
+                        <p id="auth-user-label" class="text-[10px] text-slate-400">Not logged in</p>
+                        <div class="flex gap-2">
+                            <button type="button" id="auth-login-btn" class="flex-1 px-3 py-2 rounded-lg bg-blue-600 text-white text-[10px] font-black uppercase hover:bg-blue-500">Login</button>
+                            <button type="button" id="auth-logout-btn" class="flex-1 px-3 py-2 rounded-lg border border-slate-700 text-slate-300 text-[10px] font-black uppercase hover:bg-slate-800 hidden">Logout</button>
+                        </div>
+                    </div>
                 </div>
             </nav>
         </aside>
 
-        <main class="flex-grow min-w-0 w-full md:ml-52 lg:ml-56 max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 py-4 md:py-5 lg:py-6 pt-[5.25rem] md:pt-5">
+        <main class="flex-grow min-w-0 w-full md:ml-52 lg:ml-56 max-w-6xl mx-auto px-2 sm:px-4 md:px-5 lg:px-6 py-3 md:py-5 lg:py-6">
+            <div id="mobile-readonly-banner" class="hidden"></div>
 
             <!-- Schedule: single surface — vertical stats rail | calendar -->
             <div id="view-schedule" class="view-content hidden">
@@ -49,11 +60,11 @@
                 <div class="rounded-xl border border-slate-200 shadow-sm bg-white overflow-hidden">
                     <div class="grid grid-cols-1 xl:grid-cols-12 xl:divide-x divide-slate-200 items-stretch min-h-0">
                         <div class="xl:col-span-4 flex flex-col min-w-0 border-b xl:border-b-0 border-slate-200">
-                            <div class="p-2.5 sm:p-3 shrink-0">
-                                <p class="text-[8px] font-black uppercase text-slate-500 mb-1.5 tracking-wide">Exam countdowns</p>
+                            <div class="p-2 shrink-0">
+                                <p class="text-[9px] font-black uppercase text-slate-500 mb-1 tracking-wide">Exam countdowns</p>
                                 <div id="exam-timeline" class="flex flex-col min-h-0"></div>
                             </div>
-                            <div class="bg-slate-900 p-2.5 sm:p-3 text-white flex-1 flex flex-col gap-2 min-h-0 border-t border-slate-800">
+                            <div id="schedule-sprint-panel" class="hidden md:flex bg-slate-900 p-2.5 sm:p-3 text-white flex-1 flex-col gap-2 min-h-0 border-t border-slate-800">
                                 <div class="flex items-baseline justify-between gap-2 shrink-0">
                                     <h3 class="text-blue-400 font-black text-xs leading-none">Sprint</h3>
                                     <span class="text-[8px] font-bold text-slate-500 uppercase tracking-wider">All subjects</span>
@@ -112,7 +123,7 @@
                     </div>
                     <div id="calendar-exam-list" class="hidden"></div>
                     <div id="calendar-grid"></div>
-                    <div class="mt-2 rounded-lg border border-slate-200 bg-slate-50/90 p-2 text-[9px] text-slate-700 leading-snug">
+                    <div class="mt-2 rounded-lg border border-slate-200 bg-slate-50/90 p-2 text-[9px] text-slate-700 leading-snug hidden sm:block">
                         <p class="font-black uppercase tracking-wider text-slate-500 mb-1">Legend</p>
                         <ul class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5">
                             <li class="flex items-start gap-2">
@@ -149,8 +160,8 @@
             <!-- Exams: cohort grid + collapsible upload -->
             <div id="view-exams" class="view-content hidden">
                 <h2 class="text-xl font-black text-slate-800 mb-2 tracking-tight">Exams</h2>
-                <p class="text-sm text-slate-500 mb-4 max-w-2xl">Past papers by subject and year. <span class="font-bold text-slate-700">To be uploaded</span> means no PocketBase row yet—choose <strong>Upload</strong> to open the deposit form. Other states use <strong>Schedule</strong>, <strong>Grade</strong>, or <strong>View marking</strong>. The gear control on a row opens edit (files and fields) or delete.</p>
-                <div class="flex flex-wrap gap-2 mb-6" id="backlog-subject-tabs" role="tablist" aria-label="Subject for exams grid">
+                <p class="hidden md:block text-sm text-slate-500 mb-4 max-w-2xl">Past papers by subject and year. <span class="font-bold text-slate-700">To be uploaded</span> means no PocketBase row yet—choose <strong>Upload</strong> to open the deposit form. Other states use <strong>Schedule</strong>, <strong>Grade</strong>, or <strong>View marking</strong>. The gear control on a row opens edit (files and fields) or delete.</p>
+                <div class="grid grid-cols-1 sm:flex sm:flex-wrap gap-2 mb-3 sticky top-0 z-10 bg-slate-50 py-2" id="backlog-subject-tabs" role="tablist" aria-label="Subject for exams grid">
                     <button type="button" class="backlog-tab px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide bg-slate-900 text-white shadow-sm transition-all" data-subject="Psychology">
                         Psychology
                     </button>
@@ -190,7 +201,6 @@
                                 <option value="2018">2018</option>
                                 <option value="2019">2019</option>
                                 <option value="2020">2020</option>
-                                <option value="2021">2021</option>
                                 <option value="2022">2022</option>
                                 <option value="2023">2023</option>
                                 <option value="2024" selected>2024</option>
@@ -259,7 +269,7 @@
                         <select id="perf-year-filter" class="text-xs font-bold bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-blue-500 min-w-[10rem]"></select>
                     </div>
                 </div>
-                <p id="performance-help" class="text-sm text-slate-500 mb-4 max-w-3xl leading-relaxed"></p>
+                <p id="performance-help" class="hidden md:block text-sm text-slate-500 mb-4 max-w-3xl leading-relaxed"></p>
 
                 <div id="performance-year-panel" class="hidden">
                     <p id="perf-year-cohort-label" class="text-xs text-slate-600 mb-3 font-medium"></p>
@@ -324,7 +334,6 @@
                             <option value="2018">2018</option>
                             <option value="2019">2019</option>
                             <option value="2020">2020</option>
-                            <option value="2021">2021</option>
                             <option value="2022">2022</option>
                             <option value="2023">2023</option>
                             <option value="2024">2024</option>
@@ -381,7 +390,6 @@
                     <button type="button" id="exam-edit-delete" class="px-4 py-2 rounded-xl border border-red-200 text-red-700 font-bold text-sm hover:bg-red-50 order-3 sm:order-1">Delete record</button>
                     <div class="flex flex-col sm:flex-row gap-2 justify-end order-1 sm:order-2">
                     <button type="button" id="exam-edit-cancel" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-sm">Cancel</button>
-                    <button type="button" id="exam-edit-retake" class="px-4 py-2 rounded-xl border border-blue-200 text-blue-700 font-black text-sm hover:bg-blue-50">Retake &amp; Regrade</button>
                     <button type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-black text-sm hover:bg-blue-600">Save changes</button>
                     </div>
                 </div>
@@ -445,6 +453,32 @@
             <div id="yaml-comments-body" class="max-h-[65vh] overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-4"></div>
         </div>
     </div>
+    <div id="auth-login-modal" class="hidden fixed inset-0 z-50 bg-slate-900/55 backdrop-blur-[1px] items-center justify-center p-4 overflow-y-auto">
+        <div class="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200 p-5 my-4">
+            <h3 class="text-lg font-black text-slate-900 mb-1">Login</h3>
+            <p class="text-xs text-slate-500 mb-4">Login is required for write actions on desktop.</p>
+            <form id="auth-login-form" class="space-y-3">
+                <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase block mb-1" for="auth-username">Username</label>
+                    <input id="auth-username" type="text" autocomplete="username" class="w-full p-2 rounded-xl border border-slate-200 text-sm" />
+                </div>
+                <div class="relative">
+                    <label class="text-[10px] font-black text-slate-400 uppercase block mb-1" for="auth-password">Password</label>
+                    <input id="auth-password" type="password" autocomplete="current-password" class="w-full p-2 pr-12 rounded-xl border border-slate-200 text-sm" />
+                    <button id="auth-password-toggle" type="button" aria-label="Show password" class="absolute right-2 top-[1.55rem] px-2 py-1 rounded-md border border-slate-200 text-[10px] font-bold text-slate-600 hover:bg-slate-100">Show</button>
+                </div>
+                <label class="flex items-center gap-2 text-xs text-slate-700">
+                    <input id="auth-remember-me" type="checkbox" class="rounded border-slate-300" />
+                    Remember me
+                </label>
+                <p id="auth-login-error" class="hidden text-xs text-red-700"></p>
+                <div class="flex flex-col sm:flex-row gap-2 justify-end pt-1">
+                    <button id="auth-login-cancel" type="button" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-sm">Cancel</button>
+                    <button id="auth-login-submit" type="submit" class="px-4 py-2 rounded-xl bg-slate-900 text-white font-black text-sm hover:bg-blue-600">Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <!-- Classic scripts: ES modules fail on file:// in Chrome; this layout works opened from disk or via http:// -->
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
     <script src="js/config.js"></script>
@@ -456,6 +490,7 @@
     <script src="js/services/boundaries.js"></script>
     <script src="js/services/settings.js"></script>
     <script src="js/services/papers.js"></script>
+    <script src="js/services/auth.js"></script>
     <script src="js/ui/router.js"></script>
     <script src="js/ui/calendar.js"></script>
     <script src="js/ui/dashboard.js"></script>

@@ -23,5 +23,8 @@
 
         const loader = viewLoaders[viewId];
         if (typeof loader === "function") loader();
+        if (typeof document !== "undefined") {
+            document.dispatchEvent(new CustomEvent("gf:view-change", { detail: { viewId: viewId } }));
+        }
     };
 })(window);

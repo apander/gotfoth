@@ -5,6 +5,14 @@
 (function (w) {
     const G = w.GF;
     let allPapers = [];
+    const authState = {
+        user: null,
+        loginOpen: false,
+        showPassword: false,
+    };
+    const navState = {
+        open: false,
+    };
 
     function escHtml(s) {
         return String(s ?? "")
@@ -17,6 +25,129 @@
         const m = {};
         for (const p of papers) m[p.id] = p;
         return m;
+    }
+
+    function isMobileReadOnly() {
+        const maxWidth = Number(G.MOBILE_READONLY_MAX_WIDTH || 767);
+        return w.matchMedia && w.matchMedia("(max-width: " + maxWidth + "px)").matches;
+    }
+
+    function isAuthenticated() {
+        return !!(authState.user && authState.user.username);
+    }
+
+    function canWrite() {
+        return isAuthenticated() && !isMobileReadOnly();
+    }
+
+    function updateAccessUi() {
+        const banner = document.getElementById("mobile-readonly-banner");
+        if (banner) banner.classList.add("hidden");
+        const userLabel = document.getElementById("auth-user-label");
+        if (userLabel) userLabel.textContent = isAuthenticated() ? "Logged in: " + authState.user.username : "Not logged in";
+        const loginBtn = document.getElementById("auth-login-btn");
+        const logoutBtn = document.getElementById("auth-logout-btn");
+        if (loginBtn) loginBtn.classList.toggle("hidden", isAuthenticated());
+        if (logoutBtn) logoutBtn.classList.toggle("hidden", !isAuthenticated());
+    }
+
+    function syncMobileNavUi() {
+        const panel = document.getElementById("mobile-nav-panel");
+        const toggle = document.getElementById("mobile-nav-toggle");
+        const mobile = isMobileReadOnly();
+        if (!panel) return;
+        if (!mobile) {
+            panel.classList.remove("hidden");
+            panel.classList.add("md:flex");
+            if (toggle) {
+                toggle.textContent = "Menu";
+                toggle.setAttribute("aria-expanded", "false");
+            }
+            navState.open = false;
+            return;
+        }
+        panel.classList.toggle("hidden", !navState.open);
+        if (toggle) {
+            toggle.textContent = navState.open ? "Close" : "Menu";
+            toggle.setAttribute("aria-expanded", navState.open ? "true" : "false");
+        }
+    }
+
+    function applyMobileModalLayout(modal, panel) {
+        if (!modal || !panel) return;
+        const mobile = w.matchMedia && w.matchMedia("(max-width: 767px)").matches;
+        modal.classList.toggle("items-end", mobile);
+        modal.classList.toggle("items-center", !mobile);
+        panel.classList.toggle("w-full", mobile);
+        panel.classList.toggle("max-h-[92vh]", mobile);
+        panel.classList.toggle("rounded-b-none", mobile);
+        panel.classList.toggle("rounded-2xl", !mobile);
+    }
+
+    function syncPasswordMaskUi() {
+        const passwordEl = document.getElementById("auth-password");
+        const toggleEl = document.getElementById("auth-password-toggle");
+        if (!passwordEl || !toggleEl) return;
+        passwordEl.type = authState.showPassword ? "text" : "password";
+        toggleEl.textContent = authState.showPassword ? "Hide" : "Show";
+        toggleEl.setAttribute("aria-label", authState.showPassword ? "Hide password" : "Show password");
+    }
+
+    function closeLoginModal() {
+        const modal = document.getElementById("auth-login-modal");
+        const panel = modal ? modal.querySelector("div") : null;
+        if (!modal) return;
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+        if (panel) applyMobileModalLayout(modal, panel);
+        authState.showPassword = false;
+        syncPasswordMaskUi();
+        authState.loginOpen = false;
+    }
+
+    function openLoginModal(message) {
+        const modal = document.getElementById("auth-login-modal");
+        const panel = modal ? modal.querySelector("div") : null;
+        if (!modal) return;
+        const err = document.getElementById("auth-login-error");
+        if (err) {
+            if (message) {
+                err.textContent = String(message);
+                err.classList.remove("hidden");
+            } else {
+                err.classList.add("hidden");
+                err.textContent = "";
+            }
+        }
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+        if (panel) applyMobileModalLayout(modal, panel);
+        authState.showPassword = false;
+        syncPasswordMaskUi();
+        authState.loginOpen = true;
+    }
+
+    function requireWriteAccess() {
+        if (isMobileReadOnly()) {
+            w.alert("Mobile mode is read-only. Please use desktop for edits.");
+            return false;
+        }
+        if (!isAuthenticated()) {
+            openLoginModal("Please login to continue.");
+            return false;
+        }
+        return true;
+    }
+
+    function handleWriteError(err, fallbackMessage) {
+        const msg = err && err.message ? String(err.message) : "";
+        if (msg.includes("401") || msg.toLowerCase().includes("authentication required")) {
+            authState.user = null;
+            updateAccessUi();
+            openLoginModal("Your session expired. Please login again.");
+            return;
+        }
+        w.alert(fallbackMessage + (msg ? "\n\n" + msg : ""));
     }
 
     function bindPaperRowEvents(root) {
@@ -146,6 +277,7 @@
     }
 
     function showVaultUploadPanel() {
+        if (!requireWriteAccess()) return;
         const el = document.getElementById("vault-upload-panel");
         if (!el) return;
         el.classList.remove("hidden");
@@ -216,6 +348,18 @@
             return;
         }
         a.href = u;
+        a.onclick = function (ev) {
+            ev.preventDefault();
+            fetch(u, { method: "HEAD", redirect: "follow" })
+                .then(function (res) {
+                    if (!res.ok) throw new Error("missing");
+                    const openUrl = res.url || u;
+                    w.open(openUrl, "_blank", "noopener");
+                })
+                .catch(function () {
+                    w.alert("This file is unavailable. Re-upload the file and save changes.");
+                });
+        };
         a.classList.remove("hidden");
     }
 
@@ -245,6 +389,7 @@
 
     function openExamEditModal(paper) {
         const modal = document.getElementById("exam-edit-modal");
+        const panel = modal ? modal.querySelector("div") : null;
         if (!modal || !paper) return;
         document.getElementById("exam-edit-id").value = paper.id;
         const sub = document.getElementById("exam-edit-subject");
@@ -272,18 +417,21 @@
         }
         modal.classList.remove("hidden");
         modal.classList.add("flex");
+        if (panel) applyMobileModalLayout(modal, panel);
     }
 
     function closeExamEditModal() {
         const modal = document.getElementById("exam-edit-modal");
+        const panel = modal ? modal.querySelector("div") : null;
         if (!modal) return;
         modal.classList.add("hidden");
         modal.classList.remove("flex");
+        if (panel) applyMobileModalLayout(modal, panel);
         clearExamEditFileInputs();
     }
 
-    async function saveExamEdit(opts) {
-        opts = opts || {};
+    async function saveExamEdit() {
+        if (!requireWriteAccess()) return;
         const id = document.getElementById("exam-edit-id") && document.getElementById("exam-edit-id").value;
         if (!id) return;
         const subj = document.getElementById("exam-edit-subject") && document.getElementById("exam-edit-subject").value;
@@ -304,11 +452,6 @@
             parsedPrimary = G.parseMarkingYaml(editYaml, yamlApi());
             if (parsedPrimary.error && !w.confirm("YAML issue: " + parsedPrimary.error + "\nSave anyway?")) return;
             if (parsedPrimary.warnings.length && !w.confirm(parsedPrimary.warnings.join("\n") + "\n\nSave anyway?")) return;
-        } else if (opts.retake) {
-            if (!fa) {
-                w.alert("Retake requires a new attempt file.");
-                return;
-            }
         }
 
         const scheduled =
@@ -345,17 +488,9 @@
                     if (sum) fd.append("ai_summary", sum);
                     if (sc != null) fd.append("score", String(sc));
                     fd.append("status", G.STATUS_GRADED);
-                } else if (opts.retake) {
-                    fd.append("status", G.STATUS_COMPLETED);
-                    fd.append("score", "");
-                    fd.append("full_yaml", "");
-                    fd.append("ai_summary", "");
                 }
                 await G.patchPaperRecordMultipart(id, fd);
                 if (yamlPack && yamlPack.clearMarkingFile && !yamlPack.markingBlob) {
-                    await G.patchPaperRecord(id, { file_marking_yaml: null });
-                }
-                if (opts.retake && existingPaper && existingPaper.file_marking_yaml) {
                     await G.patchPaperRecord(id, { file_marking_yaml: null });
                 }
             } else {
@@ -380,10 +515,7 @@
             await loadAllData();
         } catch (e) {
             console.error(e);
-            w.alert(
-                "Could not save changes." +
-                    (e && e.message ? "\n\n" + e.message : "\n\nCheck the browser Network tab for the PATCH response.")
-            );
+            handleWriteError(e, "Could not save changes.");
         }
     }
 
@@ -696,9 +828,22 @@
         body.setAttribute("data-qfilter-mode", "all");
         body.setAttribute("data-qonly-dropped", "0");
 
-        const filePaper = paper && G.fileUrl ? G.fileUrl(paper, "file_paper") : null;
-        const fileScheme = paper && G.fileUrl ? G.fileUrl(paper, "file_scheme") : null;
-        const fileAttempt = paper && G.fileUrl ? G.fileUrl(paper, "file_attempt") : null;
+        async function resolveFileForViewer(field) {
+            const u = paper && G.fileUrl ? G.fileUrl(paper, field) : null;
+            if (!u) return null;
+            try {
+                const res = await fetch(u, { method: "HEAD", redirect: "follow" });
+                if (!res.ok) return null;
+                return res.url || u;
+            } catch (_e) {
+                return null;
+            }
+        }
+        const [filePaper, fileScheme, fileAttempt] = await Promise.all([
+            resolveFileForViewer("file_paper"),
+            resolveFileForViewer("file_scheme"),
+            resolveFileForViewer("file_attempt"),
+        ]);
         if (controls) controls.classList.toggle("hidden", !filePaper && !fileScheme && !fileAttempt);
         if (btnPaper) btnPaper.classList.toggle("hidden", !filePaper);
         if (btnScheme) btnScheme.classList.toggle("hidden", !fileScheme);
@@ -712,6 +857,7 @@
 
         modal.classList.remove("hidden");
         modal.classList.add("flex");
+        if (commentsPanel) applyMobileModalLayout(modal, commentsPanel);
 
         function viewerSrcForUrl(url) {
             if (!url) return "";
@@ -724,7 +870,10 @@
         }
 
         function openViewer(url, label) {
-            if (!url || !viewerWrap || !viewerFrame) return;
+            if (!url || !viewerWrap || !viewerFrame) {
+                w.alert("That file is not available yet. Please re-upload it and save changes.");
+                return;
+            }
             if (viewerTitle) viewerTitle.textContent = label;
             viewerFrame.src = viewerSrcForUrl(url);
             viewerWrap.classList.remove("max-h-0", "opacity-0", "mt-0");
@@ -1051,6 +1200,7 @@
     }
 
     async function refreshPapersUi() {
+        if (!canWrite()) hideVaultUploadPanel();
         const boundaries = G.getBoundaries();
         const items = allPapers;
 
@@ -1105,6 +1255,7 @@
 
     async function openGradeYamlModal(id) {
         const modal = document.getElementById("grade-yaml-modal");
+        const panel = modal ? modal.querySelector("div") : null;
         const title = document.getElementById("grade-yaml-title");
         const hid = document.getElementById("grade-yaml-id");
         const txt = document.getElementById("grade-yaml-text");
@@ -1136,13 +1287,16 @@
 
         modal.classList.remove("hidden");
         modal.classList.add("flex");
+        if (panel) applyMobileModalLayout(modal, panel);
     }
 
     function closeGradeYamlModal() {
         const modal = document.getElementById("grade-yaml-modal");
+        const panel = modal ? modal.querySelector("div") : null;
         if (!modal) return;
         modal.classList.add("hidden");
         modal.classList.remove("flex");
+        if (panel) applyMobileModalLayout(modal, panel);
     }
 
     async function logResult(id, providedYaml, attemptDate) {
@@ -1194,6 +1348,7 @@
     }
 
     async function saveGradeYamlModal() {
+        if (!requireWriteAccess()) return;
         const hid = document.getElementById("grade-yaml-id");
         const id = hid ? hid.value : "";
         if (!id) {
@@ -1219,7 +1374,7 @@
             closeGradeYamlModal();
         } catch (e) {
             console.error(e);
-            w.alert(e && e.message ? "Could not save grade:\n" + e.message : "Could not save grade.");
+            handleWriteError(e, "Could not save grade.");
         } finally {
             if (saveBtn) {
                 saveBtn.disabled = prevDisabled;
@@ -1229,6 +1384,7 @@
     }
 
     async function savePaper() {
+        if (!requireWriteAccess()) return;
         const form = document.getElementById("vault-deposit-form");
         const subjectEl = document.getElementById("paperSub");
         const subject = subjectEl ? subjectEl.value : "";
@@ -1304,6 +1460,12 @@
         } else {
             const t = await res.text();
             console.error(t);
+            if (res.status === 401) {
+                authState.user = null;
+                updateAccessUi();
+                openLoginModal("Please login to upload.");
+                return;
+            }
             w.alert("Upload failed.");
         }
     }
@@ -1330,11 +1492,120 @@
             });
     }
 
+    async function bootstrapAuth() {
+        if (typeof G.authMe !== "function") return;
+        try {
+            const me = await G.authMe();
+            authState.user = me && me.user ? me.user : null;
+        } catch (_e) {
+            authState.user = null;
+        }
+        updateAccessUi();
+    }
+
+    function wireAuthUi() {
+        const loginBtn = document.getElementById("auth-login-btn");
+        const logoutBtn = document.getElementById("auth-logout-btn");
+        const modal = document.getElementById("auth-login-modal");
+        const panel = modal ? modal.querySelector("div") : null;
+        const cancel = document.getElementById("auth-login-cancel");
+        const form = document.getElementById("auth-login-form");
+        const passwordToggle = document.getElementById("auth-password-toggle");
+        if (loginBtn) {
+            loginBtn.addEventListener("click", function () {
+                openLoginModal("");
+            });
+        }
+        if (logoutBtn) {
+            logoutBtn.addEventListener("click", async function () {
+                try {
+                    if (typeof G.authLogout === "function") await G.authLogout();
+                } catch (_e) {}
+                authState.user = null;
+                updateAccessUi();
+                await refreshPapersUi();
+            });
+        }
+        if (cancel) cancel.addEventListener("click", closeLoginModal);
+        if (passwordToggle) {
+            passwordToggle.addEventListener("click", function () {
+                authState.showPassword = !authState.showPassword;
+                syncPasswordMaskUi();
+            });
+        }
+        if (modal) {
+            modal.addEventListener("click", function (ev) {
+                if (ev.target === modal) closeLoginModal();
+            });
+        }
+        if (form) {
+            form.addEventListener("submit", async function (ev) {
+                ev.preventDefault();
+                const usernameEl = document.getElementById("auth-username");
+                const passwordEl = document.getElementById("auth-password");
+                const rememberEl = document.getElementById("auth-remember-me");
+                const username = usernameEl && usernameEl.value ? String(usernameEl.value).trim() : "";
+                const password = passwordEl && passwordEl.value ? String(passwordEl.value) : "";
+                const rememberMe = !!(rememberEl && rememberEl.checked);
+                try {
+                    const out = await G.authLogin(username, password, rememberMe);
+                    authState.user = out && out.user ? out.user : null;
+                    closeLoginModal();
+                    updateAccessUi();
+                    await refreshPapersUi();
+                } catch (e) {
+                    openLoginModal(e && e.message ? e.message : "Login failed.");
+                }
+            });
+        }
+        w.addEventListener("resize", function () {
+            updateAccessUi();
+            syncMobileNavUi();
+            if (panel) applyMobileModalLayout(modal, panel);
+            const examModal = document.getElementById("exam-edit-modal");
+            const examPanel = examModal ? examModal.querySelector("div") : null;
+            if (examModal && examPanel) applyMobileModalLayout(examModal, examPanel);
+            const gradeModal = document.getElementById("grade-yaml-modal");
+            const gradePanel = gradeModal ? gradeModal.querySelector("div") : null;
+            if (gradeModal && gradePanel) applyMobileModalLayout(gradeModal, gradePanel);
+            const commentsModal = document.getElementById("yaml-comments-modal");
+            const commentsPanel = document.getElementById("yaml-comments-panel");
+            if (commentsModal && commentsPanel) applyMobileModalLayout(commentsModal, commentsPanel);
+            refreshPapersUi().catch(function () {});
+        });
+    }
+
+    function wireMobileNavUi() {
+        const panel = document.getElementById("mobile-nav-panel");
+        const toggle = document.getElementById("mobile-nav-toggle");
+        if (!panel || !toggle) return;
+        toggle.addEventListener("click", function () {
+            navState.open = !navState.open;
+            syncMobileNavUi();
+        });
+        document.addEventListener("gf:view-change", function () {
+            if (!isMobileReadOnly()) return;
+            navState.open = false;
+            syncMobileNavUi();
+        });
+        document.body.addEventListener("click", function (ev) {
+            if (!isMobileReadOnly() || !navState.open) return;
+            const navBtn = ev.target && ev.target.closest ? ev.target.closest(".nav-btn") : null;
+            if (!navBtn) return;
+            navState.open = false;
+            syncMobileNavUi();
+        });
+        syncMobileNavUi();
+    }
+
     w.showView = G.showView;
     w.savePaper = savePaper;
     w.saveExamEdit = saveExamEdit;
     w.saveGradeYamlModal = saveGradeYamlModal;
     w.logResult = logResult;
+    G.isMobileReadOnly = isMobileReadOnly;
+    G.isAuthenticated = isAuthenticated;
+    G.canWrite = canWrite;
     w.showExamsNav = function () {
         hideVaultUploadPanel();
         G.showView("exams");
@@ -1370,15 +1641,10 @@
         (function wireExamEditModal() {
             const cancel = document.getElementById("exam-edit-cancel");
             if (cancel) cancel.addEventListener("click", closeExamEditModal);
-            const retake = document.getElementById("exam-edit-retake");
-            if (retake) {
-                retake.addEventListener("click", function () {
-                    saveExamEdit({ retake: true });
-                });
-            }
             const del = document.getElementById("exam-edit-delete");
             if (del) {
                 del.addEventListener("click", function () {
+                    if (!requireWriteAccess()) return;
                     const id = document.getElementById("exam-edit-id") && document.getElementById("exam-edit-id").value;
                     if (!id || !w.confirm("Delete this exam record? This cannot be undone.")) return;
                     G.deletePaperRecord(id)
@@ -1419,6 +1685,7 @@
             const setBtn = ev.target && ev.target.closest && ev.target.closest(".js-set-sitting-date");
             if (setBtn) {
                 ev.preventDefault();
+                if (!requireWriteAccess()) return;
                 const sid = setBtn.getAttribute("data-id");
                 if (sid) openSittingDatePicker(sid);
                 return;
@@ -1426,6 +1693,7 @@
             const uploadBtn = ev.target && ev.target.closest && ev.target.closest(".js-backlog-upload");
             if (uploadBtn) {
                 ev.preventDefault();
+                if (!requireWriteAccess()) return;
                 openExamsUploadWithPrefill(
                     uploadBtn.getAttribute("data-subject"),
                     uploadBtn.getAttribute("data-year"),
@@ -1437,6 +1705,7 @@
                 ev.target && ev.target.closest && ev.target.closest(".js-exam-edit, .js-exam-settings");
             if (exEdit) {
                 ev.preventDefault();
+                if (!requireWriteAccess()) return;
                 const eid = exEdit.getAttribute("data-id");
                 const rp = allPapers.find(function (p) {
                     return p.id === eid;
@@ -1447,6 +1716,7 @@
             const exDel = ev.target && ev.target.closest && ev.target.closest(".js-exam-delete");
             if (exDel) {
                 ev.preventDefault();
+                if (!requireWriteAccess()) return;
                 const did = exDel.getAttribute("data-id");
                 if (!did || !w.confirm("Delete this exam record? This cannot be undone.")) return;
                 G.deletePaperRecord(did)
@@ -1462,6 +1732,7 @@
             const gradeBtn = ev.target && ev.target.closest && ev.target.closest(".js-backlog-grade");
             if (gradeBtn) {
                 ev.preventDefault();
+                if (!requireWriteAccess()) return;
                 const gid = gradeBtn.getAttribute("data-id");
                 if (gid) void openGradeYamlModal(gid);
                 return;
@@ -1503,6 +1774,9 @@
         })();
 
         try {
+            wireMobileNavUi();
+            wireAuthUi();
+            await bootstrapAuth();
             await loadAllData();
         } catch (e) {
             console.error(e);

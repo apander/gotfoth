@@ -1,7 +1,8 @@
-const { dbDelete, dbPatch, dbSelect } = require("../../../_lib/supabase");
+const { dbDelete, dbPatch, dbSelect } = require("../../../_lib/db");
 const { parseForm, readJsonBody } = require("../../../_lib/form");
 const { normalizePaperRow, fieldsToPaperPatch, uploadFilesAndBuildPatch, FILE_TO_PATH_FIELD } = require("../../../_lib/papers");
 const { sendJson, sendError, methodNotAllowed } = require("../../../_lib/http");
+const { requireAuth } = require("../../../_lib/authSimple");
 
 async function loadPaper(id) {
   const rows = await dbSelect("papers", `select=*&id=eq.${encodeURIComponent(id)}&limit=1`);
@@ -13,6 +14,8 @@ module.exports = async function handler(req, res) {
   if (!id) return sendError(res, 400, "Missing paper id.");
 
   if (req.method === "PATCH") {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     try {
       let patch = {};
       const contentType = String(req.headers["content-type"] || "");
@@ -41,6 +44,8 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === "DELETE") {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
     try {
       await dbDelete("papers", id);
       return sendJson(res, 204, {});

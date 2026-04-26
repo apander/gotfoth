@@ -18,6 +18,9 @@
         const psych = String(paper.subject).includes("Psychology");
         const accent = psych ? "bg-blue-500" : "bg-emerald-500";
         const showLog = opts.showLogButton !== false && !graded;
+        const canWrite = typeof G.canWrite === "function" ? G.canWrite() : true;
+        const scheduledLabel =
+            typeof G.formatScheduledDateForUi === "function" ? G.formatScheduledDateForUi(paper) : String(paper.scheduled_date || "");
 
         const ux = G.backlogUxStatus(paper);
         const badgeTone =
@@ -34,7 +37,7 @@
                         : "bg-slate-100 text-slate-600";
         const statusBadge = `<span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${badgeTone}">${esc(ux)}</span>`;
 
-        const showSetDate = !graded && G.isUnscheduledPaper(paper);
+        const showSetDate = canWrite && !graded && G.isUnscheduledPaper(paper);
         const setDateBtn = showSetDate
             ? `<button type="button" class="js-set-sitting-date w-full sm:w-auto bg-white text-slate-900 border-2 border-slate-200 px-4 py-2 rounded-xl font-black text-xs uppercase hover:border-blue-500 hover:text-blue-600 shrink-0" data-id="${esc(paper.id)}">Set date</button>`
             : "";
@@ -45,7 +48,7 @@
             <p class="text-[10px] font-black text-slate-400 uppercase">Grade: ${gradeDisplay}</p>
           </div>`
             : `<div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">${setDateBtn}${
-                  showLog
+                  canWrite && showLog
                       ? `<button type="button" class="js-log-result bg-slate-900 text-white px-5 py-2 rounded-xl font-black text-xs uppercase hover:bg-slate-800" data-id="${esc(paper.id)}">Log Result</button>`
                       : ""
               }</div>`;
@@ -57,7 +60,7 @@
            <div id="${esc(detailId)}" class="hidden mt-3 text-xs text-slate-600 border-t border-slate-100 pt-3 font-mono whitespace-pre-wrap break-words js-marking-detail"></div>`
             : "";
 
-        const examAdmin = opts.examAdmin
+        const examAdmin = opts.examAdmin && canWrite
             ? `<div class="flex flex-wrap gap-2 mt-2">
                 <button type="button" class="js-exam-edit px-3 py-1.5 rounded-lg bg-slate-800 text-white text-[10px] font-black uppercase hover:bg-blue-600" data-id="${esc(paper.id)}">Edit</button>
                 <button type="button" class="js-exam-delete px-3 py-1.5 rounded-lg border-2 border-red-200 text-red-700 text-[10px] font-black uppercase hover:bg-red-50" data-id="${esc(paper.id)}">Delete</button>
@@ -79,11 +82,11 @@
                         ${statusBadge}
                     </div>
                     <h3 class="font-bold text-slate-800 truncate">${esc(G.derivedPaperDisplayName(paper))}</h3>
-                    <p class="text-[10px] ${G.isUnscheduledPaper(paper) ? "text-amber-700 font-bold" : "text-slate-400"}">${
+                    <p class="text-[10px] ${G.isUnscheduledPaper(paper) ? "text-amber-700 font-bold" : "text-slate-500"}">${
                         G.isUnscheduledPaper(paper)
                             ? "No sitting date yet · use Set date"
                             : (paper.year != null && paper.year !== "" ? esc("Exam " + paper.year + " · ") : "") +
-                              esc(String(paper.scheduled_date || ""))
+                              esc(scheduledLabel)
                     }</p>
                     <div class="flex gap-3 mt-1">
                         ${paperUrl ? `<a href="${esc(paperUrl)}" target="_blank" rel="noopener" class="text-[10px] font-bold text-blue-500">PAPER</a>` : ""}
