@@ -147,10 +147,13 @@ export function Vault() {
   const student = data?.learners.find((l: any) => l.id === learner);
   const isAdmin = [
     "Families",
+    "Groups",
     "Invitations",
     "Catalogue",
     "Operations",
   ].includes(page);
+  const paperDesk =
+    page === "Papers" && (identity?.superuser || data?.role === "teacher");
   const nav =
     data?.role === "teacher"
       ? ["Papers"]
@@ -300,7 +303,7 @@ export function Vault() {
               ADMINISTRATION
             </p>
             <nav aria-label="Administration">
-              {["Families", "Invitations", "Catalogue", "Operations"].map(
+              {["Groups", "Papers", "Families", "Invitations", "Catalogue", "Operations"].map(
                 (n) => (
                   <button
                     key={n}
@@ -391,7 +394,12 @@ export function Vault() {
             {notice}
           </div>
         )}
-        {isAdmin ? (
+        {paperDesk ? (
+          <PaperDesk
+            familyId={family || "00000000-0000-4000-8000-000000000001"}
+            run={run}
+          />
+        ) : isAdmin ? (
           <Admin page={page} run={run} busy={busy} />
         ) : attempt ? (
           <Player
@@ -529,9 +537,6 @@ export function Vault() {
                 onCreate={(mode: string) => run(() => create(mode))}
                 onPapers={() => setPage("Papers")}
               />
-            )}
-            {page === "Papers" && data.role === "teacher" && (
-              <PaperDesk familyId={family} run={run} />
             )}
             {page === "Papers" && data.role !== "teacher" && (
               <>

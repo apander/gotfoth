@@ -2,8 +2,7 @@ import "server-only";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { APIError } from "better-auth/api";
 import { headers } from "next/headers";
-import { database, type Actor } from "./db";
-import { isSuperuser } from "../lib/domain";
+import { accountIsSuperuser, database, type Actor } from "./db";
 import { AppError } from "../lib/errors";
 let instance: ReturnType<typeof betterAuth> | undefined;
 export function auth() {
@@ -39,7 +38,13 @@ export function auth() {
               throw new APIError("FORBIDDEN", {
                 message: "A verified Google email is required.",
               });
-            if (isSuperuser(user.email, user.emailVerified))
+            if (
+              await accountIsSuperuser({
+                id: user.id,
+                email: user.email,
+                emailVerified: Boolean(user.emailVerified),
+              })
+            )
               return { data: user };
             const pending = await database().query(
               "SELECT id FROM invitations WHERE lower(email)=lower($1) AND expires_at>now() AND revoked_at IS NULL AND accepted_at IS NULL",

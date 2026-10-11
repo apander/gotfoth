@@ -16,6 +16,7 @@ import {
   acceptInvitation,
   adminSnapshot,
   catalogueAction,
+  setMember,
 } from "@/server/admin";
 import {
   createAttempt,
@@ -96,6 +97,7 @@ async function handle(
         );
       else if (path === "admin/family") result = await createFamily(user, body);
       else if (path === "admin/invite") result = await invite(user, body);
+      else if (path === "admin/member") result = await setMember(user, body);
       else if (path === "admin/catalogue")
         result = await catalogueAction(user, body);
       else if (path === "admin/operation")

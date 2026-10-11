@@ -14,7 +14,7 @@ import { validatePaper } from "../lib/domain";
 const hash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 export async function createFamily(actor: Actor, input: unknown) {
-  superuser(actor);
+  await superuser(actor);
   const data = z
     .object({
       name: z.string().min(1).max(100),
@@ -52,7 +52,7 @@ export async function createFamily(actor: Actor, input: unknown) {
   }, id);
 }
 export async function invite(actor: Actor, input: unknown) {
-  superuser(actor);
+  await superuser(actor);
   const data = z
     .object({
       familyId: z.string().uuid(),
@@ -173,7 +173,7 @@ export async function acceptInvitationInTransaction(
   return { familyId: inv.family_id };
 }
 export async function adminSnapshot(actor: Actor) {
-  superuser(actor);
+  await superuser(actor);
   const [families, invitations, catalogue, jobs, checks, rates] =
     await Promise.all([
       database().query("SELECT * FROM families ORDER BY created_at DESC"),
@@ -191,12 +191,29 @@ export async function adminSnapshot(actor: Actor) {
     ]);
   const familyRows = [];
   for (const f of families.rows) {
-    const ls = await transaction(
-      (tx) =>
-        tx.query("SELECT id,name FROM learners WHERE family_id=$1", [f.id]),
-      f.id,
-    );
-    familyRows.push({ ...f, learners: ls.rows });
+    const detail = await transaction(async (tx) => {
+      const learners = await tx.query(
+        "SELECT id,name FROM learners WHERE family_id=$1 ORDER BY name",
+        [f.id],
+      );
+      const members = await tx.query(
+        `SELECT u.email, m.role,
+           COALESCE(l.name, (
+             SELECT string_agg(pl.name, ', ' ORDER BY pl.name)
+             FROM parent_links p
+             JOIN learners pl ON pl.id=p.learner_id
+             WHERE p.user_id=m.user_id AND p.family_id=m.family_id
+           )) AS learner_name
+         FROM memberships m
+         JOIN "user" u ON u.id=m.user_id
+         LEFT JOIN learners l ON l.id=m.learner_id
+         WHERE m.family_id=$1 AND m.active
+         ORDER BY u.email`,
+        [f.id],
+      );
+      return { learners: learners.rows, members: members.rows };
+    }, f.id);
+    familyRows.push({ ...f, ...detail });
   }
   return {
     families: familyRows,
@@ -207,8 +224,106 @@ export async function adminSnapshot(actor: Actor) {
     rates: rates.rows,
   };
 }
+const memberInput = z.object({
+  action: z.enum(["set", "remove"]),
+  familyId: z.string().uuid(),
+  email: z.email(),
+  role: z.enum(["parent", "student", "teacher"]).optional(),
+  learnerId: z.string().uuid().nullable().optional(),
+});
+export async function setMember(actor: Actor, input: unknown) {
+  await superuser(actor);
+  const data = memberInput.parse(input);
+  return transaction(
+    (tx) => setMemberInTransaction(tx, actor, data),
+    data.familyId,
+  );
+}
+export async function setMemberInTransaction(
+  tx: Tx,
+  actor: Actor,
+  data: z.infer<typeof memberInput>,
+) {
+  await tx.query("SELECT set_config('app.family_id',$1,true)", [data.familyId]);
+  const family = await tx.query(
+    "SELECT id FROM families WHERE id=$1 AND deleted_at IS NULL",
+    [data.familyId],
+  );
+  if (!family.rows.length) throw missing();
+  const email = data.email.toLowerCase();
+  if (data.action === "remove") {
+    const member = await tx.query(
+      'SELECT id FROM "user" WHERE lower(email)=$1',
+      [email],
+    );
+    if (!member.rows.length) throw missing();
+    await tx.query(
+      "DELETE FROM parent_links WHERE user_id=$1 AND family_id=$2",
+      [member.rows[0].id, data.familyId],
+    );
+    await tx.query(
+      "DELETE FROM memberships WHERE user_id=$1 AND family_id=$2",
+      [member.rows[0].id, data.familyId],
+    );
+    await audit(tx, actor.id, "member.removed", { email }, data.familyId);
+    return { saved: true };
+  }
+  const role = data.role;
+  requireThat(role, "ROLE", "Choose a role for this member.");
+  const learnerId = role === "teacher" ? null : (data.learnerId ?? null);
+  requireThat(
+    role === "teacher" || learnerId,
+    "LEARNER",
+    "Choose the learner this member is linked to.",
+  );
+  if (learnerId) {
+    const learner = await tx.query(
+      "SELECT id FROM learners WHERE id=$1 AND family_id=$2",
+      [learnerId, data.familyId],
+    );
+    if (!learner.rows.length) throw missing();
+  }
+  const user = await tx.query('SELECT id FROM "user" WHERE lower(email)=$1', [
+    email,
+  ]);
+  if (!user.rows.length) {
+    const token = randomBytes(32).toString("base64url");
+    await tx.query(
+      "INSERT INTO invitations(id,token_hash,email,family_id,role,learner_id,expires_at,created_by) VALUES($1,$2,$3,$4,$5,$6,now()+interval '7 days',$7)",
+      [
+        randomUUID(),
+        hash(token),
+        email,
+        data.familyId,
+        role,
+        role === "teacher" ? null : learnerId,
+        actor.id,
+      ],
+    );
+    await audit(tx, actor.id, "member.invited", { email, role }, data.familyId);
+    return { url: `${process.env.BETTER_AUTH_URL}/?invite=${token}` };
+  }
+  await tx.query(
+    `INSERT INTO memberships(user_id,family_id,role,learner_id,active)
+     VALUES($1,$2,$3,$4,true)
+     ON CONFLICT(user_id,family_id) DO UPDATE
+     SET role=EXCLUDED.role, learner_id=EXCLUDED.learner_id, active=true`,
+    [user.rows[0].id, data.familyId, role, role === "student" ? learnerId : null],
+  );
+  await tx.query("DELETE FROM parent_links WHERE user_id=$1 AND family_id=$2", [
+    user.rows[0].id,
+    data.familyId,
+  ]);
+  if (role === "parent" && learnerId)
+    await tx.query(
+      "INSERT INTO parent_links(user_id,family_id,learner_id) VALUES($1,$2,$3)",
+      [user.rows[0].id, data.familyId, learnerId],
+    );
+  await audit(tx, actor.id, "member.updated", { email, role }, data.familyId);
+  return { saved: true };
+}
 export async function catalogueAction(actor: Actor, input: unknown) {
-  superuser(actor);
+  await superuser(actor);
   const data = z
     .object({
       id: z.string().uuid(),

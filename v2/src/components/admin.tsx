@@ -131,6 +131,133 @@ export function Admin({
           </div>
         </>
       )}
+      {page === "Groups" && (
+        <>
+          <form
+            className="card stack"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(async () => {
+                const r = await api("admin/member", {
+                  action: "set",
+                  familyId: family,
+                  email,
+                  role,
+                  learnerId: role === "teacher" ? null : learner,
+                });
+                setLink(r.url ?? "");
+                setEmail("");
+                await refresh();
+              });
+            }}
+          >
+            <h2>Update a member</h2>
+            <p className="muted">
+              A person has one role in a group. Saving replaces that role. An email with no account yet receives an invitation link.
+            </p>
+            <div className="form-grid">
+              <label className="field">
+                Group
+                <select
+                  required
+                  value={family}
+                  onChange={(e) => setFamily(e.target.value)}
+                >
+                  {data.families.map((f: any) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                Google email
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </label>
+              <label className="field">
+                Role
+                <select value={role} onChange={(e) => setRole(e.target.value)}>
+                  <option value="parent">Parent</option>
+                  <option value="student">Student</option>
+                  <option value="teacher">Teacher</option>
+                </select>
+              </label>
+              <label className="field">
+                Learner
+                <select
+                  required={role !== "teacher"}
+                  disabled={role === "teacher"}
+                  value={role === "teacher" ? "" : learner}
+                  onChange={(e) => setLearner(e.target.value)}
+                >
+                  {role === "teacher" ? (
+                    <option value="">Teachers are not linked to a learner</option>
+                  ) : (
+                    data.families
+                      .find((f: any) => f.id === family)
+                      ?.learners.map((l: any) => (
+                        <option key={l.id} value={l.id}>
+                          {l.name}
+                        </option>
+                      ))
+                  )}
+                </select>
+              </label>
+            </div>
+            <button className="button" disabled={busy || !family || (role !== "teacher" && !learner)}>
+              Save member
+            </button>
+            {link && (
+              <label className="field">
+                Share this single-use link
+                <input readOnly value={link} />
+              </label>
+            )}
+          </form>
+          <div className="grid" style={{ marginTop: 24 }}>
+            {data.families.map((f: any) => (
+              <section className="card" key={f.id}>
+                <h2>{f.name}</h2>
+                {f.members?.length ? (
+                  f.members.map((member: any) => (
+                    <div className="list-item row" key={member.email}>
+                      <div>
+                        <strong>{member.email}</strong>
+                        <p className="muted" style={{ margin: 0 }}>
+                          {member.role}
+                          {member.learner_name ? ` · ${member.learner_name}` : ""}
+                        </p>
+                      </div>
+                      <button
+                        className="link-button"
+                        onClick={() =>
+                          run(async () => {
+                            await api("admin/member", {
+                              action: "remove",
+                              familyId: f.id,
+                              email: member.email,
+                            });
+                            await refresh();
+                          })
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="muted">No members yet.</p>
+                )}
+              </section>
+            ))}
+          </div>
+        </>
+      )}
       {page === "Invitations" && (
         <>
           <form

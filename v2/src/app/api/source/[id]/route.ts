@@ -6,7 +6,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    superuser(await actor());
+    await superuser(await actor());
     const id = (await context.params).id;
     const row = (
       await database().query(

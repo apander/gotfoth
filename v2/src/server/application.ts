@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { isSuperuser } from "../lib/domain";
 import { Enrolment } from "../lib/contracts";
 import {
+  accountIsSuperuser,
   database,
   family,
   learnerAccess,
@@ -23,7 +23,7 @@ export async function identity(actor: Actor) {
   ).rows;
   return {
     user: { id: actor.id, email: actor.email },
-    superuser: isSuperuser(actor.email, actor.emailVerified),
+    superuser: await accountIsSuperuser(actor),
     workspaces,
   };
 }
@@ -290,7 +290,7 @@ export async function familyAction(
   });
 }
 export async function operatorAction(actor: Actor, input: unknown) {
-  superuser(actor);
+  await superuser(actor);
   const data = z
     .discriminatedUnion("action", [
       z.object({ action: z.literal("revoke"), id: z.string().uuid() }),
