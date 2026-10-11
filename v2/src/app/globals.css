@@ -783,10 +783,16 @@ details > label {
 }
 .approval {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.95fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(280px, 0.8fr);
   gap: 28px;
   align-items: start;
   margin-top: 20px;
+}
+.extract-column {
+  max-height: min(86vh, 980px);
+  overflow: auto;
+  position: sticky;
+  top: 12px;
 }
 .approval .player {
   grid-template-columns: 1fr;
@@ -1132,8 +1138,12 @@ dialog::backdrop {
   .approval {
     grid-template-columns: 1fr;
   }
-  .paper-frame {
+  .paper-frame,
+  .extract-column {
     position: static;
+    max-height: none;
+  }
+  .paper-frame {
     height: 72vh;
   }
   .home-columns {

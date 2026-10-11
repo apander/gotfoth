@@ -64,9 +64,6 @@ export function PaperDesk({
               <p className="question-text" style={{ marginTop: 24 }}>
                 {question.question.stem}
               </p>
-              <QuestionExtracts
-                extracts={question.extracts.filter((extract: any) => extract.cited)}
-              />
             </section>
             <section className="answer-panel">
               <label className="eyebrow" htmlFor="student-answer">
@@ -80,6 +77,10 @@ export function PaperDesk({
                 placeholder="Write your answer…"
               />
             </section>
+          </div>
+          <div className="extract-column">
+            <p className="eyebrow">EXTRACTS</p>
+            <QuestionExtracts extracts={question.extracts} />
           </div>
           <div>
             <p className="eyebrow">ORIGINAL PAPER</p>
