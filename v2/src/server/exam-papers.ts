@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import { AppError, requireThat } from "../lib/errors";
-import { database, type Actor } from "./db";
+import { accountIsSuperuser, database, type Actor } from "./db";
 
 type Sql = Pick<PoolClient, "query">;
 
@@ -16,6 +16,7 @@ function paperLabel(input: {
 }
 
 async function requireTeacher(actor: Actor) {
+  if (await accountIsSuperuser(actor)) return;
   const found = await database().query(
     "SELECT 1 FROM memberships WHERE user_id=$1 AND role='teacher' AND active LIMIT 1",
     [actor.id],

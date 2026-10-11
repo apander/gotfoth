@@ -52,9 +52,18 @@ export async function transaction<T>(
     client.release();
   }
 }
-export function superuser(actor: Actor) {
+export async function accountIsSuperuser(actor: Actor) {
+  if (!actor.emailVerified) return false;
+  if (isSuperuser(actor.email, actor.emailVerified)) return true;
+  const row = await database().query(
+    "SELECT 1 FROM superusers WHERE email=lower($1)",
+    [actor.email],
+  );
+  return Boolean(row.rowCount);
+}
+export async function superuser(actor: Actor) {
   requireThat(
-    isSuperuser(actor.email, actor.emailVerified),
+    await accountIsSuperuser(actor),
     "FORBIDDEN",
     "Administrator access required.",
     403,
