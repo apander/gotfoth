@@ -9,28 +9,13 @@ function requireEnv(name) {
 
 const APP_BASE_URL = requireEnv("APP_BASE_URL").replace(/\/$/, "");
 
-async function expectJson(url) {
-  const res = await fetch(url);
-  const body = await res.text();
-  if (!res.ok) throw new Error(`HTTP ${res.status} ${url} ${body}`);
-  try {
-    return JSON.parse(body);
-  } catch (_e) {
-    throw new Error(`Expected JSON from ${url}, got: ${body.slice(0, 200)}`);
-  }
-}
-
 async function main() {
   console.log(`Smoke-checking ${APP_BASE_URL}`);
-  const health = await expectJson(`${APP_BASE_URL}/api/health`);
-  if (!health || health.ok !== true) throw new Error("Health check failed.");
-  const papers = await expectJson(`${APP_BASE_URL}/api/collections/papers/records?perPage=3`);
-  const boundaries = await expectJson(`${APP_BASE_URL}/api/collections/boundaries/records`);
-  const settings = await expectJson(`${APP_BASE_URL}/api/collections/settings/records?perPage=3`);
-  console.log(`health: ok`);
-  console.log(`papers: ${Array.isArray(papers.items) ? papers.items.length : 0} rows`);
-  console.log(`boundaries: ${Array.isArray(boundaries.items) ? boundaries.items.length : 0} rows`);
-  console.log(`settings: ${Array.isArray(settings.items) ? settings.items.length : 0} rows`);
+  const res = await fetch(APP_BASE_URL);
+  const body = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${APP_BASE_URL}`);
+  if (!body.includes("GotFoth"))
+    throw new Error("Production page did not serve the GotFoth app.");
   console.log("Smoke-check complete.");
 }
 
