@@ -28,7 +28,6 @@ export function Icon({ name }: { name: string }) {
   const aliases: Record<string, string> = {
     Overview: "Today",
     Families: "Family",
-    Groups: "Family",
     Invitations: "Arrow",
     Catalogue: "Papers",
   };

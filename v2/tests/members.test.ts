@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { setMemberInTransaction } from "../src/server/admin";
 import type { Tx } from "../src/server/db";
 
-test("a superuser can replace a member role inside a group", async () => {
+test("a parent can become a teacher, and a student stays in one family", async () => {
   const db = new PGlite();
   const tx = db as unknown as Tx;
   for (const file of ["0000_v2.sql", "0001_teacher.sql", "0002_superusers.sql"])
@@ -51,4 +51,37 @@ test("a superuser can replace a member role inside a group", async () => {
   assert.equal(row.learner_id, null);
   const links = await db.query("SELECT 1 FROM parent_links WHERE user_id='parent'");
   assert.equal(links.rows.length, 0);
+  const other = randomUUID();
+  const otherLearner = randomUUID();
+  await db.query("INSERT INTO families(id,name) VALUES($1,'Other')", [other]);
+  await db.query("INSERT INTO learners(id,family_id,name) VALUES($1,$2,'Other student')", [
+    otherLearner,
+    other,
+  ]);
+  await db.query(
+    'INSERT INTO "user"(id,name,email,"emailVerified") VALUES($1,$1,$2,true)',
+    ["student", "student@example.test"],
+  );
+  await db.query(
+    "INSERT INTO memberships(user_id,family_id,role,learner_id) VALUES('student',$1,'student',$2)",
+    [family, learner],
+  );
+  await db.exec("BEGIN");
+  await assert.rejects(
+    () =>
+      setMemberInTransaction(
+        tx,
+        { id: "operator", email: "operator@example.test", emailVerified: true },
+        {
+          action: "set",
+          familyId: other,
+          email: "student@example.test",
+          role: "student",
+          learnerId: otherLearner,
+        },
+      ),
+    (error: unknown) =>
+      error instanceof Error && error.message === "A student belongs to one family.",
+  );
+  await db.exec("ROLLBACK");
 });

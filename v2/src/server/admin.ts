@@ -38,7 +38,6 @@ async function learnerIsFree(tx: Tx, learnerId: string) {
   const linked = await tx.query(
     `SELECT
        (SELECT count(*) FROM memberships WHERE learner_id=$1) +
-       (SELECT count(*) FROM parent_links WHERE learner_id=$1) +
        (SELECT count(*) FROM invitations WHERE learner_id=$1) +
        (SELECT count(*) FROM enrolments WHERE learner_id=$1) +
        (SELECT count(*) FROM attempts WHERE learner_id=$1) +
@@ -96,6 +95,7 @@ export async function saveFamilyInTransaction(
   const kept = new Set(data.learners.flatMap((learner) => (learner.id ? [learner.id] : [])));
   for (const row of existing.rows) {
     if (kept.has(row.id)) continue;
+    await tx.query("DELETE FROM parent_links WHERE learner_id=$1", [row.id]);
     requireThat(
       await learnerIsFree(tx, row.id),
       "LEARNER_IN_USE",
@@ -117,6 +117,15 @@ export async function saveFamilyInTransaction(
     );
     if (!owned.rows.length) throw missing();
   }
+  await tx.query(
+    `INSERT INTO parent_links(user_id,family_id,learner_id)
+     SELECT m.user_id, m.family_id, l.id
+     FROM memberships m
+     JOIN learners l ON l.family_id=m.family_id
+     WHERE m.family_id=$1 AND m.role='parent' AND m.active
+     ON CONFLICT DO NOTHING`,
+    [id],
+  );
   await audit(tx, actor.id, "family.updated", { id }, id);
   return { id };
 }
@@ -132,12 +141,12 @@ export async function invite(actor: Actor, input: unknown) {
     .parse(input);
   const token = randomBytes(32).toString("base64url"),
     id = randomUUID();
-  const learnerId = data.role === "teacher" ? null : (data.learnerId ?? null);
+  const learnerId = data.role === "student" ? (data.learnerId ?? null) : null;
   await transaction(async (tx) => {
     requireThat(
-      data.role === "teacher" || learnerId,
+      data.role !== "student" || learnerId,
       "LEARNER",
-      "Choose the learner this invitation is for.",
+      "Choose the student this invitation is for.",
     );
     if (learnerId) {
       const learner = await tx.query(
@@ -201,6 +210,7 @@ export async function acceptInvitationInTransaction(
     [inv.family_id],
   );
   if (!f.rows.length) throw missing();
+  await assertOneStudentFamily(tx, actor.id, inv.family_id, inv.role);
   // Existing members cannot use a second invitation to silently change role or learner identity.
   await tx.query(
     "INSERT INTO memberships(user_id,family_id,role,learner_id) VALUES($1,$2,$3,$4) ON CONFLICT(user_id,family_id) DO NOTHING",
@@ -295,6 +305,24 @@ export async function adminSnapshot(actor: Actor) {
     rates: rates.rows,
   };
 }
+async function assertOneStudentFamily(
+  tx: Tx,
+  userId: string,
+  familyId: string,
+  role: string,
+) {
+  const other = await tx.query(
+    role === "student"
+      ? "SELECT 1 FROM memberships WHERE user_id=$1 AND active AND family_id<>$2"
+      : "SELECT 1 FROM memberships WHERE user_id=$1 AND role='student' AND active AND family_id<>$2",
+    [userId, familyId],
+  );
+  requireThat(
+    other.rows.length === 0,
+    "STUDENT_FAMILY",
+    "A student belongs to one family.",
+  );
+}
 const memberInput = z.object({
   action: z.enum(["set", "remove"]),
   familyId: z.string().uuid(),
@@ -341,11 +369,11 @@ export async function setMemberInTransaction(
   }
   const role = data.role;
   requireThat(role, "ROLE", "Choose a role for this member.");
-  const learnerId = role === "teacher" ? null : (data.learnerId ?? null);
+  const learnerId = role === "student" ? (data.learnerId ?? null) : null;
   requireThat(
-    role === "teacher" || learnerId,
+    role !== "student" || learnerId,
     "LEARNER",
-    "Choose the learner this member is linked to.",
+    "Choose the student this member is linked to.",
   );
   if (learnerId) {
     const learner = await tx.query(
@@ -357,6 +385,8 @@ export async function setMemberInTransaction(
   const user = await tx.query('SELECT id FROM "user" WHERE lower(email)=$1', [
     email,
   ]);
+  if (user.rows.length)
+    await assertOneStudentFamily(tx, user.rows[0].id, data.familyId, role);
   if (!user.rows.length) {
     const token = randomBytes(32).toString("base64url");
     await tx.query(
@@ -385,10 +415,12 @@ export async function setMemberInTransaction(
     user.rows[0].id,
     data.familyId,
   ]);
-  if (role === "parent" && learnerId)
+  if (role === "parent")
     await tx.query(
-      "INSERT INTO parent_links(user_id,family_id,learner_id) VALUES($1,$2,$3)",
-      [user.rows[0].id, data.familyId, learnerId],
+      `INSERT INTO parent_links(user_id,family_id,learner_id)
+       SELECT $1, $2, id FROM learners WHERE family_id=$2
+       ON CONFLICT DO NOTHING`,
+      [user.rows[0].id, data.familyId],
     );
   await audit(tx, actor.id, "member.updated", { email, role }, data.familyId);
   return { saved: true };
