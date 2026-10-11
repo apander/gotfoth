@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, euro } from "./api";
+import { QuestionExtracts } from "./extracts";
 import { Dialog, Meter } from "./ui";
 export function Player({
   familyId,
@@ -479,6 +480,11 @@ export function Player({
           <p className="question-text" style={{ marginTop: 24 }}>
             {question.text}
           </p>
+          <QuestionExtracts
+            key={question.id}
+            extracts={(question.extracts ?? []).filter((extract: any) => extract.cited !== false)}
+            reveal
+          />
           {attempt.data.resources
             .filter((r: any) => question.resourceIds.includes(r.id))
             .map((r: any) => (
