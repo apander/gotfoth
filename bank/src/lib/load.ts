@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import type { QueryResult, QueryResultRow } from "pg";
 import { stableId } from "./lines";
 import { COMPONENT_IDS, PARSER_VERSION, SERIES_ID, type ParsedPaper } from "./types";
@@ -40,10 +41,12 @@ export async function loadPaper(client: Sql, paper: ParsedPaper, reload: boolean
   const questionFileId = randomUUID();
   const bookletFileId = randomUUID();
   const schemeFileId = randomUUID();
+  const questionPdf = await readFile(paper.questionFile.path);
+  const schemePdf = await readFile(paper.schemeFile.path);
   await client.query(
-    `INSERT INTO source_files (id, paper_id, role, filename, sha256, page_count, local_path, pearson_code)
-     VALUES ($1, $2, 'question_paper', $3, $4, $5, $6, $7),
-            ($8, $2, 'source_booklet', $3, $4, $5, $6, $7)`,
+    `INSERT INTO source_files (id, paper_id, role, filename, sha256, page_count, local_path, pearson_code, pdf)
+     VALUES ($1, $2, 'question_paper', $3, $4, $5, $6, $7, $8),
+            ($9, $2, 'source_booklet', $3, $4, $5, $6, $7, $8)`,
     [
       questionFileId,
       paperId,
@@ -52,12 +55,13 @@ export async function loadPaper(client: Sql, paper: ParsedPaper, reload: boolean
       paper.questionFile.pageCount,
       paper.questionFile.path,
       paper.pearsonCode,
+      questionPdf,
       bookletFileId,
     ],
   );
   await client.query(
-    `INSERT INTO source_files (id, paper_id, role, filename, sha256, page_count, local_path, pearson_code, scheme_date)
-     VALUES ($1, $2, 'mark_scheme', $3, $4, $5, $6, $7, $8)`,
+    `INSERT INTO source_files (id, paper_id, role, filename, sha256, page_count, local_path, pearson_code, scheme_date, pdf)
+     VALUES ($1, $2, 'mark_scheme', $3, $4, $5, $6, $7, $8, $9)`,
     [
       schemeFileId,
       paperId,
@@ -67,6 +71,7 @@ export async function loadPaper(client: Sql, paper: ParsedPaper, reload: boolean
       paper.schemeFile.path,
       paper.pearsonCode,
       paper.schemeDate,
+      schemePdf,
     ],
   );
 

@@ -781,6 +781,29 @@ details > label {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
   gap: 32px;
 }
+.approval {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.95fr);
+  gap: 28px;
+  align-items: start;
+  margin-top: 20px;
+}
+.approval .player {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.approval .player textarea.editor {
+  min-height: 220px;
+}
+.paper-frame {
+  width: 100%;
+  height: min(86vh, 980px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: white;
+  position: sticky;
+  top: 12px;
+}
 .question-panel {
   border: 0;
   background: transparent;
@@ -1105,8 +1128,13 @@ dialog::backdrop {
     padding-inline: 24px;
   }
   .player,
-  .catalogue-review {
+  .catalogue-review,
+  .approval {
     grid-template-columns: 1fr;
+  }
+  .paper-frame {
+    position: static;
+    height: 72vh;
   }
   .home-columns {
     grid-template-columns: 1fr;
