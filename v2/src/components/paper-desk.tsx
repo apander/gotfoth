@@ -26,6 +26,8 @@ export function PaperDesk({
   const [question, setQuestion] = useState<any>(null);
   const [note, setNote] = useState("");
   const [topicId, setTopicId] = useState("");
+  const [receipt, setReceipt] = useState("");
+  const [saving, setSaving] = useState(false);
 
   async function loadPapers() {
     const rows = await api(`family/exam-papers?family=${familyId}`);
@@ -49,6 +51,23 @@ export function PaperDesk({
     setNote(detail.review?.note ?? "");
     setTopicId(detail.linkedTopicIds?.[0] ?? detail.topics?.[0]?.id ?? "");
   }
+  async function publishAccepted(paperId: string) {
+    setSaving(true);
+    setReceipt("Publishing accepted parts…");
+    try {
+      const result = await api("family/exam-publish", { familyId, paperId });
+      if (question) await openPaper(paperId, true);
+      else await openPaper(paperId);
+      await loadPapers();
+      const count = Number(result.published);
+      setReceipt(`Published ${count} accepted part${count === 1 ? "" : "s"}.`);
+    } catch (error) {
+      setReceipt("");
+      throw error;
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (!papers) return <p className="muted">Loading papers…</p>;
   if (question) {
@@ -56,16 +75,27 @@ export function PaperDesk({
     const place = sequence.findIndex((item) => item.id === question.question.id);
     const earlier = sequence[place - 1];
     const later = sequence[place + 1];
+    const label = `${question.question.parent_number}(${question.question.part})`;
     async function decide(decision: "accept" | "reject") {
-      await api("family/exam-review", {
-        familyId,
-        revisionId: question.question.revision_id,
-        paperId: question.question.paper_id,
-        decision,
-        note,
-      });
-      await openPaper(question.question.paper_id, true);
-      await openQuestion(question.question.id);
+      setSaving(true);
+      setReceipt(`Saving ${label}…`);
+      try {
+        await api("family/exam-review", {
+          familyId,
+          revisionId: question.question.revision_id,
+          paperId: question.question.paper_id,
+          decision,
+          note,
+        });
+        await openPaper(question.question.paper_id, true);
+        await openQuestion(question.question.id);
+        setReceipt(decision === "accept" ? `${label} accepted.` : `${label} rejected.`);
+      } catch (error) {
+        setReceipt("");
+        throw error;
+      } finally {
+        setSaving(false);
+      }
     }
     return (
       <>
@@ -80,25 +110,51 @@ export function PaperDesk({
           </button>
           <button
             className="button secondary"
-            disabled={!earlier}
-            onClick={() => earlier && run(() => openQuestion(earlier.id))}
+            disabled={saving || !earlier}
+            onClick={() =>
+              earlier &&
+              run(async () => {
+                setReceipt("");
+                await openQuestion(earlier.id);
+              })
+            }
           >
             Back
           </button>
           <button
             className="button secondary"
-            disabled={!later}
-            onClick={() => later && run(() => openQuestion(later.id))}
+            disabled={saving || !later}
+            onClick={() =>
+              later &&
+              run(async () => {
+                setReceipt("");
+                await openQuestion(later.id);
+              })
+            }
           >
             Forward
           </button>
-          <button className="button" onClick={() => run(() => decide("accept"))}>
-            Accept
+          {question.review?.decision === "accept" ? <span className="badge">Accepted</span> : null}
+          {question.review?.decision === "reject" ? <span className="badge">Rejected</span> : null}
+          <button className="button" disabled={saving} onClick={() => run(() => decide("accept"))}>
+            {saving ? "Saving…" : "Accept"}
           </button>
-          <button className="button secondary" onClick={() => run(() => decide("reject"))}>
+          <button className="button secondary" disabled={saving} onClick={() => run(() => decide("reject"))}>
             Reject
           </button>
+          <button
+            className="button secondary"
+            disabled={saving || question.review?.decision !== "accept"}
+            onClick={() => run(() => publishAccepted(question.question.paper_id))}
+          >
+            Publish accepted
+          </button>
         </div>
+        {receipt ? (
+          <p role="status" className="notice">
+            {receipt}
+          </p>
+        ) : null}
         {question.review ? (
           <p className="muted">
             Latest review: {question.review.decision}. {question.review.note}
@@ -196,34 +252,24 @@ export function PaperDesk({
           All papers
         </button>
         <section className="card" style={{ marginTop: 16 }}>
-          <label className="field">
-            <input
-              type="checkbox"
-              checked={paper.paper.permission_confirmed}
-              onChange={(event) =>
-                run(async () => {
-                  await api("family/exam-permission", {
-                    familyId,
-                    paperId: paper.paper.id,
-                    confirmed: event.target.checked,
-                  });
-                  await openPaper(paper.paper.id);
-                })
-              }
-            />{" "}
-            I confirm these papers may be stored for this tutoring app.
-          </label>
+          <p>
+            {(paper.questions as any[]).filter((item) => item.decision === "accept").length} of{" "}
+            {paper.questions.length} parts accepted. You can publish the accepted parts before the
+            rest are reviewed.
+          </p>
+          {receipt ? (
+            <p role="status" className="notice">
+              {receipt}
+            </p>
+          ) : null}
           <button
             className="button"
-            onClick={() =>
-              run(async () => {
-                await api("family/exam-publish", { familyId, paperId: paper.paper.id });
-                await openPaper(paper.paper.id);
-                await loadPapers();
-              })
+            disabled={
+              saving || !(paper.questions as any[]).some((item) => item.decision === "accept")
             }
+            onClick={() => run(() => publishAccepted(paper.paper.id))}
           >
-            Publish
+            {saving ? "Publishing…" : "Publish accepted parts"}
           </button>
         </section>
         {questionGroups(paper.questions).map((group) => (
@@ -258,7 +304,7 @@ export function PaperDesk({
       <PageHeading
         label="PAPER MANAGEMENT"
         title="Exam papers."
-        text="Review each question against the printed paper, then publish it for students and parents."
+        text="Accept a part, then publish the accepted parts. The rest of the paper can follow later."
       />
       {papers.length === 0 ? (
         <p className="muted">No exam papers have been loaded yet.</p>
