@@ -794,6 +794,21 @@ details > label {
   position: sticky;
   top: 12px;
 }
+.review-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 8px 0 16px;
+  padding: 12px 0;
+  background: var(--paper);
+}
+.section-advice {
+  margin: 0 0 28px;
+  text-align: center;
+}
+.section-advice p:last-child {
+  margin-bottom: 0;
+}
 .approval .player {
   grid-template-columns: 1fr;
   gap: 8px;
