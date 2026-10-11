@@ -107,9 +107,6 @@ test("invitations bind recipient and role, reject reuse, expiry, revocation and 
     await learnerAccess(tx, parent, family, learner, true),
     "parent",
   );
-  await assert.rejects(
-    () => learnerAccess(tx, parent, family, sibling),
-    /unavailable/,
-  );
+  assert.equal(await learnerAccess(tx, parent, family, sibling), "parent");
   await db.close();
 });

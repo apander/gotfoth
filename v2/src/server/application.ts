@@ -15,15 +15,26 @@ import { requireThat, missing } from "../lib/errors";
 import { catalogue } from "./learning";
 import { RateCard, credit } from "./finance";
 export async function identity(actor: Actor) {
+  const operator = await accountIsSuperuser(actor);
   const workspaces = (
     await database().query(
-      "SELECT f.id,f.name,m.role FROM memberships m JOIN families f ON f.id=m.family_id WHERE m.user_id=$1 AND m.active AND NOT f.suspended AND f.deleted_at IS NULL",
+      operator
+        ? `SELECT f.id, f.name, COALESCE(m.role, 'parent') AS role
+           FROM families f
+           LEFT JOIN memberships m ON m.family_id=f.id AND m.user_id=$1 AND m.active
+           WHERE f.deleted_at IS NULL AND NOT f.suspended
+           ORDER BY lower(f.name)`
+        : `SELECT f.id, f.name, m.role
+           FROM memberships m
+           JOIN families f ON f.id=m.family_id
+           WHERE m.user_id=$1 AND m.active AND NOT f.suspended AND f.deleted_at IS NULL
+           ORDER BY lower(f.name)`,
       [actor.id],
     )
   ).rows;
   return {
     user: { id: actor.id, email: actor.email },
-    superuser: await accountIsSuperuser(actor),
+    superuser: operator,
     workspaces,
   };
 }
@@ -31,8 +42,13 @@ export async function snapshot(actor: Actor, familyId: string) {
   return family(actor, familyId, async (tx, role) => {
     const learners = (
       await tx.query(
-        `SELECT l.* FROM learners l JOIN memberships m ON m.family_id=l.family_id AND m.user_id=$1 WHERE (m.role='student' AND m.learner_id=l.id) OR (m.role='parent' AND EXISTS(SELECT 1 FROM parent_links p WHERE p.user_id=$1 AND p.learner_id=l.id))`,
-        [actor.id],
+        role === "parent"
+          ? "SELECT * FROM learners WHERE family_id=$1 ORDER BY name"
+          : `SELECT l.* FROM learners l
+             JOIN memberships m ON m.family_id=l.family_id AND m.user_id=$2 AND m.active
+             WHERE l.family_id=$1 AND m.role='student' AND m.learner_id=l.id
+             ORDER BY l.name`,
+        role === "parent" ? [familyId] : [familyId, actor.id],
       )
     ).rows;
     const ids = learners.map((l) => l.id);
@@ -244,8 +260,8 @@ export async function familyAction(
     if (data.action === "export") {
       const ids = (
         await tx.query(
-          "SELECT learner_id FROM parent_links WHERE user_id=$1 AND family_id=$2",
-          [actor.id, familyId],
+          "SELECT id AS learner_id FROM learners WHERE family_id=$1",
+          [familyId],
         )
       ).rows.map((r) => r.learner_id);
       const result: Record<string, unknown> = {};

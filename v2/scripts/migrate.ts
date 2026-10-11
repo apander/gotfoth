@@ -18,7 +18,13 @@ try {
   await client.query(
     "CREATE TABLE IF NOT EXISTS v2_migrations (name text PRIMARY KEY, applied_at timestamptz DEFAULT now())",
   );
-  const migrations = ["0000_v2", "0001_teacher", "0002_superusers", "0003_paper_pdf"];
+  const migrations = [
+    "0000_v2",
+    "0001_teacher",
+    "0002_superusers",
+    "0003_paper_pdf",
+    "0004_one_student_family",
+  ];
   for (const name of migrations) {
     const done = await client.query(
       "SELECT name FROM v2_migrations WHERE name=$1",

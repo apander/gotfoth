@@ -3,17 +3,20 @@ import { useEffect, useState } from "react";
 import { api, date } from "./api";
 import { Dialog, Empty, Icon, PageHeading } from "./ui";
 type StudentDraft = { key: string; id?: string; name: string };
+type AdultDraft = { key: string; email: string; role: "parent" | "teacher" };
 type FamilyDraft = {
   id?: string;
   name: string;
   suspended: boolean;
   students: StudentDraft[];
+  adults: AdultDraft[];
 };
 function blankFamily(): FamilyDraft {
   return {
     name: "",
     suspended: false,
     students: [{ key: crypto.randomUUID(), name: "" }],
+    adults: [],
   };
 }
 function familyDraft(family: any): FamilyDraft {
@@ -27,6 +30,13 @@ function familyDraft(family: any): FamilyDraft {
       id: learner.id,
       name: learner.name ?? "",
     })),
+    adults: (family.members ?? [])
+      .filter((member: any) => member.role === "parent" || member.role === "teacher")
+      .map((member: any) => ({
+        key: member.email,
+        email: member.email,
+        role: member.role,
+      })),
   };
 }
 export function Admin({
@@ -120,6 +130,7 @@ export function Admin({
                     <tr>
                       <th>Family</th>
                       <th>Students</th>
+                      <th>Parents and teachers</th>
                       <th>Status</th>
                       <th>
                         <span className="sr-only">Actions</span>
@@ -134,6 +145,15 @@ export function Admin({
                           {f.learners.length
                             ? f.learners.map((learner: any) => learner.name).join(", ")
                             : "—"}
+                        </td>
+                        <td>
+                          {(f.members ?? [])
+                            .filter(
+                              (member: any) =>
+                                member.role === "parent" || member.role === "teacher",
+                            )
+                            .map((member: any) => member.email)
+                            .join(", ") || "—"}
                         </td>
                         <td>
                           <span className={`badge${f.suspended ? " warm" : ""}`}>
@@ -200,8 +220,18 @@ export function Admin({
                       setFormError("Add at least one student.");
                       return;
                     }
+                    const adults = draft.adults
+                      .map((adult) => ({
+                        email: adult.email.trim().toLowerCase(),
+                        role: adult.role,
+                      }))
+                      .filter((adult) => adult.email);
+                    if (new Set(adults.map((adult) => adult.email)).size !== adults.length) {
+                      setFormError("Each parent or teacher needs a different email.");
+                      return;
+                    }
                     try {
-                      await api(
+                      const saved = await api(
                         "admin/family",
                         draft.id
                           ? {
@@ -217,8 +247,37 @@ export function Admin({
                               learners: students.map((student) => student.name),
                             },
                       );
-                      setDraft(null);
+                      const familyId = draft.id ?? saved.id;
+                      const previous = (data.families.find((item: any) => item.id === draft.id)
+                        ?.members ?? []
+                      ).filter(
+                        (member: any) =>
+                          member.role === "parent" || member.role === "teacher",
+                      );
+                      for (const member of previous)
+                        if (!adults.some((adult) => adult.email === member.email.toLowerCase()))
+                          await api("admin/member", {
+                            action: "remove",
+                            familyId,
+                            email: member.email,
+                          });
+                      const links: string[] = [];
+                      for (const adult of adults) {
+                        const result = await api("admin/member", {
+                          action: "set",
+                          familyId,
+                          email: adult.email,
+                          role: adult.role,
+                          learnerId: null,
+                        });
+                        if (result.url) links.push(`${adult.email}: ${result.url}`);
+                      }
                       await refresh();
+                      if (links.length) {
+                        setFormError(`Share these invitation links:\n${links.join("\n")}`);
+                        return;
+                      }
+                      setDraft(null);
                     } catch (error) {
                       setFormError(
                         error instanceof Error
@@ -290,6 +349,76 @@ export function Admin({
                     }
                   >
                     Add student
+                  </button>
+                </div>
+                <div className="stack">
+                  <span className="field">Parents and teachers</span>
+                  {draft.adults.map((adult) => (
+                    <div className="student-row" key={adult.key}>
+                      <input
+                        type="email"
+                        aria-label="Parent or teacher email"
+                        value={adult.email}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            adults: draft.adults.map((item) =>
+                              item.key === adult.key
+                                ? { ...item, email: event.target.value }
+                                : item,
+                            ),
+                          })
+                        }
+                      />
+                      <select
+                        aria-label="Role"
+                        value={adult.role}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            adults: draft.adults.map((item) =>
+                              item.key === adult.key
+                                ? {
+                                    ...item,
+                                    role: event.target.value as "parent" | "teacher",
+                                  }
+                                : item,
+                            ),
+                          })
+                        }
+                      >
+                        <option value="parent">Parent</option>
+                        <option value="teacher">Teacher</option>
+                      </select>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={`Remove ${adult.email || "person"}`}
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            adults: draft.adults.filter((item) => item.key !== adult.key),
+                          })
+                        }
+                      >
+                        <Icon name="Delete" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        adults: [
+                          ...draft.adults,
+                          { key: crypto.randomUUID(), email: "", role: "parent" },
+                        ],
+                      })
+                    }
+                  >
+                    Add parent or teacher
                   </button>
                 </div>
                 {formError ? (
@@ -367,133 +496,6 @@ export function Admin({
           )}
         </>
       )}
-      {page === "Groups" && (
-        <>
-          <form
-            className="card stack"
-            onSubmit={(e) => {
-              e.preventDefault();
-              run(async () => {
-                const r = await api("admin/member", {
-                  action: "set",
-                  familyId: family,
-                  email,
-                  role,
-                  learnerId: role === "teacher" ? null : learner,
-                });
-                setLink(r.url ?? "");
-                setEmail("");
-                await refresh();
-              });
-            }}
-          >
-            <h2>Update a member</h2>
-            <p className="muted">
-              A person has one role in a group. Saving replaces that role. An email with no account yet receives an invitation link.
-            </p>
-            <div className="form-grid">
-              <label className="field">
-                Group
-                <select
-                  required
-                  value={family}
-                  onChange={(e) => setFamily(e.target.value)}
-                >
-                  {data.families.map((f: any) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                Google email
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </label>
-              <label className="field">
-                Role
-                <select value={role} onChange={(e) => setRole(e.target.value)}>
-                  <option value="parent">Parent</option>
-                  <option value="student">Student</option>
-                  <option value="teacher">Teacher</option>
-                </select>
-              </label>
-              <label className="field">
-                Learner
-                <select
-                  required={role !== "teacher"}
-                  disabled={role === "teacher"}
-                  value={role === "teacher" ? "" : learner}
-                  onChange={(e) => setLearner(e.target.value)}
-                >
-                  {role === "teacher" ? (
-                    <option value="">Teachers are not linked to a learner</option>
-                  ) : (
-                    data.families
-                      .find((f: any) => f.id === family)
-                      ?.learners.map((l: any) => (
-                        <option key={l.id} value={l.id}>
-                          {l.name}
-                        </option>
-                      ))
-                  )}
-                </select>
-              </label>
-            </div>
-            <button className="button" disabled={busy || !family || (role !== "teacher" && !learner)}>
-              Save member
-            </button>
-            {link && (
-              <label className="field">
-                Share this single-use link
-                <input readOnly value={link} />
-              </label>
-            )}
-          </form>
-          <div className="grid" style={{ marginTop: 24 }}>
-            {data.families.map((f: any) => (
-              <section className="card" key={f.id}>
-                <h2>{f.name}</h2>
-                {f.members?.length ? (
-                  f.members.map((member: any) => (
-                    <div className="list-item row" key={member.email}>
-                      <div>
-                        <strong>{member.email}</strong>
-                        <p className="muted" style={{ margin: 0 }}>
-                          {member.role}
-                          {member.learner_name ? ` · ${member.learner_name}` : ""}
-                        </p>
-                      </div>
-                      <button
-                        className="link-button"
-                        onClick={() =>
-                          run(async () => {
-                            await api("admin/member", {
-                              action: "remove",
-                              familyId: f.id,
-                              email: member.email,
-                            });
-                            await refresh();
-                          })
-                        }
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <p className="muted">No members yet.</p>
-                )}
-              </section>
-            ))}
-          </div>
-        </>
-      )}
       {page === "Invitations" && (
         <>
           <form
@@ -503,7 +505,7 @@ export function Admin({
               run(async () => {
                 const r = await api("admin/invite", {
                   familyId: family,
-                  learnerId: role === "teacher" ? null : learner,
+                  learnerId: role === "student" ? learner : null,
                   email,
                   role,
                 });
@@ -528,15 +530,15 @@ export function Admin({
                 </select>
               </label>
               <label className="field">
-                {role === "teacher" ? "Learner" : "Linked learner"}
+                Student
                 <select
-                  required={role !== "teacher"}
-                  disabled={role === "teacher"}
-                  value={role === "teacher" ? "" : learner}
+                  required={role === "student"}
+                  disabled={role !== "student"}
+                  value={role === "student" ? learner : ""}
                   onChange={(e) => setLearner(e.target.value)}
                 >
-                  {role === "teacher" ? (
-                    <option value="">Teachers are not linked to a learner</option>
+                  {role !== "student" ? (
+                    <option value="">Parents and teachers belong to the family</option>
                   ) : (
                     data.families
                       .find((f: any) => f.id === family)
@@ -566,7 +568,7 @@ export function Admin({
                 </select>
               </label>
             </div>
-            <button className="button" disabled={busy || (role !== "teacher" && !learner)}>
+            <button className="button" disabled={busy || (role === "student" && !learner)}>
               Create seven-day invitation
             </button>
             {link && (

@@ -147,7 +147,6 @@ export function Vault() {
   const student = data?.learners.find((l: any) => l.id === learner);
   const isAdmin = [
     "Families",
-    "Groups",
     "Invitations",
     "Catalogue",
     "Operations",
@@ -303,7 +302,7 @@ export function Vault() {
               ADMINISTRATION
             </p>
             <nav aria-label="Administration">
-              {["Groups", "Papers", "Families", "Invitations", "Catalogue", "Operations"].map(
+              {["Papers", "Families", "Invitations", "Catalogue", "Operations"].map(
                 (n) => (
                   <button
                     key={n}
