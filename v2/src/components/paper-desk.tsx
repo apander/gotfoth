@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api } from "./api";
-import { PageHeading } from "./ui";
+import { Dialog, PageHeading } from "./ui";
 
 export function PaperDesk({
   familyId,
@@ -15,6 +15,7 @@ export function PaperDesk({
   const [question, setQuestion] = useState<any>(null);
   const [note, setNote] = useState("");
   const [topicId, setTopicId] = useState("");
+  const [openExtract, setOpenExtract] = useState<string | null>(null);
 
   async function loadPapers() {
     const rows = await api(`family/exam-papers?family=${familyId}`);
@@ -35,6 +36,7 @@ export function PaperDesk({
   async function openQuestion(id: string) {
     const detail = await api(`family/exam-question?family=${familyId}&id=${id}`);
     setQuestion(detail);
+    setOpenExtract(null);
     setNote(detail.review?.note ?? "");
     setTopicId(detail.linkedTopicIds?.[0] ?? detail.topics?.[0]?.id ?? "");
   }
@@ -63,24 +65,44 @@ export function PaperDesk({
               <p className="question-text" style={{ marginTop: 24 }}>
                 {question.question.stem}
               </p>
-              {question.extracts.map((extract: any) => (
-                <section className="source" key={extract.label}>
-                  <h3>Extract {extract.label}</h3>
-                  {extract.figures.length
-                    ? extract.figures.map((figure: any) => (
-                        <img
-                          key={figure.id}
-                          alt={`Extract ${extract.label} as printed`}
-                          src={`/api/figures/${figure.id}`}
-                          style={{ width: "100%", height: "auto", background: "white" }}
-                        />
-                      ))
-                    : extract.text
-                        .split("\n")
-                        .filter(Boolean)
-                        .map((line: string) => <p key={line}>{line}</p>)}
-                </section>
-              ))}
+              {question.extracts
+                .filter((extract: any) => extract.cited)
+                .map((extract: any) => (
+                  <button
+                    key={extract.label}
+                    className="button secondary"
+                    style={{ marginTop: 16 }}
+                    onClick={() => setOpenExtract(extract.label)}
+                  >
+                    Extract {extract.label}
+                  </button>
+                ))}
+              {openExtract
+                ? question.extracts
+                    .filter((extract: any) => extract.cited && extract.label === openExtract)
+                    .map((extract: any) => (
+                      <Dialog
+                        key={extract.label}
+                        wide
+                        title={`Extract ${extract.label}`}
+                        onClose={() => setOpenExtract(null)}
+                      >
+                        {extract.figures.length
+                          ? extract.figures.map((figure: any) => (
+                              <img
+                                key={figure.id}
+                                alt={`Extract ${extract.label} as printed`}
+                                src={`/api/figures/${figure.id}`}
+                                style={{ width: "100%", height: "auto", background: "white" }}
+                              />
+                            ))
+                          : extract.text
+                              .split("\n")
+                              .filter(Boolean)
+                              .map((line: string) => <p key={line}>{line}</p>)}
+                      </Dialog>
+                    ))
+                : null}
             </section>
             <section className="answer-panel">
               <label className="eyebrow" htmlFor="student-answer">

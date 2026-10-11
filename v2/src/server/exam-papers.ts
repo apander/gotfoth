@@ -171,7 +171,7 @@ export async function examQuestion(actor: Actor, questionId: string) {
        FROM question_extracts qe
        JOIN extracts e ON e.id = qe.extract_id
        LEFT JOIN figures f ON f.extract_id = e.id
-       WHERE qe.question_revision_id = $1
+       WHERE qe.question_revision_id = $1 AND qe.cited
        ORDER BY e.label, f.page_number`,
       [question.revision_id],
     );
@@ -303,7 +303,7 @@ export async function publishExamPaper(actor: Actor, paperId: string) {
          FROM question_extracts qe
          JOIN extracts e ON e.id = qe.extract_id
          LEFT JOIN figures f ON f.extract_id = e.id
-         WHERE qe.question_revision_id = $1
+         WHERE qe.question_revision_id = $1 AND qe.cited
          ORDER BY e.label, f.page_number`,
         [item.revision_id],
       );

@@ -1010,6 +1010,9 @@ th {
   font-weight: 500;
   font-size: var(--text-xs);
 }
+dialog.wide {
+  max-width: 960px;
+}
 dialog {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
