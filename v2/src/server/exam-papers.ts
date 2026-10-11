@@ -150,9 +150,9 @@ export async function examQuestion(actor: Actor, questionId: string) {
   return withPapers(actor, async (client) => {
     const result = await client.query(
       `SELECT q.id, q.paper_id, q.response_format, sec.label AS section,
-              r.id AS revision_id, r.stem, r.command_word, r.marks,
+              r.id AS revision_id, r.stem, r.command_word, r.marks, r.source_pages,
               c.code, spec.subject, s.name AS series, p.exam_date::text AS exam_date,
-              q.parent_number, q.part, si.source_text
+              q.parent_number, q.part
        FROM questions q
        JOIN sections sec ON sec.id = q.section_id
        JOIN papers p ON p.id = q.paper_id
@@ -160,7 +160,6 @@ export async function examQuestion(actor: Actor, questionId: string) {
        JOIN specifications spec ON spec.id = c.specification_id
        JOIN series s ON s.id = p.series_id
        JOIN question_revisions r ON r.question_id = q.id AND r.revision = 1
-       LEFT JOIN scheme_items si ON si.question_revision_id = r.id
        WHERE q.id = $1`,
       [questionId],
     );
@@ -344,6 +343,19 @@ export async function publishExamPaper(actor: Actor, paperId: string) {
     );
     await client.query("UPDATE papers SET status='published' WHERE id=$1", [paperId]);
     return { ok: true };
+  });
+}
+
+export async function examPaperFile(actor: Actor, paperId: string) {
+  return withPapers(actor, async (client) => {
+    const result = await client.query(
+      `SELECT pdf, filename FROM source_files
+       WHERE paper_id = $1 AND role = 'question_paper'`,
+      [paperId],
+    );
+    const row = result.rows[0] as { pdf: Buffer | null; filename: string } | undefined;
+    if (!row?.pdf) throw new AppError("NOT_FOUND", "The original paper is unavailable.", 404);
+    return { pdf: row.pdf, filename: row.filename };
   });
 }
 

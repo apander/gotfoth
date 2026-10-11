@@ -51,27 +51,59 @@ export function PaperDesk({
         <button className="link-button" onClick={() => setQuestion(null)}>
           Back to paper
         </button>
-        <section className="card" style={{ marginTop: 16 }}>
-          <p>{question.question.stem}</p>
-          {question.question.source_text ? (
-            <pre className="muted">{question.question.source_text}</pre>
-          ) : null}
-        </section>
-        {question.extracts.map((extract: any) => (
-          <section className="card" key={extract.label} style={{ marginTop: 16 }}>
-            <h2>Extract {extract.label}</h2>
-            {extract.figures.length
-              ? extract.figures.map((figure: any) => (
-                  <img
-                    key={figure.id}
-                    alt={`Extract ${extract.label}`}
-                    src={`/api/figures/${figure.id}`}
-                    style={{ width: "100%", height: "auto", background: "white" }}
-                  />
-                ))
-              : extract.text.split("\n").map((line: string) => <p key={line}>{line}</p>)}
-          </section>
-        ))}
+        <div className="approval">
+          <div className="player">
+            <section className="question-panel">
+              <div className="row">
+                <span className="eyebrow">
+                  QUESTION {question.question.parent_number}({question.question.part})
+                </span>
+                <span className="badge">{question.question.marks} marks</span>
+              </div>
+              <p className="question-text" style={{ marginTop: 24 }}>
+                {question.question.stem}
+              </p>
+              {question.extracts.map((extract: any) => (
+                <section className="source" key={extract.label}>
+                  <h3>Extract {extract.label}</h3>
+                  {extract.figures.length
+                    ? extract.figures.map((figure: any) => (
+                        <img
+                          key={figure.id}
+                          alt={`Extract ${extract.label} as printed`}
+                          src={`/api/figures/${figure.id}`}
+                          style={{ width: "100%", height: "auto", background: "white" }}
+                        />
+                      ))
+                    : extract.text
+                        .split("\n")
+                        .filter(Boolean)
+                        .map((line: string) => <p key={line}>{line}</p>)}
+                </section>
+              ))}
+            </section>
+            <section className="answer-panel">
+              <label className="eyebrow" htmlFor="student-answer">
+                YOUR ANSWER
+              </label>
+              <textarea
+                id="student-answer"
+                className="editor"
+                readOnly
+                aria-label="Student answer"
+                placeholder="Write your answer…"
+              />
+            </section>
+          </div>
+          <div>
+            <p className="eyebrow">ORIGINAL PAPER</p>
+            <iframe
+              className="paper-frame"
+              title="Original question paper"
+              src={`/api/exam-papers/${question.question.paper_id}#page=${question.question.source_pages?.[0] ?? 1}`}
+            />
+          </div>
+        </div>
         <section className="card" style={{ marginTop: 16 }}>
           <h2>Topic</h2>
           <label className="field">

@@ -60,6 +60,7 @@ export const sourceFiles = pgTable("source_files", {
   localPath: text("local_path").notNull(),
   pearsonCode: text("pearson_code"),
   schemeDate: date("scheme_date"),
+  pdf: bytea("pdf"),
 });
 
 export const pages = pgTable("pages", {
