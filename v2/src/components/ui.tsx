@@ -129,12 +129,10 @@ export function Dialog({
   title,
   onClose,
   children,
-  wide = false,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
-  wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -146,7 +144,7 @@ export function Dialog({
     };
   }, []);
   return (
-    <dialog ref={ref} className={wide ? "wide" : undefined} aria-label={title} onCancel={onClose}>
+    <dialog ref={ref} aria-label={title} onCancel={onClose}>
       <div className="row">
         <h2>{title}</h2>
         <button
