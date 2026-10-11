@@ -4,6 +4,7 @@ import { useState } from "react";
 type Figure = { id: string };
 type Extract = {
   label: string;
+  heading?: string;
   text?: string;
   figures?: Figure[];
 };
@@ -56,7 +57,11 @@ export function QuestionExtracts({
             ) : null}
             {shown ? (
               <section className="source">
-                <h3>Extract {extract.label}</h3>
+                <h3>
+                  {extract.heading?.includes(":")
+                    ? `Section ${extract.heading.replace(":", " · Extract ")}`
+                    : `Extract ${extract.label}`}
+                </h3>
                 {printed(extract)}
               </section>
             ) : null}

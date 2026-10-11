@@ -44,6 +44,7 @@ async function withPapers<T>(actor: Actor, fn: (client: Sql) => Promise<T>) {
 function groupExtracts(
   rows: {
     label: string;
+    section?: string;
     body: string;
     needs_figure: boolean;
     cited: boolean;
@@ -55,14 +56,22 @@ function groupExtracts(
 ) {
   const grouped: {
     label: string;
+    heading: string;
     text: string;
     cited: boolean;
     figures: { id: string; width: number; height: number; page: number }[];
   }[] = [];
   for (const row of rows) {
-    let extract = grouped.find((item) => item.label === row.label);
+    const key = row.section ? `${row.section}:${row.label}` : row.label;
+    let extract = grouped.find((item) => item.heading === key);
     if (!extract) {
-      extract = { label: row.label, text: row.body, cited: row.cited, figures: [] };
+      extract = {
+        label: row.label,
+        heading: row.section ? `${row.section}:${row.label}` : row.label,
+        text: row.body,
+        cited: row.cited,
+        figures: [],
+      };
       grouped.push(extract);
     }
     if (row.figure_id && row.width && row.height && row.page_number)
@@ -166,14 +175,14 @@ export async function examQuestion(actor: Actor, questionId: string) {
     const question = result.rows[0];
     if (!question) throw new AppError("NOT_FOUND", "This question is unavailable.", 404);
     const extracts = await client.query(
-      `SELECT e.label, e.body, e.needs_figure, qe.cited,
+      `SELECT sec.label AS section, e.label, e.body, e.needs_figure, true AS cited,
               f.id AS figure_id, f.width, f.height, f.page_number
-       FROM question_extracts qe
-       JOIN extracts e ON e.id = qe.extract_id
+       FROM extracts e
+       JOIN sections sec ON sec.id = e.section_id
        LEFT JOIN figures f ON f.extract_id = e.id
-       WHERE qe.question_revision_id = $1 AND qe.cited
-       ORDER BY e.label, f.page_number`,
-      [question.revision_id],
+       WHERE sec.paper_id = $1
+       ORDER BY sec.sort_order, e.label, f.page_number`,
+      [question.paper_id],
     );
     const topics = await client.query(
       `SELECT t.id, t.theme, t.label FROM topics t
