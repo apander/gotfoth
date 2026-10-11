@@ -19,4 +19,6 @@ test("database connections must use Neon", () => {
       "PAPER_BANK_URL",
     ),
   );
+  const verified = hosted.replace("sslmode=require", "sslmode=verify-full");
+  assert.equal(requireNeonUrl(verified, "PAPER_BANK_URL"), verified);
 });

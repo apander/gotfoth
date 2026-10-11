@@ -18,8 +18,9 @@ function requireNeonUrl(connectionString, name) {
   if (url.protocol !== "postgresql:" && url.protocol !== "postgres:") {
     throw new Error(`${name} must be a Postgres connection string.`);
   }
-  if (url.searchParams.get("sslmode") !== "require") {
-    throw new Error(`${name} must include sslmode=require.`);
+  const sslmode = url.searchParams.get("sslmode");
+  if (sslmode !== "require" && sslmode !== "verify-ca" && sslmode !== "verify-full") {
+    throw new Error(`${name} must include sslmode=require, verify-ca, or verify-full.`);
   }
   return connectionString;
 }
