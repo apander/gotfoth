@@ -287,7 +287,6 @@ export async function publishExamPaper(actor: Actor, paperId: string) {
     );
     const row = paper.rows[0];
     if (!row) throw new AppError("NOT_FOUND", "This paper is unavailable.", 404);
-    requireThat(row.permission_confirmed, "PERMISSION", "Confirm permission to store this paper before publishing.");
     const questions = await client.query(
       `SELECT q.id, sec.label AS section, r.id AS revision_id, r.stem, r.command_word, r.marks, q.response_format,
               si.style, si.ao_knowledge, si.ao_application, si.ao_analysis, si.ao_evaluation, si.quantitative_skills,
@@ -299,22 +298,19 @@ export async function publishExamPaper(actor: Actor, paperId: string) {
        WHERE q.paper_id = $1`,
       [paperId],
     );
-    requireThat(questions.rows.length > 0, "EMPTY", "This paper has no questions.");
-    requireThat(
-      questions.rows.every((item) => item.decision === "accept"),
-      "REVIEW",
-      "Accept every part before publishing.",
-    );
+    const accepted = questions.rows.filter((item) => item.decision === "accept");
+    requireThat(accepted.length > 0, "REVIEW", "Accept a part before publishing.");
     const questionsView = [];
-    for (const item of questions.rows) {
+    for (const item of accepted) {
       const extracts = await client.query(
-        `SELECT e.label, e.body, e.needs_figure, qe.cited, f.id AS figure_id, f.width, f.height, f.page_number
-         FROM question_extracts qe
-         JOIN extracts e ON e.id = qe.extract_id
+        `SELECT sec.label AS section, e.label, e.body, e.needs_figure, true AS cited,
+                f.id AS figure_id, f.width, f.height, f.page_number
+         FROM extracts e
+         JOIN sections sec ON sec.id = e.section_id
          LEFT JOIN figures f ON f.extract_id = e.id
-         WHERE qe.question_revision_id = $1 AND qe.cited
+         WHERE sec.paper_id = $1 AND sec.label = $2
          ORDER BY e.label, f.page_number`,
-        [item.revision_id],
+        [paperId, item.section],
       );
       questionsView.push({
         id: item.id,
@@ -351,7 +347,7 @@ export async function publishExamPaper(actor: Actor, paperId: string) {
       [paperId, contentHash, JSON.stringify(snapshot)],
     );
     await client.query("UPDATE papers SET status='published' WHERE id=$1", [paperId]);
-    return { ok: true };
+    return { published: accepted.length };
   });
 }
 
