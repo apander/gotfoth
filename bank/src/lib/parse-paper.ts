@@ -99,7 +99,7 @@ export function parseQuestionPaper(pages: PageText[]): {
         if (!current.pages.includes(page.page)) current.pages.push(page.page);
         continue;
       }
-      if (/^Read the extracts?/i.test(line) && !current) {
+      if (/^Read(?: the)? extracts?/i.test(line) && !current) {
         const meta = sectionMeta.get(section)!;
         meta.instruction = meta.instruction ? `${meta.instruction} ${line}` : line;
         continue;

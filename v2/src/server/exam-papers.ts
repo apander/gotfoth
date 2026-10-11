@@ -158,7 +158,7 @@ export async function examPaper(actor: Actor, paperId: string) {
 export async function examQuestion(actor: Actor, questionId: string) {
   return withPapers(actor, async (client) => {
     const result = await client.query(
-      `SELECT q.id, q.paper_id, q.response_format, sec.label AS section,
+      `SELECT q.id, q.paper_id, q.response_format, sec.label AS section, sec.instruction,
               r.id AS revision_id, r.stem, r.command_word, r.marks, r.source_pages,
               c.code, spec.subject, s.name AS series, p.exam_date::text AS exam_date,
               q.parent_number, q.part
@@ -180,9 +180,9 @@ export async function examQuestion(actor: Actor, questionId: string) {
        FROM extracts e
        JOIN sections sec ON sec.id = e.section_id
        LEFT JOIN figures f ON f.extract_id = e.id
-       WHERE sec.paper_id = $1
-       ORDER BY sec.sort_order, e.label, f.page_number`,
-      [question.paper_id],
+       WHERE sec.paper_id = $1 AND sec.label = $2
+       ORDER BY e.label, f.page_number`,
+      [question.paper_id, question.section],
     );
     const topics = await client.query(
       `SELECT t.id, t.theme, t.label FROM topics t

@@ -4,6 +4,16 @@ import { api } from "./api";
 import { QuestionExtracts } from "./extracts";
 import { PageHeading } from "./ui";
 
+function questionGroups(questions: any[]) {
+  const groups: { parent: number; section: string; items: any[] }[] = [];
+  for (const item of questions) {
+    const found = groups.find((group) => group.parent === item.parent_number);
+    if (found) found.items.push(item);
+    else groups.push({ parent: item.parent_number, section: item.section, items: [item] });
+  }
+  return groups;
+}
+
 export function PaperDesk({
   familyId,
   run,
@@ -79,7 +89,12 @@ export function PaperDesk({
             </section>
           </div>
           <div className="extract-column">
-            <p className="eyebrow">EXTRACTS</p>
+            <p className="eyebrow">
+              SECTION {question.question.section} · QUESTION {question.question.parent_number}
+            </p>
+            {question.question.instruction ? (
+              <p className="muted">{question.question.instruction}</p>
+            ) : null}
             <QuestionExtracts extracts={question.extracts} />
           </div>
           <div>
@@ -210,22 +225,30 @@ export function PaperDesk({
             Publish
           </button>
         </section>
-        {paper.questions.map((item: any) => (
-          <button
-            className="list-item"
-            key={item.id}
-            style={{ display: "block", width: "100%", textAlign: "left", marginTop: 12 }}
-            onClick={() => run(() => openQuestion(item.id))}
-          >
-            <strong>
-              {item.section} {item.parent_number}({item.part})
-            </strong>
-            <span className="muted">
-              {" "}
-              · {item.marks} marks · {item.decision ?? "pending"}
-            </span>
-            <div>{item.stem.slice(0, 180)}</div>
-          </button>
+        {questionGroups(paper.questions).map((group) => (
+          <section key={group.parent} style={{ marginTop: 28 }}>
+            <h2>
+              Question {group.parent}
+              <span className="muted"> · Section {group.section}</span>
+            </h2>
+            {group.items.map((item: any) => (
+              <button
+                className="list-item"
+                key={item.id}
+                style={{ display: "block", width: "100%", textAlign: "left", marginTop: 12 }}
+                onClick={() => run(() => openQuestion(item.id))}
+              >
+                <strong>
+                  {item.parent_number}({item.part})
+                </strong>
+                <span className="muted">
+                  {" "}
+                  · {item.marks} marks · {item.decision ?? "pending"}
+                </span>
+                <div>{item.stem.slice(0, 180)}</div>
+              </button>
+            ))}
+          </section>
         ))}
       </>
     );
