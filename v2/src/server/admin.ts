@@ -13,34 +13,68 @@ import { Paper } from "../lib/contracts";
 import { validatePaper } from "../lib/domain";
 const hash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
-export async function createFamily(actor: Actor, input: unknown) {
+const learnerName = z.string().trim().min(1).max(100);
+const familyChange = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("create"),
+    name: learnerName,
+    learners: z.array(learnerName).min(1).max(20),
+  }),
+  z.object({
+    action: z.literal("update"),
+    id: z.string().uuid(),
+    name: learnerName,
+    suspended: z.boolean(),
+    learners: z
+      .array(z.object({ id: z.string().uuid().optional(), name: learnerName }))
+      .max(20),
+  }),
+  z.object({
+    action: z.literal("delete"),
+    id: z.string().uuid(),
+  }),
+]);
+async function learnerIsFree(tx: Tx, learnerId: string) {
+  const linked = await tx.query(
+    `SELECT
+       (SELECT count(*) FROM memberships WHERE learner_id=$1) +
+       (SELECT count(*) FROM parent_links WHERE learner_id=$1) +
+       (SELECT count(*) FROM invitations WHERE learner_id=$1) +
+       (SELECT count(*) FROM enrolments WHERE learner_id=$1) +
+       (SELECT count(*) FROM attempts WHERE learner_id=$1) +
+       (SELECT count(*) FROM exposure WHERE learner_id=$1) +
+       (SELECT count(*) FROM recovered_work WHERE learner_id=$1) +
+       (SELECT count(*) FROM reservations WHERE learner_id=$1) +
+       (SELECT count(*) FROM ledger WHERE learner_id=$1) +
+       (SELECT count(*) FROM study_sessions WHERE learner_id=$1)
+       AS total`,
+    [learnerId],
+  );
+  return Number(linked.rows[0].total) === 0;
+}
+export async function saveFamily(actor: Actor, input: unknown) {
   await superuser(actor);
-  const data = z
-    .object({
-      name: z.string().min(1).max(100),
-      learners: z.array(z.string().min(1).max(100)).min(1).max(20),
-    })
-    .parse(input);
-  const id = randomUUID();
-  return transaction(async (tx) => {
-    await tx.query("SELECT pg_advisory_xact_lock(820025)");
-    const existing = await tx.query(
-      "SELECT count(*) FROM families WHERE deleted_at IS NULL",
+  const data = familyChange.parse(input);
+  const id = data.action === "create" ? randomUUID() : data.id;
+  return transaction((tx) => saveFamilyInTransaction(tx, actor, data, id), id);
+}
+export async function saveFamilyInTransaction(
+  tx: Tx,
+  actor: Actor,
+  data: z.infer<typeof familyChange>,
+  id: string,
+) {
+  if (data.action === "delete") {
+    const removed = await tx.query(
+      "UPDATE families SET deleted_at=now() WHERE id=$1 AND deleted_at IS NULL RETURNING id",
+      [id],
     );
-    if (Number(existing.rows[0].count) > 0) {
-      const restore = await tx.query(
-        "SELECT 1 FROM operational_checks WHERE key='restore_test' AND checked_at>now()-interval '30 days'",
-      );
-      requireThat(
-        restore.rows.length,
-        "RESTORE_REQUIRED",
-        "Record a successful restore test before onboarding another family.",
-      );
-    }
-    await tx.query("INSERT INTO families(id,name) VALUES($1,$2)", [
-      id,
-      data.name,
-    ]);
+    if (!removed.rows.length) throw missing();
+    await audit(tx, actor.id, "family.deleted", { id }, id);
+    return { id };
+  }
+  if (data.action === "create") {
+    await tx.query("INSERT INTO families(id,name) VALUES($1,$2)", [id, data.name]);
     await tx.query("INSERT INTO funding_accounts(family_id) VALUES($1)", [id]);
     for (const name of data.learners)
       await tx.query(
@@ -49,7 +83,42 @@ export async function createFamily(actor: Actor, input: unknown) {
       );
     await audit(tx, actor.id, "family.created", { id }, id);
     return { id };
-  }, id);
+  }
+  const family = await tx.query(
+    "UPDATE families SET name=$2, suspended=$3 WHERE id=$1 AND deleted_at IS NULL RETURNING id",
+    [id, data.name, data.suspended],
+  );
+  if (!family.rows.length) throw missing();
+  const existing = await tx.query(
+    "SELECT id,name FROM learners WHERE family_id=$1",
+    [id],
+  );
+  const kept = new Set(data.learners.flatMap((learner) => (learner.id ? [learner.id] : [])));
+  for (const row of existing.rows) {
+    if (kept.has(row.id)) continue;
+    requireThat(
+      await learnerIsFree(tx, row.id),
+      "LEARNER_IN_USE",
+      `${row.name} is linked to members or study records.`,
+    );
+    await tx.query("DELETE FROM learners WHERE id=$1 AND family_id=$2", [row.id, id]);
+  }
+  for (const learner of data.learners) {
+    if (!learner.id) {
+      await tx.query(
+        "INSERT INTO learners(id,family_id,name) VALUES($1,$2,$3)",
+        [randomUUID(), id, learner.name],
+      );
+      continue;
+    }
+    const owned = await tx.query(
+      "UPDATE learners SET name=$3 WHERE id=$1 AND family_id=$2 RETURNING id",
+      [learner.id, id, learner.name],
+    );
+    if (!owned.rows.length) throw missing();
+  }
+  await audit(tx, actor.id, "family.updated", { id }, id);
+  return { id };
 }
 export async function invite(actor: Actor, input: unknown) {
   await superuser(actor);
@@ -176,7 +245,9 @@ export async function adminSnapshot(actor: Actor) {
   await superuser(actor);
   const [families, invitations, catalogue, jobs, checks, rates] =
     await Promise.all([
-      database().query("SELECT * FROM families ORDER BY created_at DESC"),
+      database().query(
+        "SELECT * FROM families WHERE deleted_at IS NULL ORDER BY lower(name)",
+      ),
       database().query(
         "SELECT id,email,family_id,role,expires_at,revoked_at,accepted_at FROM invitations ORDER BY expires_at DESC LIMIT 100",
       ),

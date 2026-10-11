@@ -306,6 +306,59 @@ svg {
 .button.danger {
   background: var(--error);
 }
+.icon-button {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--ink);
+}
+.icon-button:hover:not(:disabled) {
+  background: var(--paper);
+}
+.icon-button.danger {
+  color: var(--error);
+}
+.icon-button .icon {
+  width: 18px;
+  height: 18px;
+}
+.family-grid {
+  display: grid;
+  gap: 8px;
+}
+.family-grid h2 {
+  margin: 0;
+}
+.family-grid th:last-child,
+.family-grid td:last-child {
+  width: 1%;
+  text-align: right;
+}
+.table-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.student-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.student-row input {
+  flex: 1;
+}
+.form-error {
+  margin: 0;
+  color: var(--error);
+  font-size: var(--text-sm);
+}
 .link-button {
   background: none;
   border: 0;

@@ -20,6 +20,9 @@ const paths: Record<string, string> = {
   Credit: "M20 6H4v15h16V6 M4 6V3h13 M14 11h6v5h-6z",
   Operations: "M4 6h16 M4 12h16 M4 18h16 M8 3v6 M16 9v6 M10 15v6",
   Arrow: "M4 12h16 m-6-6 6 6-6 6",
+  Plus: "M12 5v14 M5 12h14",
+  Edit: "M4 20h4L18 10l-4-4L4 16z M13 7l4 4",
+  Delete: "M4 7h16 M9 7V5h6v2 M7 7l1 13h8l1-13",
 };
 export function Icon({ name }: { name: string }) {
   const aliases: Record<string, string> = {

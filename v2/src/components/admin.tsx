@@ -1,7 +1,34 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api, date } from "./api";
-import { PageHeading, Empty } from "./ui";
+import { Dialog, Empty, Icon, PageHeading } from "./ui";
+type StudentDraft = { key: string; id?: string; name: string };
+type FamilyDraft = {
+  id?: string;
+  name: string;
+  suspended: boolean;
+  students: StudentDraft[];
+};
+function blankFamily(): FamilyDraft {
+  return {
+    name: "",
+    suspended: false,
+    students: [{ key: crypto.randomUUID(), name: "" }],
+  };
+}
+function familyDraft(family: any): FamilyDraft {
+  const learners = family.learners?.length ? family.learners : [{ name: "" }];
+  return {
+    id: family.id,
+    name: family.name,
+    suspended: Boolean(family.suspended),
+    students: learners.map((learner: any) => ({
+      key: learner.id ?? crypto.randomUUID(),
+      id: learner.id,
+      name: learner.name ?? "",
+    })),
+  };
+}
 export function Admin({
   page,
   run,
@@ -12,8 +39,9 @@ export function Admin({
   busy: boolean;
 }) {
   const [data, setData] = useState<any>(null),
-    [name, setName] = useState(""),
-    [names, setNames] = useState(""),
+    [draft, setDraft] = useState<FamilyDraft | null>(null),
+    [removing, setRemoving] = useState<any>(null),
+    [formError, setFormError] = useState(""),
     [family, setFamily] = useState(""),
     [learner, setLearner] = useState(""),
     [email, setEmail] = useState(""),
@@ -67,68 +95,276 @@ export function Admin({
       />
       {page === "Families" && (
         <>
-          <form
-            className="card stack"
-            onSubmit={(e) => {
-              e.preventDefault();
-              run(async () => {
-                await api("admin/family", {
-                  name,
-                  learners: names.split("\n").filter(Boolean),
-                });
-                setName("");
-                setNames("");
-                await refresh();
-              });
-            }}
-          >
-            <h2>Create a family workspace</h2>
-            <label className="field">
-              Family name
-              <input
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
-            <label className="field">
-              Learner names · one per line
-              <textarea
-                required
-                value={names}
-                onChange={(e) => setNames(e.target.value)}
-              />
-            </label>
-            <button className="button" disabled={busy}>
-              Create workspace
-            </button>
-          </form>
-          <div className="grid" style={{ marginTop: 24 }}>
-            {data.families.map((f: any) => (
-              <section className="card" key={f.id}>
-                <h2>{f.name}</h2>
-                <p>{f.learners.map((l: any) => l.name).join(", ")}</p>
-                <p className="muted">
-                  {f.suspended ? "Access suspended" : "Active workspace"}
+          <section className="card family-grid">
+            <div className="row">
+              <h2>Families</h2>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Add family"
+                title="Add family"
+                onClick={() => {
+                  setFormError("");
+                  setDraft(blankFamily());
+                }}
+              >
+                <Icon name="Plus" />
+              </button>
+            </div>
+            {data.families.length === 0 ? (
+              <Empty title="No families" text="Add a family to give it students and members." />
+            ) : (
+              <div className="overflow">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Family</th>
+                      <th>Students</th>
+                      <th>Status</th>
+                      <th>
+                        <span className="sr-only">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.families.map((f: any) => (
+                      <tr key={f.id}>
+                        <td>{f.name}</td>
+                        <td>
+                          {f.learners.length
+                            ? f.learners.map((learner: any) => learner.name).join(", ")
+                            : "—"}
+                        </td>
+                        <td>
+                          <span className={`badge${f.suspended ? " warm" : ""}`}>
+                            {f.suspended ? "Suspended" : "Active"}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="table-actions">
+                            <button
+                              type="button"
+                              className="icon-button"
+                              aria-label={`Edit ${f.name}`}
+                              title={`Edit ${f.name}`}
+                              onClick={() => {
+                                setFormError("");
+                                setDraft(familyDraft(f));
+                              }}
+                            >
+                              <Icon name="Edit" />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-button danger"
+                              aria-label={`Delete ${f.name}`}
+                              title={`Delete ${f.name}`}
+                              onClick={() => {
+                                setFormError("");
+                                setRemoving(f);
+                              }}
+                            >
+                              <Icon name="Delete" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+          {draft && (
+            <Dialog
+              title={draft.id ? "Edit family" : "Add family"}
+              onClose={() => setDraft(null)}
+            >
+              <form
+                className="stack"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  run(async () => {
+                    setFormError("");
+                    const students = draft.students
+                      .map((student) => ({
+                        id: student.id,
+                        name: student.name.trim(),
+                      }))
+                      .filter((student) => student.name);
+                    if (!draft.name.trim()) {
+                      setFormError("Enter a family name.");
+                      return;
+                    }
+                    if (!draft.id && students.length === 0) {
+                      setFormError("Add at least one student.");
+                      return;
+                    }
+                    try {
+                      await api(
+                        "admin/family",
+                        draft.id
+                          ? {
+                              action: "update",
+                              id: draft.id,
+                              name: draft.name.trim(),
+                              suspended: draft.suspended,
+                              learners: students,
+                            }
+                          : {
+                              action: "create",
+                              name: draft.name.trim(),
+                              learners: students.map((student) => student.name),
+                            },
+                      );
+                      setDraft(null);
+                      await refresh();
+                    } catch (error) {
+                      setFormError(
+                        error instanceof Error
+                          ? error.message
+                          : "Could not save this family.",
+                      );
+                      throw error;
+                    }
+                  });
+                }}
+              >
+                <label className="field">
+                  Family name
+                  <input
+                    required
+                    autoFocus
+                    value={draft.name}
+                    onChange={(event) =>
+                      setDraft({ ...draft, name: event.target.value })
+                    }
+                  />
+                </label>
+                <div className="stack">
+                  <span className="field">Students</span>
+                  {draft.students.map((student) => (
+                    <div className="student-row" key={student.key}>
+                      <input
+                        aria-label="Student name"
+                        value={student.name}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            students: draft.students.map((item) =>
+                              item.key === student.key
+                                ? { ...item, name: event.target.value }
+                                : item,
+                            ),
+                          })
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={`Remove ${student.name || "student"}`}
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            students: draft.students.filter(
+                              (item) => item.key !== student.key,
+                            ),
+                          })
+                        }
+                      >
+                        <Icon name="Delete" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        students: [
+                          ...draft.students,
+                          { key: crypto.randomUUID(), name: "" },
+                        ],
+                      })
+                    }
+                  >
+                    Add student
+                  </button>
+                </div>
+                {formError ? (
+                  <p role="alert" className="form-error">
+                    {formError}
+                  </p>
+                ) : null}
+                {draft.id ? (
+                  <label className="field">
+                    <span>
+                      <input
+                        type="checkbox"
+                        checked={draft.suspended}
+                        onChange={(event) =>
+                          setDraft({ ...draft, suspended: event.target.checked })
+                        }
+                      />
+                      Suspend access
+                    </span>
+                  </label>
+                ) : null}
+                <button className="button" disabled={busy}>
+                  {busy ? "Saving…" : "Save family"}
+                </button>
+              </form>
+            </Dialog>
+          )}
+          {removing && (
+            <Dialog title="Delete family" onClose={() => setRemoving(null)}>
+              <p>
+                Delete {removing.name}? People in this family will lose access.
+              </p>
+              {formError ? (
+                <p role="alert" className="form-error">
+                  {formError}
                 </p>
+              ) : null}
+              <div className="row">
                 <button
-                  className="button secondary small"
+                  type="button"
+                  className="button secondary"
+                  onClick={() => setRemoving(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="button danger"
+                  disabled={busy}
                   onClick={() =>
                     run(async () => {
-                      await api("admin/operation", {
-                        action: "suspend",
-                        id: f.id,
-                        suspended: !f.suspended,
-                      });
-                      await refresh();
+                      try {
+                        await api("admin/family", {
+                          action: "delete",
+                          id: removing.id,
+                        });
+                        setRemoving(null);
+                        setFormError("");
+                        await refresh();
+                      } catch (error) {
+                        setFormError(
+                          error instanceof Error
+                            ? error.message
+                            : "Could not delete this family.",
+                        );
+                        throw error;
+                      }
                     })
                   }
                 >
-                  {f.suspended ? "Restore access" : "Suspend access"}
+                  {busy ? "Deleting…" : "Delete family"}
                 </button>
-              </section>
-            ))}
-          </div>
+              </div>
+            </Dialog>
+          )}
         </>
       )}
       {page === "Groups" && (

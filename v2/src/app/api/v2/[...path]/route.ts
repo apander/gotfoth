@@ -11,7 +11,7 @@ import {
   operatorAction,
 } from "@/server/application";
 import {
-  createFamily,
+  saveFamily,
   invite,
   acceptInvitation,
   adminSnapshot,
@@ -95,7 +95,7 @@ async function handle(
           user,
           z.string().min(20).max(100).parse(body.token),
         );
-      else if (path === "admin/family") result = await createFamily(user, body);
+      else if (path === "admin/family") result = await saveFamily(user, body);
       else if (path === "admin/invite") result = await invite(user, body);
       else if (path === "admin/member") result = await setMember(user, body);
       else if (path === "admin/catalogue")
