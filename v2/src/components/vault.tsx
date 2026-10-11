@@ -8,7 +8,20 @@ import { Admin } from "./admin";
 import { Brand, PageHeading, Empty, Icon } from "./ui";
 import { Home, Subjects, PracticePicker, PaperList } from "./revision";
 import { PaperDesk } from "./paper-desk";
-const authClient = createAuthClient();
+function authBaseURL() {
+  if (typeof window !== "undefined") return window.location.origin;
+  const configured = process.env.BETTER_AUTH_URL;
+  if (configured) {
+    try {
+      const url = new URL(configured);
+      if (url.protocol === "http:" || url.protocol === "https:") return url.origin;
+    } catch {
+      // A production pull can replace this sensitive value with a non-URL placeholder.
+    }
+  }
+  return "https://gotfoth.vercel.app";
+}
+const authClient = createAuthClient({ baseURL: authBaseURL() });
 export function Vault() {
   const acceptingInvitation = useRef<{
     token: string;
