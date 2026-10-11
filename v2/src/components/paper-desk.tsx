@@ -38,10 +38,10 @@ export function PaperDesk({
     void loadPapers().catch(() => setPapers([]));
   }, [familyId]);
 
-  async function openPaper(id: string) {
+  async function openPaper(id: string, stay = false) {
     const detail = await api(`family/exam-paper?family=${familyId}&id=${id}`);
     setPaper(detail);
-    setQuestion(null);
+    if (!stay) setQuestion(null);
   }
   async function openQuestion(id: string) {
     const detail = await api(`family/exam-question?family=${familyId}&id=${id}`);
@@ -51,7 +51,22 @@ export function PaperDesk({
   }
 
   if (!papers) return <p className="muted">Loading papers…</p>;
-  if (question)
+  if (question) {
+    const sequence: any[] = paper?.questions ?? [];
+    const place = sequence.findIndex((item) => item.id === question.question.id);
+    const earlier = sequence[place - 1];
+    const later = sequence[place + 1];
+    async function decide(decision: "accept" | "reject") {
+      await api("family/exam-review", {
+        familyId,
+        revisionId: question.question.revision_id,
+        paperId: question.question.paper_id,
+        decision,
+        note,
+      });
+      await openPaper(question.question.paper_id, true);
+      await openQuestion(question.question.id);
+    }
     return (
       <>
         <PageHeading
@@ -59,12 +74,75 @@ export function PaperDesk({
           title={question.question.label}
           text={`Section ${question.question.section} · ${question.question.parent_number}(${question.question.part}) · ${question.question.marks} marks`}
         />
-        <button className="link-button" onClick={() => setQuestion(null)}>
-          Back to paper
-        </button>
+        <div className="row review-bar">
+          <button className="link-button" onClick={() => setQuestion(null)}>
+            Back to paper
+          </button>
+          <button
+            className="button secondary"
+            disabled={!earlier}
+            onClick={() => earlier && run(() => openQuestion(earlier.id))}
+          >
+            Back
+          </button>
+          <button
+            className="button secondary"
+            disabled={!later}
+            onClick={() => later && run(() => openQuestion(later.id))}
+          >
+            Forward
+          </button>
+          <button className="button" onClick={() => run(() => decide("accept"))}>
+            Accept
+          </button>
+          <button className="button secondary" onClick={() => run(() => decide("reject"))}>
+            Reject
+          </button>
+        </div>
+        {question.review ? (
+          <p className="muted">
+            Latest review: {question.review.decision}. {question.review.note}
+          </p>
+        ) : null}
+        <section className="card" style={{ marginTop: 8 }}>
+          <label className="field">
+            Note
+            <textarea value={note} onChange={(event) => setNote(event.target.value)} />
+          </label>
+          <label className="field">
+            Specification topic
+            <select value={topicId} onChange={(event) => setTopicId(event.target.value)}>
+              {question.topics.map((topic: any) => (
+                <option key={topic.id} value={topic.id}>
+                  {topic.theme}: {topic.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="button secondary"
+            onClick={() =>
+              run(async () => {
+                await api("family/exam-topic", {
+                  familyId,
+                  questionId: question.question.id,
+                  topicId,
+                  confirmed: true,
+                });
+                await openQuestion(question.question.id);
+              })
+            }
+          >
+            Confirm topic
+          </button>
+        </section>
         <div className="approval">
           <div className="player">
             <section className="question-panel">
+              <div className="section-advice">
+                <p className="eyebrow">SECTION {question.question.section}</p>
+                {question.question.instruction ? <p>{question.question.instruction}</p> : null}
+              </div>
               <div className="row">
                 <span className="eyebrow">
                   QUESTION {question.question.parent_number}({question.question.part})
@@ -92,9 +170,6 @@ export function PaperDesk({
             <p className="eyebrow">
               SECTION {question.question.section} · QUESTION {question.question.parent_number}
             </p>
-            {question.question.instruction ? (
-              <p className="muted">{question.question.instruction}</p>
-            ) : null}
             <QuestionExtracts extracts={question.extracts} />
           </div>
           <div>
@@ -106,83 +181,9 @@ export function PaperDesk({
             />
           </div>
         </div>
-        <section className="card" style={{ marginTop: 16 }}>
-          <h2>Topic</h2>
-          <label className="field">
-            Specification topic
-            <select value={topicId} onChange={(event) => setTopicId(event.target.value)}>
-              {question.topics.map((topic: any) => (
-                <option key={topic.id} value={topic.id}>
-                  {topic.theme}: {topic.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            className="button secondary"
-            onClick={() =>
-              run(async () => {
-                await api("family/exam-topic", {
-                  familyId,
-                  questionId: question.question.id,
-                  topicId,
-                  confirmed: true,
-                });
-                await openQuestion(question.question.id);
-              })
-            }
-          >
-            Confirm topic
-          </button>
-          <label className="field">
-            Note
-            <textarea value={note} onChange={(event) => setNote(event.target.value)} />
-          </label>
-          <div className="row">
-            <button
-              className="button"
-              onClick={() =>
-                run(async () => {
-                  await api("family/exam-review", {
-                    familyId,
-                    revisionId: question.question.revision_id,
-                    paperId: question.question.paper_id,
-                    decision: "accept",
-                    note,
-                  });
-                  await openQuestion(question.question.id);
-                  await openPaper(question.question.paper_id);
-                })
-              }
-            >
-              Accept
-            </button>
-            <button
-              className="button secondary"
-              onClick={() =>
-                run(async () => {
-                  await api("family/exam-review", {
-                    familyId,
-                    revisionId: question.question.revision_id,
-                    paperId: question.question.paper_id,
-                    decision: "reject",
-                    note,
-                  });
-                  await openQuestion(question.question.id);
-                })
-              }
-            >
-              Reject
-            </button>
-          </div>
-          {question.review ? (
-            <p className="muted">
-              Latest review: {question.review.decision}. {question.review.note}
-            </p>
-          ) : null}
-        </section>
       </>
     );
+  }
   if (paper)
     return (
       <>
