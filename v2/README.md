@@ -23,7 +23,7 @@ No live deployment, external account creation, or paid model call is performed b
 
 ## First family
 
-Sign in with the configured verified superuser account, create a family and learner, then issue a parent invitation and a student invitation. Copy each link to its intended recipient. A superuser has no implicit access to learner answers: join a family through an explicit parent membership to use its parent views. A second family is blocked until a successful restore test is recorded in Operations.
+Sign in with the configured verified superuser account, create a family and learner, then issue a parent invitation and a student invitation. Copy each link to its intended recipient. A superuser has no implicit access to learner answers: join a family through an explicit parent membership to use its parent views.
 
 Parents add each course’s specification identifier, taught topic identifiers, target session, Psychology option, time zone, allowance and availability. Topic identifiers must match the reviewed catalogue. Multiple parent invitations can link the same parent to additional learners without changing their existing role.
 
@@ -79,7 +79,7 @@ This is an implemented application baseline, **not an approved production launch
 - Exercise the complete authenticated student/parent workflow with real OAuth and reviewed papers; inspect permissions under the deployed pooled runtime role.
 - Reconcile payment success, refund, dispute and reversal events in Stripe test mode; no live checkout until that is complete.
 - Verify workflow crash recovery and operator usage reconciliation under forced interruption.
-- Configure the protected `v2-production-maintenance` GitHub environment, its three secrets from `.github/workflows/v2-maintenance.yml`, and the `V2_MAINTENANCE_ENABLED` repository variable. The daily job encrypts and uploads a private backup, purges requested family records, and expires backups after 30 days. Run `scripts/backup.ts restore-test <downloaded-backup>` against an empty isolated `RESTORE_TEST_DATABASE_URL`; the command rejects nonempty targets. Record a successful real restore in Operations. Production backup and purge operation are not verified merely by the code tests.
+- Configure the protected `v2-production-maintenance` GitHub environment, its three secrets from `.github/workflows/v2-maintenance.yml`, and the `V2_MAINTENANCE_ENABLED` repository variable. The daily job encrypts and uploads a private backup, purges requested family records, and expires backups after 30 days. Run `scripts/backup.ts restore-test <downloaded-backup>` against an empty isolated `RESTORE_TEST_DATABASE_URL`; the command rejects nonempty targets. Production backup and purge operation are not verified merely by the code tests.
 - Evaluate model configurations using human-marked references and test provider failure/cost cases.
 - Validate each imported full mock, including diagram resources and all optional routes.
 - Recheck dependency advisories at deployment. The final installed dependency audit reported zero vulnerabilities after non-breaking fixes and overrides.
