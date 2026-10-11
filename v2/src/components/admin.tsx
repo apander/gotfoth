@@ -69,7 +69,7 @@ export function Admin({
         2,
       ),
     ),
-    [check, setCheck] = useState("restore_test"),
+    [check, setCheck] = useState("merchant_review"),
     [evidence, setEvidence] = useState("");
   async function refresh() {
     const r = await api("admin");
@@ -803,7 +803,6 @@ export function Admin({
                   value={check}
                   onChange={(e) => setCheck(e.target.value)}
                 >
-                  <option value="restore_test">Backup restore test</option>
                   <option value="merchant_review">
                     Merchant and refund review
                   </option>

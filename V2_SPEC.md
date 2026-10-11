@@ -709,7 +709,7 @@ Provide family export and deletion. Initial retention defaults:
 - Redacted operational logs are retained for 30 days.
 - Payment records follow the configured merchant retention requirements.
 
-Take daily backups and complete a restore test before onboarding another family.
+Take daily backups. A restore drill is an operator task and does not block creating a family.
 
 Initial recovery targets:
 

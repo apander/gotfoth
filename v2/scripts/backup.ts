@@ -96,7 +96,7 @@ try {
       await restored.end();
     }
     console.log(
-      "Isolated restore and schema integrity checks passed. Record this evidence in Operations.",
+      "Isolated restore and schema integrity checks passed.",
     );
   } else if (mode === "create") {
     await run("pg_dump", [

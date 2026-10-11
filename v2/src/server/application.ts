@@ -302,11 +302,7 @@ export async function operatorAction(actor: Actor, input: unknown) {
       z.object({ action: z.literal("rate"), rate: RateCard }),
       z.object({
         action: z.literal("check"),
-        key: z.enum([
-          "restore_test",
-          "merchant_review",
-          "catalogue_permission",
-        ]),
+        key: z.enum(["merchant_review", "catalogue_permission"]),
         evidence: z.string().min(20),
       }),
       z.object({
