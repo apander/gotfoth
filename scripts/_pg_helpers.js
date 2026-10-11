@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { requireNeonUrl } = require("./neon-url");
 
 function requireEnv(name) {
   const v = process.env[name];
@@ -44,6 +45,7 @@ function run(cmd, args) {
 }
 
 async function pgDump(dbUrl, outFile) {
+  requireNeonUrl(dbUrl, "database URL");
   await run(binTool("pg_dump"), [
     `--dbname=${dbUrl}`,
     "--format=custom",
@@ -55,6 +57,7 @@ async function pgDump(dbUrl, outFile) {
 }
 
 async function pgRestore(dbUrl, dumpFile) {
+  requireNeonUrl(dbUrl, "database URL");
   await run(binTool("pg_restore"), [
     `--dbname=${dbUrl}`,
     "--clean",

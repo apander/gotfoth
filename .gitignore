@@ -1,5 +1,12 @@
 # Dependencies
 node_modules/
+**/.next/
+.npm-cache/
+**/coverage/
+**/test-results/
+**/playwright-report/
+**/.import-cache/
+**/*.tsbuildinfo
 
 # Local env files (never commit secrets)
 .env
@@ -21,3 +28,4 @@ venv/
 backups/
 .vercel
 .env*.local
+**/.pglite/

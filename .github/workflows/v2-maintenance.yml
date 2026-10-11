@@ -1,0 +1,30 @@
+name: Study Vault v2 maintenance
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '20 2 * * *'
+permissions:
+  contents: read
+jobs:
+  backup-and-retention:
+    if: vars.V2_MAINTENANCE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: v2-production-maintenance
+    defaults:
+      run:
+        working-directory: v2
+    env:
+      DATABASE_ADMIN_URL: ${{ secrets.V2_DATABASE_ADMIN_URL }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.V2_BACKUP_ENCRYPTION_KEY }}
+      BACKUP_BLOB_READ_WRITE_TOKEN: ${{ secrets.V2_BACKUP_BLOB_READ_WRITE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: v2/package-lock.json
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: npx tsx scripts/backup.ts create
+      - run: npx tsx scripts/maintenance.ts

@@ -1,0 +1,90 @@
+:root {
+  color-scheme: light;
+  --paper: #f6f4ef;
+  --ink: #1c1b19;
+  --muted: #5e5a54;
+  --line: #ddd8ce;
+  --card: #fffdf9;
+  --accent: #1f4d3a;
+  --accent-soft: #e5f0ea;
+  --warn: #8a4b12;
+  --danger: #8d2b2b;
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: var(--accent); }
+button, input, select, textarea { font: inherit; }
+button, .button {
+  background: var(--accent);
+  color: white;
+  border: 0;
+  border-radius: 6px;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+}
+button.secondary, .button.secondary {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+header.bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  border-bottom: 1px solid var(--line);
+  padding: 0.8rem 1.5rem;
+  background: var(--card);
+}
+header.bar strong { font-size: 1.05rem; }
+h1 { font-size: 1.65rem; line-height: 1.2; overflow-wrap: normal; }
+img.paper-figure {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 0.6rem;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  margin: 0.8rem 0;
+}
+.muted { color: var(--muted); }
+.warn { color: var(--warn); }
+.row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 0.45rem 0.3rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.review {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 1rem;
+}
+pre, .prose {
+  white-space: pre-wrap;
+  font-family: "Segoe UI", sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+label { display: block; margin: 0.4rem 0; }
+input[type="password"], input[type="text"], select, textarea {
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+}
+textarea { min-height: 4.5rem; }
+.login { max-width: 28rem; margin: 4rem auto; }
+@media (max-width: 800px) {
+  .review { grid-template-columns: 1fr; }
+}

@@ -1,11 +1,12 @@
 const { Pool } = require("pg");
 const { requireEnv } = require("../env");
+const { requireNeonUrl } = require("../../../scripts/neon-url");
 
 let pool;
 
 function getPool() {
   if (pool) return pool;
-  const connectionString = requireEnv("NEON_DATABASE_URL");
+  const connectionString = requireNeonUrl(requireEnv("NEON_DATABASE_URL"), "NEON_DATABASE_URL");
   pool = new Pool({
     connectionString,
     max: 4,
