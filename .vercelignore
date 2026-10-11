@@ -1,0 +1,10 @@
+node_modules
+v2/node_modules
+v2/.next
+v2/.next-demo
+.env*
+**/.env*
+**/*.tsbuildinfo
+**/test-results
+**/playwright-report
+backups

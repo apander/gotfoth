@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { Pool } = require("pg");
+const { requireNeonUrl } = require("./neon-url");
 
 function requireEnv(name) {
   const v = process.env[name];
@@ -10,7 +11,7 @@ function requireEnv(name) {
   return v;
 }
 
-const NEON_DATABASE_URL = requireEnv("NEON_DATABASE_URL");
+const NEON_DATABASE_URL = requireNeonUrl(requireEnv("NEON_DATABASE_URL"), "NEON_DATABASE_URL");
 const repoRoot = path.resolve(__dirname, "..");
 const migrationDir = path.join(repoRoot, "neon", "migrations");
 const seedPath = path.join(repoRoot, "neon", "seed.sql");

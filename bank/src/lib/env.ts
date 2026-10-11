@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { Client } from "pg";
+import { requireNeonUrl } from "./neon-url";
 
 export async function loadEnvFile() {
   if (process.env.PAPER_BANK_URL && process.env.PAPER_BANK_ADMIN_URL) return;
@@ -19,7 +20,10 @@ export async function connect(variable: "PAPER_BANK_URL" | "PAPER_BANK_ADMIN_URL
   await loadEnvFile();
   const connectionString = process.env[variable];
   if (!connectionString) throw new Error(`${variable} is not set.`);
-  const client = new Client({ connectionString });
+  const client = new Client({
+    connectionString: requireNeonUrl(connectionString, variable),
+    options: "-c search_path=paper_bank,public",
+  });
   await client.connect();
   return client;
 }
