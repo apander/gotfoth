@@ -1584,6 +1584,60 @@ dialog::backdrop {
     scroll-behavior: auto !important;
   }
 }
+.week-planner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 520px;
+  overflow: auto;
+  user-select: none;
+  touch-action: none;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+}
+.week-head-row,
+.week-row {
+  display: grid;
+  grid-template-columns: 52px repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  align-items: center;
+}
+.week-head-row {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--paper);
+  padding-bottom: 4px;
+}
+.week-head,
+.week-time {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+.week-head {
+  text-align: center;
+}
+.week-time {
+  font-weight: 450;
+}
+.week-cell {
+  height: 18px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: var(--white);
+}
+.week-cell.on,
+.week-cell.preview.on {
+  background: var(--accent);
+}
+.week-cell.preview:not(.on) {
+  background: var(--accent-soft);
+}
 .schedule-row {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr auto;
