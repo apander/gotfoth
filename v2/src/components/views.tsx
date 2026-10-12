@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, date } from "./api";
-import { PageHeading, Empty, Dialog } from "./ui";
+import { PageHeading, Empty, Dialog, Icon } from "./ui";
 import { Button, Meter } from "./ui";
 import { score } from "./revision";
 import { ScheduleFields } from "./schedule-fields";
@@ -287,7 +287,6 @@ function CoursePanel({
   familyId,
   learnerId,
   open,
-  onOpen,
   onClose,
   run,
   refresh,
@@ -298,7 +297,6 @@ function CoursePanel({
   familyId: string;
   learnerId: string;
   open: boolean;
-  onOpen: () => void;
   onClose: () => void;
   run: Run;
   refresh: () => Promise<void>;
@@ -320,8 +318,7 @@ function CoursePanel({
         ],
       ),
     ),
-    [examDates, setExamDates] = useState(JSON.stringify(saved?.examDates ?? [])),
-    [confirming, setConfirming] = useState(false);
+    [examDates, setExamDates] = useState(JSON.stringify(saved?.examDates ?? []));
   useEffect(() => {
     setSession(saved?.targetSession ?? "");
     setSpec(saved?.specification ?? "");
@@ -359,53 +356,8 @@ function CoursePanel({
     ),
   ];
   const topicChoices = [...new Set([...catalogueTopics, ...topics])];
+  if (!open) return null;
   return (
-    <>
-      <article className="card course-card">
-        <header>
-          <div>
-            <h2>
-              {subject.label} · {subject.code}
-            </h2>
-            <p className="muted">
-              {saved
-                ? `${saved.targetSession} · ${saved.taughtTopics.length} taught topics`
-                : "Not set up"}
-            </p>
-          </div>
-          <div className="row">
-            <button className="button small" type="button" onClick={onOpen}>
-              {saved ? "Edit" : "Add"}
-            </button>
-            {saved && (
-              <button
-                className="button secondary small"
-                type="button"
-                onClick={() => setConfirming(true)}
-              >
-                Delete
-              </button>
-            )}
-          </div>
-        </header>
-        {saved && (
-          <div className="stack">
-            {saved.taughtTopics.length > 0 && (
-              <div className="topic-choices">
-                {saved.taughtTopics.map((topic: string) => (
-                  <span className="topic-choice" key={topic}>
-                    {topicLabel(topic)}
-                  </span>
-                ))}
-              </div>
-            )}
-            {saved.availability?.length > 0 && (
-              <p className="muted">{studyTimes(saved.availability)}</p>
-            )}
-          </div>
-        )}
-      </article>
-      {open && (
         <Dialog
           title={`${saved ? "Edit" : "Add"} ${subject.label}`}
           onClose={onClose}
@@ -536,46 +488,6 @@ function CoursePanel({
           </button>
         </form>
         </Dialog>
-      )}
-      {confirming && (
-        <Dialog
-          title={`Delete ${subject.label}`}
-          onClose={() => setConfirming(false)}
-        >
-          <p>
-            Remove {subject.label} for this student. It can be added again
-            later.
-          </p>
-          <div className="row">
-            <button
-              className="button danger"
-              type="button"
-              onClick={() =>
-                run(async () => {
-                  await api("family/enrolment/delete", {
-                    familyId,
-                    learnerId,
-                    subject: subject.id,
-                  });
-                  setConfirming(false);
-                  onClose();
-                  await refresh();
-                })
-              }
-            >
-              Delete course
-            </button>
-            <button
-              className="button secondary"
-              type="button"
-              onClick={() => setConfirming(false)}
-            >
-              Keep course
-            </button>
-          </div>
-        </Dialog>
-      )}
-    </>
   );
 }
 export function FamilySettings({
@@ -598,9 +510,12 @@ export function FamilySettings({
   const student = learners.find((person) => person.id === learnerId);
   const mine = enrolments.filter((item) => item.learner_id === learnerId);
   const [editing, setEditing] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   useEffect(() => {
     setEditing(null);
+    setRemoving(null);
   }, [learnerId]);
+  const removingSubject = courseSubjects.find((subject) => subject.id === removing);
   return (
     <>
       <PageHeading
@@ -608,23 +523,125 @@ export function FamilySettings({
         title={student?.name ?? "Student"}
         text="Add a course, or change one that is already set up."
       />
-      <div className="course-board" id="student-courses">
-        {courseSubjects.map((subject) => (
-          <CoursePanel
-            key={`${learnerId}-${subject.id}`}
-            subject={subject}
-            enrolment={mine.find((item) => item.data.subject === subject.id)}
-            papers={papers}
-            familyId={familyId}
-            learnerId={learnerId}
-            open={editing === subject.id}
-            onOpen={() => setEditing(subject.id)}
-            onClose={() => setEditing(null)}
-            run={run}
-            refresh={refresh}
-          />
-        ))}
-      </div>
+      <section className="card family-grid" id="student-courses">
+        <div className="overflow">
+          <table>
+            <thead>
+              <tr>
+                <th>Course</th>
+                <th>Session</th>
+                <th>Topics</th>
+                <th>Study times</th>
+                <th>
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {courseSubjects.map((subject) => {
+                const enrolment = mine.find((item) => item.data.subject === subject.id);
+                const saved = enrolment?.data;
+                const topics = saved?.taughtTopics ?? [];
+                return (
+                  <tr key={`${learnerId}-${subject.id}`}>
+                    <td>
+                      {subject.label}
+                      <span className="muted"> · {subject.code}</span>
+                    </td>
+                    <td>{saved?.targetSession || "—"}</td>
+                    <td>
+                      {topics.length
+                        ? topics.map((topic: string) => topicLabel(topic)).join(", ")
+                        : "—"}
+                    </td>
+                    <td>
+                      {saved?.availability?.length
+                        ? studyTimes(saved.availability)
+                        : "—"}
+                    </td>
+                    <td>
+                      <div className="table-actions">
+                        <button
+                          type="button"
+                          className="icon-button"
+                          aria-label={`${saved ? "Edit" : "Add"} ${subject.label}`}
+                          title={`${saved ? "Edit" : "Add"} ${subject.label}`}
+                          onClick={() => setEditing(subject.id)}
+                        >
+                          <Icon name={saved ? "Edit" : "Plus"} />
+                        </button>
+                        {saved && (
+                          <button
+                            type="button"
+                            className="icon-button danger"
+                            aria-label={`Delete ${subject.label}`}
+                            title={`Delete ${subject.label}`}
+                            onClick={() => setRemoving(subject.id)}
+                          >
+                            <Icon name="Delete" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {courseSubjects.map((subject) => (
+        <CoursePanel
+          key={`${learnerId}-${subject.id}`}
+          subject={subject}
+          enrolment={mine.find((item) => item.data.subject === subject.id)}
+          papers={papers}
+          familyId={familyId}
+          learnerId={learnerId}
+          open={editing === subject.id}
+          onClose={() => setEditing(null)}
+          run={run}
+          refresh={refresh}
+        />
+      ))}
+      {removingSubject && (
+        <Dialog
+          title={`Delete ${removingSubject.label}`}
+          onClose={() => setRemoving(null)}
+        >
+          <p>
+            Remove {removingSubject.label} for this student. It can be added
+            again later.
+          </p>
+          <div className="row">
+            <button
+              className="button danger"
+              type="button"
+              onClick={() =>
+                run(async () => {
+                  await api("family/enrolment/delete", {
+                    familyId,
+                    learnerId,
+                    subject: removingSubject.id,
+                  });
+                  setRemoving(null);
+                  setEditing(null);
+                  await refresh();
+                })
+              }
+            >
+              Delete course
+            </button>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => setRemoving(null)}
+            >
+              Keep course
+            </button>
+          </div>
+        </Dialog>
+      )}
       <section className="card stack" style={{ marginTop: 24 }}>
         <h2>Reserved papers for {student?.name ?? "this student"}</h2>
         <p className="muted">
