@@ -361,6 +361,31 @@ svg {
   font-size: var(--text-sm);
   white-space: pre-wrap;
 }
+.invite-share {
+  display: grid;
+  gap: 12px;
+}
+.invite-share > p {
+  margin: 0;
+  font-weight: 550;
+}
+.invite-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.invite-link > div {
+  min-width: 0;
+  flex: 1;
+}
+.invite-link p {
+  margin: 0;
+}
+.invite-link code {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: var(--text-xs);
+}
 .student-row select {
   flex: 0 0 140px;
   width: 140px;
