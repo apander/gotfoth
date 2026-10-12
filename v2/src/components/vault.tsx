@@ -8,6 +8,7 @@ import { Admin } from "./admin";
 import { Brand, PageHeading, Empty, Icon } from "./ui";
 import { Home, Subjects, PracticePicker, PaperList } from "./revision";
 import { PaperDesk } from "./paper-desk";
+import { AccountPage } from "./account";
 function authBaseURL() {
   if (typeof window !== "undefined") return window.location.origin;
   const configured = process.env.BETTER_AUTH_URL;
@@ -63,6 +64,7 @@ export function Vault() {
           "Invitations",
           "Catalogue",
           "Operations",
+          "Account",
         ].includes(linkedPage)
       )
         setPage(linkedPage);
@@ -102,14 +104,16 @@ export function Vault() {
     const value = await api(`family/snapshot?family=${family}`);
     setData(value);
     setPage((current) =>
-      value.role === "teacher"
-        ? "Papers"
-        : value.role === "parent" && current === "Today"
-          ? "Overview"
-          : value.role === "student" &&
-              ["Overview", "Reviews", "Family", "Credit"].includes(current)
-            ? "Today"
-            : current,
+      current === "Account"
+        ? current
+        : value.role === "teacher"
+          ? "Papers"
+          : value.role === "parent" && current === "Today"
+            ? "Overview"
+            : value.role === "student" &&
+                ["Overview", "Reviews", "Family", "Credit"].includes(current)
+              ? "Today"
+              : current,
     );
     setLearner((current) =>
       value.learners.some((l: any) => l.id === current)
@@ -350,9 +354,20 @@ export function Vault() {
             >
               Aa
             </button>
-            <span className="avatar" aria-hidden>
-              {identity.user.email[0].toUpperCase()}
-            </span>
+            <button
+              className="link-button account-link"
+              aria-current={page === "Account" ? "page" : undefined}
+              onClick={() => {
+                setPage("Account");
+                setAttempt("");
+                setAssessment("");
+              }}
+            >
+              <span className="avatar" aria-hidden>
+                {identity.user.email[0].toUpperCase()}
+              </span>
+              Account
+            </button>
             <button
               className="link-button"
               onClick={() =>
@@ -393,7 +408,22 @@ export function Vault() {
             {notice}
           </div>
         )}
-        {paperDesk ? (
+        {page === "Account" ? (
+          <AccountPage
+            run={run}
+            busy={busy}
+            onDeleted={async () => {
+              try {
+                await authClient.signOut();
+              } catch {
+                // The sign-in is already gone.
+              }
+              setIdentity(null);
+              setData(null);
+              setPage("Today");
+            }}
+          />
+        ) : paperDesk ? (
           <PaperDesk
             familyId={family || "00000000-0000-4000-8000-000000000001"}
             run={run}
