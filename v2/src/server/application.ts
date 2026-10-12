@@ -22,7 +22,7 @@ export async function identity(actor: Actor) {
   const workspaces = (
     await database().query(
       operator
-        ? `SELECT f.id, f.name, COALESCE(m.role, 'parent') AS role
+        ? `SELECT f.id, f.name, m.role
            FROM families f
            LEFT JOIN memberships m ON m.family_id=f.id AND m.user_id=$1 AND m.active
            WHERE f.deleted_at IS NULL AND NOT f.suspended

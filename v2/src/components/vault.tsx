@@ -23,6 +23,24 @@ function authBaseURL() {
   return "https://gotfoth.vercel.app";
 }
 const authClient = createAuthClient({ baseURL: authBaseURL() });
+const accountKinds = [
+  { role: "student", label: "Student" },
+  { role: "parent", label: "Parent" },
+  { role: "teacher", label: "Teacher" },
+  { role: "superuser", label: "Superuser" },
+] as const;
+function signedInKinds(
+  identity: {
+    superuser: boolean;
+    workspaces: { id: string; role?: string | null }[];
+  },
+  familyId: string,
+) {
+  const role = identity.workspaces.find((workspace) => workspace.id === familyId)?.role;
+  return accountKinds.filter(
+    (kind) => kind.role === role || (kind.role === "superuser" && identity.superuser),
+  );
+}
 export function Vault() {
   const acceptingInvitation = useRef<{
     token: string;
@@ -163,6 +181,7 @@ export function Vault() {
       : data?.role === "parent"
         ? ["Overview", "Reviews", "Family", "Credit", "Progress", "Plan"]
         : ["Today", "Subjects", "Practice", "Progress"];
+  const kinds = identity ? signedInKinds(identity, family) : [];
   async function create(
     mode: string,
     paperId?: string,
@@ -357,16 +376,24 @@ export function Vault() {
             <button
               className="link-button account-link"
               aria-current={page === "Account" ? "page" : undefined}
-              aria-label={`Account for ${identity.user.name || identity.user.email}`}
+              aria-label={`Account for ${identity.user.name || identity.user.email}${
+                kinds.length ? `, ${kinds.map((kind) => kind.label).join(" and ")}` : ""
+              }`}
               onClick={() => {
                 setPage("Account");
                 setAttempt("");
                 setAssessment("");
               }}
             >
-              <span className="avatar" aria-hidden>
-                {(identity.user.name || identity.user.email)[0].toUpperCase()}
-              </span>
+              {kinds.length > 0 && (
+                <span className="account-icons">
+                  {kinds.map((kind) => (
+                    <span className={`account-icon ${kind.role}`} key={kind.role} title={kind.label}>
+                      <Icon name={kind.label} />
+                    </span>
+                  ))}
+                </span>
+              )}
               <span className="account-who">
                 <strong>{identity.user.name || identity.user.email}</strong>
                 {identity.user.name ? <span>{identity.user.email}</span> : null}

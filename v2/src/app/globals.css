@@ -265,6 +265,35 @@ svg {
 .account-link[aria-current="page"] .account-who strong {
   text-decoration: underline;
 }
+.account-icons {
+  display: inline-flex;
+  gap: 4px;
+}
+.account-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.account-icon .icon {
+  width: 16px;
+  height: 16px;
+}
+.account-icon.parent {
+  background: #e5f2eb;
+  color: var(--success);
+}
+.account-icon.teacher {
+  background: #f6efe2;
+  color: var(--warning);
+}
+.account-icon.superuser {
+  background: var(--accent);
+  color: var(--white);
+}
 .account-who {
   display: grid;
   min-width: 0;
