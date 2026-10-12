@@ -30,6 +30,7 @@ import { review } from "@/server/marking";
 import { checkout, calendarConnect } from "@/server/integrations";
 import { proposePlan, planAction } from "@/server/planning";
 import { database } from "@/server/db";
+import { accountView, deleteAccount, updateAccount } from "@/server/account";
 import {
   examPaper,
   examQuestion,
@@ -89,10 +90,13 @@ async function handle(
         result = await examPaper(user, z.string().uuid().parse(url.searchParams.get("id")));
       else if (path === "family/exam-question")
         result = await examQuestion(user, z.string().min(3).parse(url.searchParams.get("id")));
+      else if (path === "account") result = await accountView(user);
       else
         throw new AppError("NOT_FOUND", "This endpoint is unavailable.", 404);
     } else {
-      if (path === "invitation/accept")
+      if (path === "account") result = await updateAccount(user, body);
+      else if (path === "account/delete") result = await deleteAccount(user, body);
+      else if (path === "invitation/accept")
         result = await acceptInvitation(
           user,
           z.string().min(20).max(100).parse(body.token),

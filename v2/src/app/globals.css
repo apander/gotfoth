@@ -256,6 +256,20 @@ svg {
   place-items: center;
   font-weight: 650;
 }
+.account-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-link[aria-current="page"] {
+  text-decoration: underline;
+}
+.account-delete {
+  margin-top: 24px;
+}
+.account-delete h2 {
+  margin: 0;
+}
 .heading {
   margin: 28px 0 32px;
 }
