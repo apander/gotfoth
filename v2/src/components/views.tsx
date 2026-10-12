@@ -401,7 +401,7 @@ function CoursePanel({
                 learnerId,
                 course: {
                   subject: subject.id,
-                  specification: spec,
+                  specification: spec || subject.code,
                   targetSession: session,
                   taughtTopics: topics,
                   option: subject.id === "psychology" && option ? option : undefined,
@@ -433,21 +433,23 @@ function CoursePanel({
                 ))}
               </select>
             </label>
-            <label className="field">
-              Specification
-              <select
-                required
-                value={spec}
-                onChange={(event) => setSpec(event.target.value)}
-              >
-                <option value="">Choose a specification</option>
-                {specs.map((item) => (
-                  <option value={item} key={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {specs.length > 0 && (
+              <label className="field">
+                Specification
+                <select
+                  required
+                  value={spec}
+                  onChange={(event) => setSpec(event.target.value)}
+                >
+                  <option value="">Choose a specification</option>
+                  {specs.map((item) => (
+                    <option value={item} key={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {subject.id === "psychology" && (
               <label className="field">
                 Unit 3 option
