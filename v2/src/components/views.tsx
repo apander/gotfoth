@@ -6,6 +6,13 @@ import { Button, Meter } from "./ui";
 import { score } from "./revision";
 import { ScheduleFields } from "./schedule-fields";
 type Run = (fn: () => Promise<void>) => void;
+const examMonths = ["January", "June", "October"] as const;
+function examSessionChoices(now = new Date()) {
+  const start = now.getFullYear();
+  return Array.from({ length: 4 }, (_, index) => start + index).flatMap((year) =>
+    examMonths.map((month) => `${month} ${year}`),
+  );
+}
 export function Progress({
   initialTopic,
   familyId,
@@ -296,6 +303,7 @@ export function FamilySettings({
       setExamDates(JSON.stringify(e.examDates, null, 2));
     }
   }, [learner, subject]);
+  const sessions = examSessionChoices();
   return (
     <>
       <PageHeading
@@ -358,12 +366,18 @@ export function FamilySettings({
           </label>
           <label className="field">
             Target exam session
-            <input
+            <select
               required
-              value={session}
+              value={sessions.includes(session) ? session : ""}
               onChange={(e) => setSession(e.target.value)}
-              placeholder="June 2027"
-            />
+            >
+              <option value="">Choose a session</option>
+              {sessions.map((choice) => (
+                <option value={choice} key={choice}>
+                  {choice}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="field">
             Specification version
