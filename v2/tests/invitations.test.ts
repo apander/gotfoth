@@ -11,6 +11,9 @@ test("invitations bind recipient and role, reject reuse, expiry, revocation and 
   await db.exec(
     await readFile(new URL("../drizzle/0000_v2.sql", import.meta.url), "utf8"),
   );
+  await db.exec(
+    await readFile(new URL("../drizzle/0005_people_names.sql", import.meta.url), "utf8"),
+  );
   const family = randomUUID(),
     learner = randomUUID(),
     sibling = randomUUID();

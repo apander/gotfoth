@@ -2,8 +2,13 @@
 import { useEffect, useState } from "react";
 import { api, date } from "./api";
 import { Dialog, Empty, Icon, PageHeading } from "./ui";
-type StudentDraft = { key: string; id?: string; name: string };
-type AdultDraft = { key: string; email: string; role: "parent" | "teacher" };
+type StudentDraft = { key: string; id?: string; name: string; email: string };
+type AdultDraft = {
+  key: string;
+  name: string;
+  email: string;
+  role: "parent" | "teacher";
+};
 type FamilyDraft = {
   id?: string;
   name: string;
@@ -15,12 +20,24 @@ function blankFamily(): FamilyDraft {
   return {
     name: "",
     suspended: false,
-    students: [{ key: crypto.randomUUID(), name: "" }],
+    students: [{ key: crypto.randomUUID(), name: "", email: "" }],
     adults: [],
   };
 }
 function familyDraft(family: any): FamilyDraft {
-  const learners = family.learners?.length ? family.learners : [{ name: "" }];
+  const learners = family.learners?.length ? family.learners : [{ name: "", email: "" }];
+  const adults = [
+    ...(family.members ?? []).filter(
+      (member: any) => member.role === "parent" || member.role === "teacher",
+    ),
+    ...(family.invites ?? []).filter(
+      (invite: any) =>
+        (invite.role === "parent" || invite.role === "teacher") &&
+        !(family.members ?? []).some(
+          (member: any) => member.email.toLowerCase() === invite.email.toLowerCase(),
+        ),
+    ),
+  ];
   return {
     id: family.id,
     name: family.name,
@@ -29,14 +46,14 @@ function familyDraft(family: any): FamilyDraft {
       key: learner.id ?? crypto.randomUUID(),
       id: learner.id,
       name: learner.name ?? "",
+      email: learner.email ?? "",
     })),
-    adults: (family.members ?? [])
-      .filter((member: any) => member.role === "parent" || member.role === "teacher")
-      .map((member: any) => ({
-        key: member.email,
-        email: member.email,
-        role: member.role,
-      })),
+    adults: adults.map((member: any) => ({
+      key: member.email,
+      name: member.name ?? member.display_name ?? "",
+      email: member.email,
+      role: member.role,
+    })),
   };
 }
 export function Admin({
@@ -143,16 +160,35 @@ export function Admin({
                         <td>{f.name}</td>
                         <td>
                           {f.learners.length
-                            ? f.learners.map((learner: any) => learner.name).join(", ")
+                            ? f.learners
+                                .map((learner: any) =>
+                                  learner.email
+                                    ? `${learner.name} · ${learner.email}`
+                                    : learner.name,
+                                )
+                                .join(", ")
                             : "—"}
                         </td>
                         <td>
-                          {(f.members ?? [])
-                            .filter(
+                          {[
+                            ...(f.members ?? []).filter(
                               (member: any) =>
                                 member.role === "parent" || member.role === "teacher",
+                            ),
+                            ...(f.invites ?? []).filter(
+                              (invite: any) =>
+                                (invite.role === "parent" || invite.role === "teacher") &&
+                                !(f.members ?? []).some(
+                                  (member: any) =>
+                                    member.email.toLowerCase() === invite.email.toLowerCase(),
+                                ),
+                            ),
+                          ]
+                            .map((member: any) =>
+                              member.name || member.display_name
+                                ? `${member.name || member.display_name} · ${member.email}`
+                                : member.email,
                             )
-                            .map((member: any) => member.email)
                             .join(", ") || "—"}
                         </td>
                         <td>
@@ -210,8 +246,9 @@ export function Admin({
                       .map((student) => ({
                         id: student.id,
                         name: student.name.trim(),
+                        email: student.email.trim().toLowerCase(),
                       }))
-                      .filter((student) => student.name);
+                      .filter((student) => student.name || student.email);
                     if (!draft.name.trim()) {
                       setFormError("Enter a family name.");
                       return;
@@ -220,14 +257,24 @@ export function Admin({
                       setFormError("Add at least one student.");
                       return;
                     }
+                    if (students.some((student) => !student.name || !student.email)) {
+                      setFormError("Each student needs a name and a school email.");
+                      return;
+                    }
                     const adults = draft.adults
                       .map((adult) => ({
+                        name: adult.name.trim(),
                         email: adult.email.trim().toLowerCase(),
                         role: adult.role,
                       }))
-                      .filter((adult) => adult.email);
-                    if (new Set(adults.map((adult) => adult.email)).size !== adults.length) {
-                      setFormError("Each parent or teacher needs a different email.");
+                      .filter((adult) => adult.name || adult.email);
+                    if (adults.some((adult) => !adult.name || !adult.email)) {
+                      setFormError("Each parent or teacher needs a name and a school email.");
+                      return;
+                    }
+                    const emails = [...students.map((student) => student.email), ...adults.map((adult) => adult.email)];
+                    if (new Set(emails).size !== emails.length) {
+                      setFormError("Each person needs a different school email.");
                       return;
                     }
                     try {
@@ -244,10 +291,39 @@ export function Admin({
                           : {
                               action: "create",
                               name: draft.name.trim(),
-                              learners: students.map((student) => student.name),
+                              learners: students.map((student) => ({
+                                name: student.name,
+                                email: student.email,
+                              })),
                             },
                       );
                       const familyId = draft.id ?? saved.id;
+                      const previousLearners = draft.id
+                        ? (data.families.find((item: any) => item.id === draft.id)?.learners ?? [])
+                        : [];
+                      for (const before of previousLearners)
+                        if (
+                          before.email &&
+                          !students.some((student) => student.email === before.email.toLowerCase())
+                        )
+                          await api("admin/member", {
+                            action: "remove",
+                            familyId,
+                            email: before.email,
+                          });
+                      const links: string[] = [];
+                      for (const [index, student] of students.entries()) {
+                        const learnerId = saved.learners?.[index]?.id ?? student.id;
+                        const result = await api("admin/member", {
+                          action: "set",
+                          familyId,
+                          email: student.email,
+                          name: student.name,
+                          role: "student",
+                          learnerId,
+                        });
+                        if (result.url) links.push(`${student.name}: ${result.url}`);
+                      }
                       const previous = (data.families.find((item: any) => item.id === draft.id)
                         ?.members ?? []
                       ).filter(
@@ -261,12 +337,31 @@ export function Admin({
                             familyId,
                             email: member.email,
                           });
-                      const links: string[] = [];
+                      const previousInvites = (
+                        data.families.find((item: any) => item.id === draft.id)?.invites ?? []
+                      ).filter(
+                        (invite: any) =>
+                          invite.role === "parent" || invite.role === "teacher",
+                      );
+                      for (const invite of previousInvites)
+                        if (
+                          !adults.some((adult) => adult.email === invite.email.toLowerCase()) &&
+                          !previous.some(
+                            (member: any) =>
+                              member.email.toLowerCase() === invite.email.toLowerCase(),
+                          )
+                        )
+                          await api("admin/member", {
+                            action: "remove",
+                            familyId,
+                            email: invite.email,
+                          });
                       for (const adult of adults) {
                         const result = await api("admin/member", {
                           action: "set",
                           familyId,
                           email: adult.email,
+                          name: adult.name,
                           role: adult.role,
                           learnerId: null,
                         });
@@ -306,6 +401,7 @@ export function Admin({
                     <div className="student-row" key={student.key}>
                       <input
                         aria-label="Student name"
+                        placeholder="Name"
                         value={student.name}
                         onChange={(event) =>
                           setDraft({
@@ -313,6 +409,22 @@ export function Admin({
                             students: draft.students.map((item) =>
                               item.key === student.key
                                 ? { ...item, name: event.target.value }
+                                : item,
+                            ),
+                          })
+                        }
+                      />
+                      <input
+                        type="email"
+                        aria-label="Student school email"
+                        placeholder="School email"
+                        value={student.email}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            students: draft.students.map((item) =>
+                              item.key === student.key
+                                ? { ...item, email: event.target.value }
                                 : item,
                             ),
                           })
@@ -343,7 +455,7 @@ export function Admin({
                         ...draft,
                         students: [
                           ...draft.students,
-                          { key: crypto.randomUUID(), name: "" },
+                          { key: crypto.randomUUID(), name: "", email: "" },
                         ],
                       })
                     }
@@ -356,8 +468,24 @@ export function Admin({
                   {draft.adults.map((adult) => (
                     <div className="student-row" key={adult.key}>
                       <input
+                        aria-label="Parent or teacher name"
+                        placeholder="Name"
+                        value={adult.name}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            adults: draft.adults.map((item) =>
+                              item.key === adult.key
+                                ? { ...item, name: event.target.value }
+                                : item,
+                            ),
+                          })
+                        }
+                      />
+                      <input
                         type="email"
                         aria-label="Parent or teacher email"
+                        placeholder="School email"
                         value={adult.email}
                         onChange={(event) =>
                           setDraft({
@@ -413,7 +541,7 @@ export function Admin({
                         ...draft,
                         adults: [
                           ...draft.adults,
-                          { key: crypto.randomUUID(), email: "", role: "parent" },
+                          { key: crypto.randomUUID(), name: "", email: "", role: "parent" },
                         ],
                       })
                     }

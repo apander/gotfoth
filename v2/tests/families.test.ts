@@ -16,7 +16,7 @@ const actor = {
 test("a family can be added, renamed, and deleted without a restore check", async () => {
   const db = new PGlite();
   const tx = db as unknown as Tx;
-  for (const file of ["0000_v2.sql", "0001_teacher.sql"])
+  for (const file of ["0000_v2.sql", "0001_teacher.sql", "0005_people_names.sql"])
     await db.exec(
       await readFile(new URL(`../drizzle/${file}`, import.meta.url), "utf8"),
     );
@@ -26,21 +26,22 @@ test("a family can be added, renamed, and deleted without a restore check", asyn
   await saveFamilyInTransaction(
     tx,
     actor,
-    { action: "create", name: "Anderson", learners: ["Oliver"] },
+    { action: "create", name: "Anderson", learners: [{ name: "Oliver", email: "oliver@britams.nl" }] },
     anderson,
   );
   await saveFamilyInTransaction(
     tx,
     actor,
-    { action: "create", name: "Paper review", learners: ["Sample"] },
+    { action: "create", name: "Paper review", learners: [{ name: "Sample" }] },
     review,
   );
   await db.exec("COMMIT");
-  const created = await db.query<{ id: string; name: string }>(
-    "SELECT id,name FROM learners WHERE family_id=$1",
+  const created = await db.query<{ id: string; name: string; email: string }>(
+    "SELECT id,name,email FROM learners WHERE family_id=$1",
     [anderson],
   );
   assert.equal(created.rows[0].name, "Oliver");
+  assert.equal(created.rows[0].email, "oliver@britams.nl");
   await db.exec("BEGIN");
   await saveFamilyInTransaction(
     tx,
@@ -65,8 +66,8 @@ test("a family can be added, renamed, and deleted without a restore check", asyn
     ["student", "student@example.test"],
   );
   await db.query(
-    "INSERT INTO memberships(user_id,family_id,role,learner_id) VALUES('student',$1,'student',$2)",
-    [anderson, created.rows[0].id],
+    "INSERT INTO attempts(id,family_id,learner_id,mode,state,data) VALUES($1,$2,$3,'guided','draft','{}')",
+    [randomUUID(), anderson, created.rows[0].id],
   );
   await db.exec("BEGIN");
   await assert.rejects(

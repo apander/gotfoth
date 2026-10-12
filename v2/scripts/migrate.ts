@@ -24,6 +24,7 @@ try {
     "0002_superusers",
     "0003_paper_pdf",
     "0004_one_student_family",
+    "0005_people_names",
   ];
   for (const name of migrations) {
     const done = await client.query(

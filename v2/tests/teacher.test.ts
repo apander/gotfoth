@@ -14,6 +14,9 @@ test("a teacher membership is allowed and a teacher invitation does not need a l
   await db.exec(
     await readFile(new URL("../drizzle/0001_teacher.sql", import.meta.url), "utf8"),
   );
+  await db.exec(
+    await readFile(new URL("../drizzle/0005_people_names.sql", import.meta.url), "utf8"),
+  );
   const family = randomUUID(),
     learner = randomUUID();
   await db.query(

@@ -9,7 +9,7 @@ import type { Tx } from "../src/server/db";
 test("a parent can become a teacher, and a student stays in one family", async () => {
   const db = new PGlite();
   const tx = db as unknown as Tx;
-  for (const file of ["0000_v2.sql", "0001_teacher.sql", "0002_superusers.sql"])
+  for (const file of ["0000_v2.sql", "0001_teacher.sql", "0002_superusers.sql", "0005_people_names.sql"])
     await db.exec(await readFile(new URL(`../drizzle/${file}`, import.meta.url), "utf8"));
   const operators = await db.query("SELECT email FROM superusers ORDER BY email");
   assert.deepEqual(
