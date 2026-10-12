@@ -113,3 +113,61 @@ test("invitations bind recipient and role, reject reuse, expiry, revocation and 
   assert.equal(await learnerAccess(tx, parent, family, sibling), "parent");
   await db.close();
 });
+
+test("a parent invitation joins the family without a student id", async () => {
+  const db = new PGlite(),
+    tx = db as unknown as Tx;
+  await db.exec(
+    await readFile(new URL("../drizzle/0000_v2.sql", import.meta.url), "utf8"),
+  );
+  const family = randomUUID(),
+    learner = randomUUID(),
+    sibling = randomUUID(),
+    token = "parent-without-learner-id-token";
+  await db.query(
+    'INSERT INTO "user"(id,name,email,"emailVerified") VALUES($1,$2,$3,true)',
+    ["parent", "Alasdair", "info@spectrumbier.com"],
+  );
+  await db.query("INSERT INTO families(id,name) VALUES($1,$2)", [
+    family,
+    "Anderson",
+  ]);
+  for (const [id, name] of [
+    [learner, "Elliot"],
+    [sibling, "Oliver"],
+  ] as const)
+    await db.query("INSERT INTO learners(id,family_id,name) VALUES($1,$2,$3)", [
+      id,
+      family,
+      name,
+    ]);
+  await db.query(
+    "INSERT INTO invitations(id,token_hash,email,family_id,role,learner_id,expires_at,created_by) VALUES($1,$2,$3,$4,'parent',NULL,now()+interval '7 days','parent')",
+    [
+      randomUUID(),
+      createHash("sha256").update(token).digest("hex"),
+      "info@spectrumbier.com",
+      family,
+    ],
+  );
+  await db.exec("BEGIN");
+  await acceptInvitationInTransaction(
+    tx,
+    {
+      id: "parent",
+      email: "info@spectrumbier.com",
+      emailVerified: true,
+    },
+    token,
+  );
+  await db.query("SELECT set_config('app.family_id',$1,true)", [family]);
+  const links = await db.query(
+    "SELECT learner_id FROM parent_links WHERE user_id='parent' ORDER BY learner_id",
+  );
+  await db.exec("COMMIT");
+  assert.deepEqual(
+    links.rows.map((row) => (row as { learner_id: string }).learner_id).sort(),
+    [learner, sibling].sort(),
+  );
+  await db.close();
+});
