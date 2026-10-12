@@ -196,7 +196,7 @@ export function Admin({
       const result = await api("admin/welcome", { url });
       setShareNote((notes) => ({
         ...notes,
-        [item.email]: `Copied. Welcome email sent to ${result.email}.`,
+        [item.email]: `Copied. Welcome email sent to ${item.name || result.email}.`,
       }));
     } catch (error) {
       setShareNote((notes) => ({
@@ -692,7 +692,12 @@ export function Admin({
                         key={item.email}
                         item={{
                           name: item.name,
-                          detail: `${item.role[0].toUpperCase()}${item.role.slice(1)} · ${item.email}`,
+                          detail:
+                            item.role === "teacher"
+                              ? "Teacher"
+                              : item.role === "student"
+                                ? "Student"
+                                : "Parent",
                           url: item.url,
                         }}
                         note={shareNote[item.email]}
