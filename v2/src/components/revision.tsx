@@ -34,18 +34,13 @@ export function Home({
   const published = results.filter((a: any) => a.state === "published");
   const latest = published[0],
     latestScore = score(latest?.effective);
-  const parent = data.role === "parent";
   const courseReady = !!selected;
   return (
     <>
       <PageHeading
-        label={parent ? "FAMILY / OVERVIEW" : "YOUR WORKSPACE"}
-        title={parent ? "The work. The progress." : "Back to work."}
-        text={
-          parent
-            ? "Review feedback, keep plans realistic, and see what needs attention."
-            : "Real questions. Focused practice. Every mark counts."
-        }
+        label="YOUR WORKSPACE"
+        title="Back to work."
+        text="Real questions. Focused practice. Every mark counts."
       />
       <section className="continuation" aria-label="Next revision action">
         <div className="continuation-top">
@@ -72,28 +67,24 @@ export function Home({
             ? `${next.subject ?? "Revision"} · ${next.mode} · ${next.state === "draft" ? "Ready to start" : "Session in progress"}`
             : courseReady
               ? `${selected.data.subject} · About 10 minutes, using topics you have covered.`
-              : parent
-                ? "Add a course and the topics already taught to prepare the first session."
-                : "Your parent needs to add a course and taught topics before you can start."}
+              : "Set up a course and the topics you have covered before the first session."}
         </p>
         <div className="row">
           <Button
-            disabled={busy || (!next && !courseReady && !parent)}
+            disabled={busy || (!next && !courseReady)}
             onClick={() =>
               next
                 ? onAttempt(next.id)
                 : courseReady
                   ? onCreate("guided")
-                  : onPage("Family")
+                  : onPage("Study")
             }
           >
             {next
               ? "Continue revision"
               : courseReady
                 ? "Start revision"
-                : parent
-                  ? "Set up a course"
-                  : "Waiting for course setup"}
+                : "Set up a course"}
             <Icon name="Arrow" />
           </Button>
           <button className="link-button" onClick={() => onPage("Practice")}>
@@ -257,7 +248,7 @@ export function PracticePicker({ selected, busy, onCreate, onPapers }: any) {
           <span className="muted">
             {selected
               ? `${selected.data.subject} · Taught topics only`
-              : "Add a course in Family settings first."}
+              : "Add a course in Study first."}
           </span>
           <Button disabled={!selected || busy} onClick={() => onCreate(mode)}>
             Start practice
@@ -370,7 +361,7 @@ export function Subjects({
       {!courses.length ? (
         <Empty
           title="Add your first course"
-          text="A parent can set up Psychology or Business and select taught topics in Family settings."
+          text="Set up Psychology or Business in Study, including the topics you have covered."
         />
       ) : (
         <>
@@ -431,7 +422,7 @@ export function Subjects({
               ) : (
                 <Empty
                   title="No taught topics selected"
-                  text="Ask your parent to add the topics you have covered in Family settings."
+                  text="Add the topics you have covered in Study."
                 />
               )}
             </section>

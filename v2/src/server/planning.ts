@@ -36,7 +36,13 @@ export async function proposePlan(
     })
     .parse(input);
   return family(actor, familyId, async (tx) => {
-    await learnerAccess(tx, actor, familyId, learnerId);
+    const role = await learnerAccess(tx, actor, familyId, learnerId);
+    requireThat(
+      role === "student",
+      "FORBIDDEN",
+      "Students arrange their own plan.",
+      403,
+    );
     const row = (
       await tx.query("SELECT * FROM enrolments WHERE id=$1 AND learner_id=$2", [
         enrolmentId,
@@ -117,6 +123,12 @@ export async function planAction(
     ).rows[0];
     if (!row) throw missing();
     const role = await learnerAccess(tx, actor, familyId, row.learner_id);
+    requireThat(
+      role === "student",
+      "FORBIDDEN",
+      "Students arrange their own plan.",
+      403,
+    );
     if (data.action === "approve") {
       requireThat(
         role === "student",

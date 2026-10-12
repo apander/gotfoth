@@ -524,9 +524,9 @@ export function FamilySettings({
   return (
     <>
       <PageHeading
-        label="STUDENT"
-        title={student?.name ?? "Student"}
-        text="Add a course, or change one that is already set up."
+        label="YOUR STUDY"
+        title={student?.name ?? "Your courses"}
+        text="Set each course, the topics you have covered, and when you can study."
       />
       <section className="card family-grid" id="student-courses">
         <div className="overflow">
@@ -895,7 +895,7 @@ export function Plan({
       {!sessions.length && (
         <Empty
           title="No sessions planned"
-          text="Add availability in Family settings, then propose a plan."
+          text="Set your availability in Study, then propose a plan."
         />
       )}
     </>
@@ -904,17 +904,17 @@ export function Plan({
 export function Assessment({
   familyId,
   id,
-  parent,
+  reviewer,
   run,
   onBack,
   onRetry,
 }: {
   familyId: string;
   id: string;
-  parent: boolean;
+  reviewer: boolean;
   run: Run;
   onBack: () => void;
-  onRetry: (id: string, topic: string) => void;
+  onRetry?: (id: string, topic: string) => void;
 }) {
   const [data, setData] = useState<any>(null),
     [results, setResults] = useState(""),
@@ -1026,12 +1026,14 @@ export function Assessment({
                   <p>{result.improvement}</p>
                 </div>
                 <p className="muted">{result.justification}</p>
-                <button
-                  className="button secondary"
-                  onClick={() => onRetry(data.id, q.topics[0])}
-                >
-                  Practise an improvement
-                </button>
+                {onRetry && (
+                  <button
+                    className="button secondary"
+                    onClick={() => onRetry(data.id, q.topics[0])}
+                  >
+                    Practise an improvement
+                  </button>
+                )}
               </>
             )}
             {q.rubric && (
@@ -1040,7 +1042,7 @@ export function Assessment({
                 <p className="question-text">{q.rubric.text}</p>
               </details>
             )}
-            {parent &&
+            {reviewer &&
               data.candidates
                 ?.filter((c: any) => c.primary.questionId === q.id)
                 .map((c: any, i: number) => (
@@ -1088,9 +1090,9 @@ export function Assessment({
         );
       })}
       <section className="card stack">
-        <h2>{parent ? "Review decision" : "Query this result"}</h2>
+        <h2>{reviewer ? "Review decision" : "Query this result"}</h2>
         <div>
-          {parent && data.error_code === "INVALID_CHOICES" && (
+          {reviewer && data.error_code === "INVALID_CHOICES" && (
             <section className="notice">
               <h3>Resolve the saved question choices</h3>
               <p>
@@ -1139,8 +1141,8 @@ export function Assessment({
             placeholder="Explain the rubric-supported decision or your question."
           />
         </label>
-        {parent && <ResultEditor value={results} onChange={setResults} />}
-        {parent && (
+        {reviewer && <ResultEditor value={results} onChange={setResults} />}
+        {reviewer && (
           <details>
             <summary>
               Effective assessments · editable structured result
@@ -1156,7 +1158,7 @@ export function Assessment({
           </details>
         )}
         <div className="row">
-          {parent ? (
+          {reviewer ? (
             <>
               <button
                 className="button"
@@ -1186,7 +1188,7 @@ export function Assessment({
               disabled={reason.length < 5 || data.state !== "published"}
               onClick={() => run(() => decide("query"))}
             >
-              Ask a parent to review
+              Ask your teacher to review
             </button>
           )}
         </div>
@@ -1200,7 +1202,7 @@ function ResultSummary({
   onRetry,
 }: {
   data: any;
-  onRetry: (id: string, topic: string) => void;
+  onRetry?: (id: string, topic: string) => void;
 }) {
   const total = score(data.effective);
   if (!total) return null;
@@ -1258,7 +1260,7 @@ function ResultSummary({
           </p>
         </div>
       </section>
-      {next && (
+      {next && onRetry && (
         <section className="result-next row">
           <div>
             <p className="eyebrow">RECOMMENDED NEXT STEP</p>
