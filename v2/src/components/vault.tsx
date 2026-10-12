@@ -497,44 +497,70 @@ export function Vault() {
           </div>
         ) : (
           <>
-            <div className="row">
-              {data.learners.length > 1 && (
-                <label className="field">
-                  Learner
-                  <select
-                    value={learner}
-                    onChange={(e) => setLearner(e.target.value)}
-                  >
-                    {data.learners.map((l: any) => (
-                      <option key={l.id} value={l.id}>
-                        {l.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              {data.enrolments.filter((e: any) => e.learner_id === learner)
+            {data.learners.length > 0 && (
+              <div className="student-360" aria-label="Students">
+                {data.learners.map((person: any) => {
+                  const courses = data.enrolments.filter(
+                    (item: any) => item.learner_id === person.id,
+                  );
+                  return (
+                    <button
+                      type="button"
+                      className={`student-card${person.id === learner ? " selected" : ""}`}
+                      aria-pressed={person.id === learner}
+                      key={person.id}
+                      onClick={() => {
+                        setLearner(person.id);
+                        if (!courses.some((item: any) => item.id === course))
+                          setCourse(courses[0]?.id ?? "");
+                      }}
+                    >
+                      <strong>{person.name}</strong>
+                      <small>
+                        {courses.length
+                          ? courses
+                              .map((item: any) =>
+                                item.data.subject === "psychology"
+                                  ? "Psychology"
+                                  : "Business",
+                              )
+                              .join(" · ")
+                          : "No courses yet"}
+                      </small>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {page !== "Family" &&
+              data.enrolments.filter((item: any) => item.learner_id === learner)
                 .length > 0 && (
-                <label className="field">
-                  Course
-                  <select
-                    value={selected?.id ?? ""}
-                    onChange={(e) => setCourse(e.target.value)}
-                  >
-                    {data.enrolments
-                      .filter((e: any) => e.learner_id === learner)
-                      .map((e: any) => (
-                        <option key={e.id} value={e.id}>
-                          {e.data.subject === "psychology"
-                            ? "Psychology"
-                            : "Business"}{" "}
-                          · {e.data.targetSession}
-                        </option>
-                      ))}
-                  </select>
-                </label>
+                <div
+                  className="subject-switch"
+                  aria-label={`${student?.name ?? "Student"}'s courses`}
+                >
+                  {data.enrolments
+                    .filter((item: any) => item.learner_id === learner)
+                    .map((item: any) => (
+                      <button
+                        type="button"
+                        className={`subject-button${item.id === selected?.id ? " selected" : ""}`}
+                        aria-pressed={item.id === selected?.id}
+                        key={item.id}
+                        onClick={() => setCourse(item.id)}
+                      >
+                        <span>
+                          <strong>
+                            {item.data.subject === "psychology"
+                              ? "Psychology"
+                              : "Business"}
+                          </strong>
+                          <small>{item.data.targetSession}</small>
+                        </span>
+                      </button>
+                    ))}
+                </div>
               )}
-            </div>
             {["Today", "Overview"].includes(page) && (
               <Home
                 data={data}
@@ -632,6 +658,7 @@ export function Vault() {
             {page === "Family" && (
               <FamilySettings
                 familyId={family}
+                learnerId={learner}
                 learners={data.learners}
                 enrolments={data.enrolments}
                 papers={data.papers}
