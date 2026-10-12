@@ -498,6 +498,7 @@ export function FamilySettings({
   papers,
   run,
   refresh,
+  courseEdit,
 }: {
   familyId: string;
   learnerId: string;
@@ -506,6 +507,7 @@ export function FamilySettings({
   papers: any[];
   run: Run;
   refresh: () => Promise<void>;
+  courseEdit?: { subject: string; at: number } | null;
 }) {
   const student = learners.find((person) => person.id === learnerId);
   const mine = enrolments.filter((item) => item.learner_id === learnerId);
@@ -515,6 +517,9 @@ export function FamilySettings({
     setEditing(null);
     setRemoving(null);
   }, [learnerId]);
+  useEffect(() => {
+    if (courseEdit) setEditing(courseEdit.subject);
+  }, [courseEdit]);
   const removingSubject = courseSubjects.find((subject) => subject.id === removing);
   return (
     <>

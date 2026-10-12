@@ -52,6 +52,10 @@ export function Vault() {
     [page, setPage] = useState("Today"),
     [learner, setLearner] = useState(""),
     [course, setCourse] = useState(""),
+    [courseEdit, setCourseEdit] = useState<{
+      subject: string;
+      at: number;
+    } | null>(null),
     [historyTopic, setHistoryTopic] = useState(""),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
@@ -564,8 +568,23 @@ export function Vault() {
                         type="button"
                         className={`subject-button${item.id === selected?.id ? " selected" : ""}`}
                         aria-pressed={item.id === selected?.id}
+                        aria-label={
+                          data.role === "parent"
+                            ? `Edit ${item.data.subject === "psychology" ? "Psychology" : "Business"}`
+                            : undefined
+                        }
                         key={item.id}
-                        onClick={() => setCourse(item.id)}
+                        onClick={() => {
+                          setCourse(item.id);
+                          if (data.role !== "parent") return;
+                          setCourseEdit({
+                            subject: item.data.subject,
+                            at: Date.now(),
+                          });
+                          setPage("Family");
+                          setAttempt("");
+                          setAssessment("");
+                        }}
                       >
                         <span>
                           <strong>
@@ -682,6 +701,7 @@ export function Vault() {
                 papers={data.papers}
                 run={run}
                 refresh={refresh}
+                courseEdit={courseEdit}
               />
             )}
             {page === "Reviews" && (
