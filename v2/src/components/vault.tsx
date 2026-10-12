@@ -4,6 +4,7 @@ import { createAuthClient } from "better-auth/react";
 import { api, euro, date } from "./api";
 import { Player } from "./player";
 import { Progress, FamilySettings, Plan, Assessment } from "./views";
+import { ParentMonitor, TeacherGuidance, TeacherStudents } from "./roles";
 import { Admin } from "./admin";
 import { Brand, PageHeading, Empty, Icon } from "./ui";
 import { Home, Subjects, PracticePicker, PaperList } from "./revision";
@@ -52,10 +53,6 @@ export function Vault() {
     [page, setPage] = useState("Today"),
     [learner, setLearner] = useState(""),
     [course, setCourse] = useState(""),
-    [courseEdit, setCourseEdit] = useState<{
-      subject: string;
-      at: number;
-    } | null>(null),
     [historyTopic, setHistoryTopic] = useState(""),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
@@ -125,18 +122,31 @@ export function Vault() {
     if (!family) return;
     const value = await api(`family/snapshot?family=${family}`);
     setData(value);
-    setPage((current) =>
-      current === "Account"
+    setPage((current) => {
+      if (current === "Account") return current;
+      if (value.role === "teacher")
+        return current === "Students" || current === "Guidance" ? current : "Students";
+      if (value.role === "parent")
+        return current === "Progress" || current === "Credit" ? current : "Progress";
+      if (value.role === "superuser")
+        return ["Papers", "Families", "Invitations", "Catalogue", "Operations"].includes(
+          current,
+        )
+          ? current
+          : "Families";
+      if (current === "Family") return "Study";
+      return [
+        "Today",
+        "Study",
+        "Subjects",
+        "Practice",
+        "Papers",
+        "Progress",
+        "Plan",
+      ].includes(current)
         ? current
-        : value.role === "teacher"
-          ? "Papers"
-          : value.role === "parent" && current === "Today"
-            ? "Overview"
-            : value.role === "student" &&
-                ["Overview", "Reviews", "Family", "Credit"].includes(current)
-              ? "Today"
-              : current,
-    );
+        : "Today";
+    });
     setLearner((current) =>
       value.learners.some((l: any) => l.id === current)
         ? current
@@ -170,21 +180,21 @@ export function Vault() {
     data?.enrolments.find(
       (c: any) => c.id === course && c.learner_id === learner,
     ) ?? data?.enrolments.find((c: any) => c.learner_id === learner);
-  const student = data?.learners.find((l: any) => l.id === learner);
   const isAdmin = [
     "Families",
     "Invitations",
     "Catalogue",
     "Operations",
   ].includes(page);
-  const paperDesk =
-    page === "Papers" && (identity?.superuser || data?.role === "teacher");
+  const paperDesk = page === "Papers" && !!identity?.superuser && data?.role !== "student";
   const nav =
     data?.role === "teacher"
-      ? ["Papers"]
+      ? ["Students", "Guidance"]
       : data?.role === "parent"
-        ? ["Overview", "Reviews", "Family", "Credit", "Progress", "Plan"]
-        : ["Today", "Subjects", "Practice", "Progress"];
+        ? ["Progress", "Credit"]
+        : data?.role === "superuser"
+          ? []
+          : ["Today", "Study", "Practice", "Papers", "Progress", "Plan"];
   const kinds = identity ? signedInKinds(identity, family) : [];
   async function create(
     mode: string,
@@ -192,7 +202,7 @@ export function Vault() {
     topic?: string,
     retryOf?: string,
   ) {
-    if (!selected) throw new Error("A parent needs to add your course first.");
+    if (!selected) throw new Error("Set up your course in Study first.");
     const result = await api("family/attempt/create", {
       familyId: family,
       learnerId: learner,
@@ -307,22 +317,6 @@ export function Vault() {
             </button>
           ))}
         </nav>
-        {data?.role === "student" && (
-          <nav className="secondary-nav" aria-label="Planning">
-            <button
-              disabled={!!attempt}
-              className={`nav-button ${page === "Plan" ? "active" : ""}`}
-              onClick={() => {
-                setPage("Plan");
-                setAttempt("");
-                setAssessment("");
-              }}
-            >
-              <Icon name="Plan" />
-              Plan
-            </button>
-          </nav>
-        )}
         {identity.superuser && (
           <>
             <p className="eyebrow" style={{ marginBottom: -20 }}>
@@ -486,14 +480,16 @@ export function Vault() {
           <Assessment
             familyId={family}
             id={assessment}
-            parent={data?.role === "parent"}
+            reviewer={data?.role === "teacher"}
             run={run}
             onBack={() => {
               setAssessment("");
               void refresh();
             }}
-            onRetry={(id, topic) =>
-              run(() => create("guided", undefined, topic, id))
+            onRetry={
+              data?.role === "student"
+                ? (id, topic) => run(() => create("guided", undefined, topic, id))
+                : undefined
             }
           />
         ) : !data ? (
@@ -509,58 +505,11 @@ export function Vault() {
           </div>
         ) : (
           <>
-            {data.role !== "student" && data.learners.length > 0 && (
-              <div className="student-360" aria-label="Students">
-                {data.learners.map((person: any) => {
-                  const courses = data.enrolments.filter(
-                    (item: any) => item.learner_id === person.id,
-                  );
-                  return (
-                    <button
-                      type="button"
-                      className={`student-card${person.id === learner ? " selected" : ""}`}
-                      aria-pressed={person.id === learner}
-                      aria-label={`Open courses for ${person.name}`}
-                      key={person.id}
-                      onClick={() => {
-                        setLearner(person.id);
-                        if (!courses.some((item: any) => item.id === course))
-                          setCourse(courses[0]?.id ?? "");
-                        if (data.role !== "parent") return;
-                        setPage("Family");
-                        setAttempt("");
-                        setAssessment("");
-                        setTimeout(() => {
-                          document
-                            .getElementById("student-courses")
-                            ?.scrollIntoView({ block: "start" });
-                        }, 0);
-                      }}
-                    >
-                      <strong>{person.name}</strong>
-                      <small>
-                        {courses.length
-                          ? courses
-                              .map((item: any) =>
-                                item.data.subject === "psychology"
-                                  ? "Psychology"
-                                  : "Business",
-                              )
-                              .join(" · ")
-                          : "No courses yet"}
-                      </small>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {page !== "Family" &&
+            {data.role === "student" &&
+              page !== "Study" &&
               data.enrolments.filter((item: any) => item.learner_id === learner)
                 .length > 0 && (
-                <div
-                  className="subject-switch"
-                  aria-label={`${student?.name ?? "Student"}'s courses`}
-                >
+                <div className="subject-switch" aria-label="Your courses">
                   {data.enrolments
                     .filter((item: any) => item.learner_id === learner)
                     .map((item: any) => (
@@ -568,23 +517,8 @@ export function Vault() {
                         type="button"
                         className={`subject-button${item.id === selected?.id ? " selected" : ""}`}
                         aria-pressed={item.id === selected?.id}
-                        aria-label={
-                          data.role === "parent"
-                            ? `Edit ${item.data.subject === "psychology" ? "Psychology" : "Business"}`
-                            : undefined
-                        }
                         key={item.id}
-                        onClick={() => {
-                          setCourse(item.id);
-                          if (data.role !== "parent") return;
-                          setCourseEdit({
-                            subject: item.data.subject,
-                            at: Date.now(),
-                          });
-                          setPage("Family");
-                          setAttempt("");
-                          setAssessment("");
-                        }}
+                        onClick={() => setCourse(item.id)}
                       >
                         <span>
                           <strong>
@@ -661,7 +595,7 @@ export function Vault() {
                 onPapers={() => setPage("Papers")}
               />
             )}
-            {page === "Papers" && data.role !== "teacher" && (
+            {page === "Papers" && data.role === "student" && (
               <>
                 <PageHeading
                   label="PAST PAPERS"
@@ -679,7 +613,7 @@ export function Vault() {
                 />
               </>
             )}
-            {page === "Progress" && (
+            {page === "Progress" && data.role === "student" && (
               <Progress
                 initialTopic={historyTopic}
                 familyId={family}
@@ -692,7 +626,16 @@ export function Vault() {
                 }
               />
             )}
-            {page === "Family" && (
+            {page === "Progress" && data.role === "parent" && (
+              <ParentMonitor data={data} onAssessment={setAssessment} />
+            )}
+            {page === "Students" && data.role === "teacher" && (
+              <TeacherStudents data={data} onAssessment={setAssessment} />
+            )}
+            {page === "Guidance" && data.role === "teacher" && (
+              <TeacherGuidance data={data} />
+            )}
+            {page === "Study" && data.role === "student" && (
               <FamilySettings
                 familyId={family}
                 learnerId={learner}
@@ -701,7 +644,6 @@ export function Vault() {
                 papers={data.papers}
                 run={run}
                 refresh={refresh}
-                courseEdit={courseEdit}
               />
             )}
             {page === "Reviews" && (

@@ -49,13 +49,15 @@ export async function snapshot(actor: Actor, familyId: string) {
   return family(actor, familyId, async (tx, role) => {
     const learners = (
       await tx.query(
-        role === "parent"
+        role === "parent" || role === "teacher" || role === "superuser"
           ? "SELECT * FROM learners WHERE family_id=$1 ORDER BY name"
           : `SELECT l.* FROM learners l
              JOIN memberships m ON m.family_id=l.family_id AND m.user_id=$2 AND m.active
              WHERE l.family_id=$1 AND m.role='student' AND m.learner_id=l.id
              ORDER BY l.name`,
-        role === "parent" ? [familyId] : [familyId, actor.id],
+        role === "parent" || role === "teacher" || role === "superuser"
+          ? [familyId]
+          : [familyId, actor.id],
       )
     ).rows;
     const ids = learners.map((l) => l.id);
@@ -161,7 +163,13 @@ export async function saveEnrolment(
     .object({ learnerId: z.string().uuid(), course: Enrolment })
     .parse(input);
   return family(actor, familyId, async (tx) => {
-    await learnerAccess(tx, actor, familyId, data.learnerId, true);
+    const who = await learnerAccess(tx, actor, familyId, data.learnerId);
+    requireThat(
+      who === "student",
+      "FORBIDDEN",
+      "Students arrange their own courses.",
+      403,
+    );
     const id = randomUUID();
     await tx.query(
       "INSERT INTO enrolments(id,family_id,learner_id,data) VALUES($1,$2,$3,$4) ON CONFLICT(learner_id,(data->>'subject')) DO UPDATE SET data=EXCLUDED.data",
@@ -182,7 +190,13 @@ export async function removeEnrolment(
     })
     .parse(input);
   return family(actor, familyId, async (tx) => {
-    await learnerAccess(tx, actor, familyId, data.learnerId, true);
+    const who = await learnerAccess(tx, actor, familyId, data.learnerId);
+    requireThat(
+      who === "student",
+      "FORBIDDEN",
+      "Students arrange their own courses.",
+      403,
+    );
     const removed = await tx.query(
       `DELETE FROM enrolments
        WHERE family_id=$1 AND learner_id=$2 AND data->>'subject'=$3`,
@@ -214,7 +228,7 @@ export async function assessmentDetail(
         submission.attempt_id,
       ])
     ).rows[0];
-    const released = role === "parent" || r.state === "published";
+    const released = role === "teacher" || r.state === "published";
     const questions = attempt.data.questions
       .filter(
         (q: any) =>
@@ -227,15 +241,15 @@ export async function assessmentDetail(
       );
     return {
       ...r,
-      candidates: role === "parent" ? r.candidates : undefined,
-      provenance: role === "parent" ? r.provenance : undefined,
+      candidates: role === "teacher" ? r.candidates : undefined,
+      provenance: role === "teacher" ? r.provenance : undefined,
       effective: r.state === "published" ? r.effective : undefined,
       submission,
       questions,
       choiceGroups: attempt.data.choices,
       resources: attempt.data.resources,
       decisions:
-        role === "parent"
+        role === "teacher"
           ? (
               await tx.query(
                 "SELECT data,created_at FROM review_decisions WHERE assessment_id=$1 ORDER BY created_at",
@@ -271,6 +285,20 @@ export async function familyAction(
     ])
     .parse(input);
   return family(actor, familyId, async (tx, role) => {
+    if (data.action === "release") {
+      const who = await learnerAccess(tx, actor, familyId, data.learnerId);
+      requireThat(
+        who === "student",
+        "FORBIDDEN",
+        "Students release their own papers.",
+        403,
+      );
+      await tx.query(
+        "INSERT INTO catalogue_releases(family_id,paper_id,released_by) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
+        [familyId, data.paperId, actor.id],
+      );
+      return { released: true };
+    }
     requireThat(role === "parent", "FORBIDDEN", "Parent access required.", 403);
     if (data.action === "cap") {
       await learnerAccess(tx, actor, familyId, data.learnerId, true);
@@ -278,13 +306,6 @@ export async function familyAction(
         data.learnerId,
         data.micros,
       ]);
-    }
-    if (data.action === "release") {
-      await learnerAccess(tx, actor, familyId, data.learnerId, true);
-      await tx.query(
-        "INSERT INTO catalogue_releases(family_id,paper_id,released_by) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
-        [familyId, data.paperId, actor.id],
-      );
     }
     if (data.action === "export") {
       const ids = (

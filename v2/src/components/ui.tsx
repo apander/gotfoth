@@ -34,10 +34,13 @@ const paths: Record<string, string> = {
 };
 export function Icon({ name }: { name: string }) {
   const aliases: Record<string, string> = {
-    Overview: "Today",
-    Families: "Family",
-    Invitations: "Arrow",
-    Catalogue: "Papers",
+  Overview: "Today",
+  Families: "Family",
+  Invitations: "Arrow",
+  Catalogue: "Papers",
+  Study: "Plan",
+  Students: "Family",
+  Guidance: "Reviews",
   };
   return (
     <svg

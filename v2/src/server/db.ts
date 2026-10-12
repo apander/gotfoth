@@ -88,7 +88,7 @@ export async function family<T>(
     let role = membership.rows[0]?.role as string | undefined;
     if (!role) {
       if (!(await accountIsSuperuser(actor))) throw missing();
-      role = "parent";
+      role = "superuser";
     }
     return fn(tx, role);
   }, familyId);
@@ -102,7 +102,9 @@ export async function learnerAccess(
 ) {
   const result = await tx.query(
     `SELECT m.role FROM memberships m WHERE m.user_id=$1 AND m.family_id=$2 AND m.active AND
-    ((m.role='student' AND m.learner_id=$3 AND NOT $4) OR (m.role='parent' AND EXISTS(SELECT 1 FROM learners l WHERE l.id=$3 AND l.family_id=m.family_id)))`,
+    ((m.role='student' AND m.learner_id=$3 AND NOT $4)
+      OR (m.role='teacher' AND NOT $4 AND EXISTS(SELECT 1 FROM learners l WHERE l.id=$3 AND l.family_id=m.family_id))
+      OR (m.role='parent' AND EXISTS(SELECT 1 FROM learners l WHERE l.id=$3 AND l.family_id=m.family_id)))`,
     [actor.id, familyId, learnerId, parentOnly],
   );
   if (!result.rows.length) throw missing();

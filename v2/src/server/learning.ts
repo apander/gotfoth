@@ -48,7 +48,13 @@ export async function createAttemptInTransaction(
       retryOf: z.string().uuid().optional(),
     })
     .parse(input);
-  await learnerAccess(tx, actor, familyId, data.learnerId);
+  const role = await learnerAccess(tx, actor, familyId, data.learnerId);
+  requireThat(
+    role === "student",
+    "FORBIDDEN",
+    "Students start their own practice.",
+    403,
+  );
   const row = (
     await tx.query(
       "SELECT data FROM enrolments WHERE id=$1 AND learner_id=$2",
@@ -160,7 +166,7 @@ export async function createAttemptInTransaction(
     requireThat(
       selection.length,
       "NO_QUESTIONS",
-      "No eligible questions are available. Add taught topics or ask a parent to release a reserved paper.",
+      "No eligible questions are available. Add the topics you have studied, or release a reserved paper from Study.",
     );
     questions = selection.map((s) => ({
       ...s.question,

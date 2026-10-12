@@ -438,12 +438,14 @@ export async function review(actor: Actor, familyId: string, input: unknown) {
       ])
     ).rows[0];
     if (!r) throw missing();
-    await learnerAccess(
-      tx,
-      actor,
-      familyId,
-      r.learner_id,
-      data.action !== "query",
+    const role = await learnerAccess(tx, actor, familyId, r.learner_id);
+    requireThat(
+      data.action === "query" ? role === "student" : role === "teacher",
+      "FORBIDDEN",
+      data.action === "query"
+        ? "Students query their own results."
+        : "Teachers review results.",
+      403,
     );
     const s = (
       await tx.query("SELECT * FROM submissions WHERE id=$1", [r.submission_id])
