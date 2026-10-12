@@ -266,7 +266,7 @@ export function Vault() {
       </a>
       <aside className="sidebar">
         <Brand />
-        {identity.workspaces.length > 0 && (
+        {identity.superuser && identity.workspaces.length > 0 && (
           <select
             className="workspace"
             disabled={!!attempt}
