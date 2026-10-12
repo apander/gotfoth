@@ -5,14 +5,8 @@ import { PageHeading, Empty } from "./ui";
 import { Button, Meter } from "./ui";
 import { score } from "./revision";
 import { ScheduleFields } from "./schedule-fields";
+import { examSessionChoices } from "../lib/sessions";
 type Run = (fn: () => Promise<void>) => void;
-const examMonths = ["January", "June", "October"] as const;
-function examSessionChoices(now = new Date()) {
-  const start = now.getFullYear();
-  return Array.from({ length: 4 }, (_, index) => start + index).flatMap((year) =>
-    examMonths.map((month) => `${month} ${year}`),
-  );
-}
 export function Progress({
   initialTopic,
   familyId,
