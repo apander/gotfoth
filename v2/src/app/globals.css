@@ -453,6 +453,10 @@ svg {
 .stack > .button {
   justify-self: start;
 }
+.stack > p.muted {
+  margin: 0;
+  font-size: var(--text-sm);
+}
 .section-title {
   display: flex;
   align-items: center;

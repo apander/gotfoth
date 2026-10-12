@@ -379,13 +379,22 @@ export function Admin({
                         role: adult.role,
                       }))
                       .filter((adult) => adult.name || adult.email);
-                    if (adults.some((adult) => !adult.name || !adult.email)) {
-                      setFormError("Each parent or teacher needs a name and a school email.");
+                    const incomplete = adults.filter((adult) => !adult.name || !adult.email);
+                    if (incomplete.length) {
+                      const parents = incomplete.some((adult) => adult.role === "parent");
+                      const teachers = incomplete.some((adult) => adult.role === "teacher");
+                      setFormError(
+                        parents && teachers
+                          ? "Each parent needs a name and an email. Each teacher needs a name and a school email."
+                          : teachers
+                            ? "Each teacher needs a name and a school email."
+                            : "Each parent needs a name and an email.",
+                      );
                       return;
                     }
                     const emails = [...students.map((student) => student.email), ...adults.map((adult) => adult.email)];
                     if (new Set(emails).size !== emails.length) {
-                      setFormError("Each person needs a different school email.");
+                      setFormError("Each person needs a different email.");
                       return;
                     }
                     try {
@@ -588,6 +597,9 @@ export function Admin({
                 </div>
                 <div className="stack">
                   <span className="field">Parents and teachers</span>
+                  <p className="muted">
+                    Parents use a personal email. Teachers use a school email.
+                  </p>
                   {draft.adults.map((adult) => (
                     <div className="student-row" key={adult.key}>
                       <input
@@ -607,8 +619,8 @@ export function Admin({
                       />
                       <input
                         type="email"
-                        aria-label="Parent or teacher email"
-                        placeholder="School email"
+                        aria-label={adult.role === "teacher" ? "Teacher school email" : "Parent email"}
+                        placeholder={adult.role === "teacher" ? "School email" : "Email"}
                         value={adult.email}
                         onChange={(event) =>
                           setDraft({
