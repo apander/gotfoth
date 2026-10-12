@@ -25,6 +25,7 @@ export const learners = pgTable("learners", {
     .notNull()
     .references(() => families.id),
   name: text().notNull(),
+  email: text(),
   monthlyCap: bigint("monthly_cap", { mode: "number" })
     .notNull()
     .default(10000000),

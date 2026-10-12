@@ -14,26 +14,43 @@ import { validatePaper } from "../lib/domain";
 const hash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 const learnerName = z.string().trim().min(1).max(100);
+const learnerRecord = z.object({
+  id: z.string().uuid().optional(),
+  name: learnerName,
+  email: z.string().trim().max(200).optional(),
+});
 const familyChange = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("create"),
     name: learnerName,
-    learners: z.array(learnerName).min(1).max(20),
+    learners: z.array(learnerRecord).min(1).max(20),
   }),
   z.object({
     action: z.literal("update"),
     id: z.string().uuid(),
     name: learnerName,
     suspended: z.boolean(),
-    learners: z
-      .array(z.object({ id: z.string().uuid().optional(), name: learnerName }))
-      .max(20),
+    learners: z.array(learnerRecord).max(20),
   }),
   z.object({
     action: z.literal("delete"),
     id: z.string().uuid(),
   }),
 ]);
+function cleanEmail(value?: string | null) {
+  const email = value?.trim().toLowerCase() ?? "";
+  if (!email) return null;
+  requireThat(z.email().safeParse(email).success, "EMAIL", "Enter a valid email address.");
+  return email;
+}
+async function assertLearnerEmailFree(tx: Tx, email: string | null, learnerId: string) {
+  if (!email) return;
+  const taken = await tx.query(
+    "SELECT id FROM learners WHERE lower(email)=lower($1) AND id<>$2",
+    [email, learnerId],
+  );
+  requireThat(taken.rows.length === 0, "EMAIL", "That student email is already used.");
+}
 async function learnerIsFree(tx: Tx, learnerId: string) {
   const linked = await tx.query(
     `SELECT
@@ -75,13 +92,19 @@ export async function saveFamilyInTransaction(
   if (data.action === "create") {
     await tx.query("INSERT INTO families(id,name) VALUES($1,$2)", [id, data.name]);
     await tx.query("INSERT INTO funding_accounts(family_id) VALUES($1)", [id]);
-    for (const name of data.learners)
+    const learners = [];
+    for (const learner of data.learners) {
+      const learnerId = randomUUID();
+      const email = cleanEmail(learner.email);
+      await assertLearnerEmailFree(tx, email, learnerId);
       await tx.query(
-        "INSERT INTO learners(id,family_id,name) VALUES($1,$2,$3)",
-        [randomUUID(), id, name],
+        "INSERT INTO learners(id,family_id,name,email) VALUES($1,$2,$3,$4)",
+        [learnerId, id, learner.name, email],
       );
+      learners.push({ id: learnerId, name: learner.name, email });
+    }
     await audit(tx, actor.id, "family.created", { id }, id);
-    return { id };
+    return { id, learners };
   }
   const family = await tx.query(
     "UPDATE families SET name=$2, suspended=$3 WHERE id=$1 AND deleted_at IS NULL RETURNING id",
@@ -89,13 +112,18 @@ export async function saveFamilyInTransaction(
   );
   if (!family.rows.length) throw missing();
   const existing = await tx.query(
-    "SELECT id,name FROM learners WHERE family_id=$1",
+    "SELECT id,name,email FROM learners WHERE family_id=$1",
     [id],
   );
   const kept = new Set(data.learners.flatMap((learner) => (learner.id ? [learner.id] : [])));
   for (const row of existing.rows) {
     if (kept.has(row.id)) continue;
     await tx.query("DELETE FROM parent_links WHERE learner_id=$1", [row.id]);
+    await tx.query(
+      "UPDATE invitations SET revoked_at=now(), learner_id=NULL WHERE learner_id=$1 AND accepted_at IS NULL",
+      [row.id],
+    );
+    await tx.query("DELETE FROM memberships WHERE learner_id=$1 AND role='student'", [row.id]);
     requireThat(
       await learnerIsFree(tx, row.id),
       "LEARNER_IN_USE",
@@ -103,19 +131,24 @@ export async function saveFamilyInTransaction(
     );
     await tx.query("DELETE FROM learners WHERE id=$1 AND family_id=$2", [row.id, id]);
   }
+  const learners = [];
   for (const learner of data.learners) {
+    const email = cleanEmail(learner.email);
+    const learnerId = learner.id ?? randomUUID();
+    await assertLearnerEmailFree(tx, email, learnerId);
     if (!learner.id) {
       await tx.query(
-        "INSERT INTO learners(id,family_id,name) VALUES($1,$2,$3)",
-        [randomUUID(), id, learner.name],
+        "INSERT INTO learners(id,family_id,name,email) VALUES($1,$2,$3,$4)",
+        [learnerId, id, learner.name, email],
       );
-      continue;
+    } else {
+      const owned = await tx.query(
+        "UPDATE learners SET name=$3, email=$4 WHERE id=$1 AND family_id=$2 RETURNING id",
+        [learner.id, id, learner.name, email],
+      );
+      if (!owned.rows.length) throw missing();
     }
-    const owned = await tx.query(
-      "UPDATE learners SET name=$3 WHERE id=$1 AND family_id=$2 RETURNING id",
-      [learner.id, id, learner.name],
-    );
-    if (!owned.rows.length) throw missing();
+    learners.push({ id: learnerId, name: learner.name, email });
   }
   await tx.query(
     `INSERT INTO parent_links(user_id,family_id,learner_id)
@@ -127,7 +160,7 @@ export async function saveFamilyInTransaction(
     [id],
   );
   await audit(tx, actor.id, "family.updated", { id }, id);
-  return { id };
+  return { id, learners };
 }
 export async function invite(actor: Actor, input: unknown) {
   await superuser(actor);
@@ -221,6 +254,11 @@ export async function acceptInvitationInTransaction(
       inv.role === "student" ? inv.learner_id : null,
     ],
   );
+  if (inv.display_name)
+    await tx.query(
+      "UPDATE memberships SET display_name=$3 WHERE user_id=$1 AND family_id=$2 AND display_name IS NULL",
+      [actor.id, inv.family_id, inv.display_name],
+    );
   const membership = await tx.query(
     "SELECT * FROM memberships WHERE user_id=$1 AND family_id=$2",
     [actor.id, inv.family_id],
@@ -259,7 +297,7 @@ export async function adminSnapshot(actor: Actor) {
         "SELECT * FROM families WHERE deleted_at IS NULL ORDER BY lower(name)",
       ),
       database().query(
-        "SELECT id,email,family_id,role,expires_at,revoked_at,accepted_at FROM invitations ORDER BY expires_at DESC LIMIT 100",
+        "SELECT id,email,display_name,family_id,role,learner_id,expires_at,revoked_at,accepted_at FROM invitations ORDER BY expires_at DESC LIMIT 100",
       ),
       database().query(
         "SELECT * FROM catalogue ORDER BY published_at DESC NULLS FIRST",
@@ -274,11 +312,11 @@ export async function adminSnapshot(actor: Actor) {
   for (const f of families.rows) {
     const detail = await transaction(async (tx) => {
       const learners = await tx.query(
-        "SELECT id,name FROM learners WHERE family_id=$1 ORDER BY name",
+        "SELECT id,name,email FROM learners WHERE family_id=$1 ORDER BY name",
         [f.id],
       );
       const members = await tx.query(
-        `SELECT u.email, m.role,
+        `SELECT u.email, COALESCE(m.display_name, u.name) AS name, m.role,
            COALESCE(l.name, (
              SELECT string_agg(pl.name, ', ' ORDER BY pl.name)
              FROM parent_links p
@@ -294,7 +332,14 @@ export async function adminSnapshot(actor: Actor) {
       );
       return { learners: learners.rows, members: members.rows };
     }, f.id);
-    familyRows.push({ ...f, ...detail });
+    const invites = invitations.rows.filter(
+      (invite) =>
+        invite.family_id === f.id &&
+        !invite.accepted_at &&
+        !invite.revoked_at &&
+        new Date(invite.expires_at) > new Date(),
+    );
+    familyRows.push({ ...f, ...detail, invites });
   }
   return {
     families: familyRows,
@@ -327,6 +372,7 @@ const memberInput = z.object({
   action: z.enum(["set", "remove"]),
   familyId: z.string().uuid(),
   email: z.email(),
+  name: z.string().trim().max(100).optional(),
   role: z.enum(["parent", "student", "teacher"]).optional(),
   learnerId: z.string().uuid().nullable().optional(),
 });
@@ -355,7 +401,19 @@ export async function setMemberInTransaction(
       'SELECT id FROM "user" WHERE lower(email)=$1',
       [email],
     );
-    if (!member.rows.length) throw missing();
+    if (!member.rows.length) {
+      const revoked = await tx.query(
+        "UPDATE invitations SET revoked_at=now() WHERE family_id=$1 AND lower(email)=$2 AND accepted_at IS NULL RETURNING id",
+        [data.familyId, email],
+      );
+      requireThat(revoked.rows.length, "NOT_FOUND", "This person is not in the family.", 404);
+      await audit(tx, actor.id, "member.removed", { email }, data.familyId);
+      return { saved: true };
+    }
+    await tx.query(
+      "UPDATE invitations SET revoked_at=now() WHERE family_id=$1 AND lower(email)=$2 AND accepted_at IS NULL",
+      [data.familyId, email],
+    );
     await tx.query(
       "DELETE FROM parent_links WHERE user_id=$1 AND family_id=$2",
       [member.rows[0].id, data.familyId],
@@ -387,17 +445,30 @@ export async function setMemberInTransaction(
   ]);
   if (user.rows.length)
     await assertOneStudentFamily(tx, user.rows[0].id, data.familyId, role);
+  const displayName = data.name?.trim() || null;
   if (!user.rows.length) {
     const token = randomBytes(32).toString("base64url");
+    const pending = await tx.query(
+      `UPDATE invitations
+       SET role=$3, learner_id=$4, display_name=$5, expires_at=now()+interval '7 days', revoked_at=NULL
+       WHERE family_id=$1 AND lower(email)=$2 AND accepted_at IS NULL
+       RETURNING id`,
+      [data.familyId, email, role, role === "student" ? learnerId : null, displayName],
+    );
+    if (pending.rows.length) {
+      await audit(tx, actor.id, "member.invited", { email, role }, data.familyId);
+      return { saved: true };
+    }
     await tx.query(
-      "INSERT INTO invitations(id,token_hash,email,family_id,role,learner_id,expires_at,created_by) VALUES($1,$2,$3,$4,$5,$6,now()+interval '7 days',$7)",
+      "INSERT INTO invitations(id,token_hash,email,family_id,role,learner_id,display_name,expires_at,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval '7 days',$8)",
       [
         randomUUID(),
         hash(token),
         email,
         data.familyId,
         role,
-        role === "teacher" ? null : learnerId,
+        role === "student" ? learnerId : null,
+        displayName,
         actor.id,
       ],
     );
@@ -405,11 +476,12 @@ export async function setMemberInTransaction(
     return { url: `${process.env.BETTER_AUTH_URL}/?invite=${token}` };
   }
   await tx.query(
-    `INSERT INTO memberships(user_id,family_id,role,learner_id,active)
-     VALUES($1,$2,$3,$4,true)
+    `INSERT INTO memberships(user_id,family_id,role,learner_id,active,display_name)
+     VALUES($1,$2,$3,$4,true,$5)
      ON CONFLICT(user_id,family_id) DO UPDATE
-     SET role=EXCLUDED.role, learner_id=EXCLUDED.learner_id, active=true`,
-    [user.rows[0].id, data.familyId, role, role === "student" ? learnerId : null],
+     SET role=EXCLUDED.role, learner_id=EXCLUDED.learner_id, active=true,
+         display_name=COALESCE(EXCLUDED.display_name, memberships.display_name)`,
+    [user.rows[0].id, data.familyId, role, role === "student" ? learnerId : null, displayName],
   );
   await tx.query("DELETE FROM parent_links WHERE user_id=$1 AND family_id=$2", [
     user.rows[0].id,
