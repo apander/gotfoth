@@ -807,6 +807,10 @@ details > label {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   color: var(--ink);
+  cursor: pointer;
+}
+.student-card:hover {
+  border-color: var(--accent);
 }
 .student-card.selected {
   border-color: var(--accent);
@@ -819,7 +823,13 @@ details > label {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+}
+.course-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
 }
 .course-card header {
   display: flex;

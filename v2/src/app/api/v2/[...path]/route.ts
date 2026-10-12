@@ -6,6 +6,7 @@ import {
   identity,
   snapshot,
   saveEnrolment,
+  removeEnrolment,
   assessmentDetail,
   familyAction,
   operatorAction,
@@ -112,6 +113,8 @@ async function handle(
         result = await operatorAction(user, body);
       else if (path === "family/enrolment")
         result = await saveEnrolment(user, familyId, body);
+      else if (path === "family/enrolment/delete")
+        result = await removeEnrolment(user, familyId, body);
       else if (path === "family/attempt/create")
         result = await createAttempt(user, familyId, body);
       else if (path === "family/attempt/action")

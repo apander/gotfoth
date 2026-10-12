@@ -170,6 +170,28 @@ export async function saveEnrolment(
     return { saved: true };
   });
 }
+export async function removeEnrolment(
+  actor: Actor,
+  familyId: string,
+  input: unknown,
+) {
+  const data = z
+    .object({
+      learnerId: z.string().uuid(),
+      subject: z.enum(["psychology", "business"]),
+    })
+    .parse(input);
+  return family(actor, familyId, async (tx) => {
+    await learnerAccess(tx, actor, familyId, data.learnerId, true);
+    const removed = await tx.query(
+      `DELETE FROM enrolments
+       WHERE family_id=$1 AND learner_id=$2 AND data->>'subject'=$3`,
+      [familyId, data.learnerId, data.subject],
+    );
+    if (!removed.rowCount) throw missing();
+    return { removed: true };
+  });
+}
 export async function assessmentDetail(
   actor: Actor,
   familyId: string,
