@@ -443,6 +443,14 @@ export function Vault() {
           <AccountPage
             run={run}
             busy={busy}
+            onRenamed={(name) => {
+              setIdentity((current: any) =>
+                current
+                  ? { ...current, user: { ...current.user, name } }
+                  : current,
+              );
+              if (family) void refresh();
+            }}
             onDeleted={async () => {
               try {
                 await authClient.signOut();

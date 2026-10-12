@@ -7,10 +7,12 @@ export function AccountPage({
   run,
   busy,
   onDeleted,
+  onRenamed,
 }: {
   run: (fn: () => Promise<void>) => void;
   busy: boolean;
   onDeleted: () => Promise<void>;
+  onRenamed: (name: string) => void;
 }) {
   const [account, setAccount] = useState<any>(null),
     [name, setName] = useState(""),
@@ -43,6 +45,7 @@ export function AccountPage({
             const value = await api("account", { name: name.trim() });
             setAccount(value);
             setName(value.name ?? "");
+            onRenamed(value.name ?? name.trim());
             setSaved("Name saved.");
           });
         }}
