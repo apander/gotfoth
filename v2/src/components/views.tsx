@@ -259,8 +259,273 @@ export function Progress({
     </>
   );
 }
+const courseSubjects = [
+  { id: "psychology", label: "Psychology", code: "YPS01" },
+  { id: "business", label: "Business", code: "YBS11" },
+] as const;
+function topicLabel(id: string) {
+  const text = id.replaceAll(".", " ").replaceAll("_", " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+function studyTimes(slots: { day: number; start: string; minutes: number }[]) {
+  const names = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
+  return slots
+    .map((slot) => {
+      const [hour, minute] = slot.start.split(":").map(Number);
+      const end = hour * 60 + minute + slot.minutes;
+      const endText = `${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
+      return `${names[slot.day]} ${slot.start}–${endText}`;
+    })
+    .join(" · ");
+}
+function CoursePanel({
+  subject,
+  enrolment,
+  papers,
+  familyId,
+  learnerId,
+  open,
+  onOpen,
+  run,
+  refresh,
+}: {
+  subject: (typeof courseSubjects)[number];
+  enrolment: any;
+  papers: any[];
+  familyId: string;
+  learnerId: string;
+  open: boolean;
+  onOpen: () => void;
+  run: Run;
+  refresh: () => Promise<void>;
+}) {
+  const saved = enrolment?.data;
+  const [session, setSession] = useState(saved?.targetSession ?? ""),
+    [spec, setSpec] = useState(saved?.specification ?? ""),
+    [topics, setTopics] = useState<string[]>(saved?.taughtTopics ?? []),
+    [option, setOption] = useState(saved?.option ?? ""),
+    [extra, setExtra] = useState(saved?.extraTimePercent ?? 0),
+    [timezone, setTimezone] = useState(
+      saved?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+    ),
+    [availability, setAvailability] = useState(
+      JSON.stringify(
+        saved?.availability ?? [
+          { day: 1, start: "17:00", minutes: 20 },
+          { day: 4, start: "17:00", minutes: 20 },
+        ],
+      ),
+    ),
+    [examDates, setExamDates] = useState(JSON.stringify(saved?.examDates ?? []));
+  useEffect(() => {
+    setSession(saved?.targetSession ?? "");
+    setSpec(saved?.specification ?? "");
+    setTopics(saved?.taughtTopics ?? []);
+    setOption(saved?.option ?? "");
+    setExtra(saved?.extraTimePercent ?? 0);
+    setTimezone(
+      saved?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+    );
+    setAvailability(
+      JSON.stringify(
+        saved?.availability ?? [
+          { day: 1, start: "17:00", minutes: 20 },
+          { day: 4, start: "17:00", minutes: 20 },
+        ],
+      ),
+    );
+    setExamDates(JSON.stringify(saved?.examDates ?? []));
+  }, [learnerId, enrolment?.id]);
+  const sessions = examSessionChoices();
+  const specs = [
+    ...new Set(
+      papers
+        .filter((paper) => paper.subject === subject.id)
+        .flatMap((paper) => paper.compatibleSpecifications ?? []),
+    ),
+  ];
+  if (spec && !specs.includes(spec)) specs.unshift(spec);
+  const catalogueTopics = [
+    ...new Set(
+      papers
+        .filter((paper) => paper.subject === subject.id)
+        .flatMap((paper) => paper.topics ?? []),
+    ),
+  ];
+  const topicChoices = [...new Set([...catalogueTopics, ...topics])];
+  return (
+    <article className="card course-card">
+      <header>
+        <div>
+          <h2>
+            {subject.label} · {subject.code}
+          </h2>
+          <p className="muted">
+            {saved
+              ? `${saved.targetSession} · ${saved.taughtTopics.length} taught topics`
+              : "Not set up"}
+          </p>
+        </div>
+        {!open && (
+          <button className="button secondary small" type="button" onClick={onOpen}>
+            {saved ? "Edit" : "Add"}
+          </button>
+        )}
+      </header>
+      {!open && saved && (
+        <div className="stack">
+          {saved.taughtTopics.length > 0 && (
+            <div className="topic-choices">
+              {saved.taughtTopics.map((topic: string) => (
+                <span className="topic-choice" key={topic}>
+                  {topicLabel(topic)}
+                </span>
+              ))}
+            </div>
+          )}
+          {saved.availability?.length > 0 && (
+            <p className="muted">{studyTimes(saved.availability)}</p>
+          )}
+        </div>
+      )}
+      {open && (
+        <form
+          className="stack"
+          onSubmit={(event) => {
+            event.preventDefault();
+            run(async () => {
+              await api("family/enrolment", {
+                familyId,
+                learnerId,
+                course: {
+                  subject: subject.id,
+                  specification: spec,
+                  targetSession: session,
+                  taughtTopics: topics,
+                  option: subject.id === "psychology" && option ? option : undefined,
+                  timezone,
+                  extraTimePercent: extra,
+                  sessionMinutes: 20,
+                  availability: JSON.parse(availability),
+                  examDates: JSON.parse(examDates),
+                  blockedDates: saved?.blockedDates ?? [],
+                },
+              });
+              await refresh();
+            });
+          }}
+        >
+          <div className="form-grid">
+            <label className="field">
+              Target exam session
+              <select
+                required
+                value={sessions.includes(session) ? session : ""}
+                onChange={(event) => setSession(event.target.value)}
+              >
+                <option value="">Choose a session</option>
+                {sessions.map((choice) => (
+                  <option value={choice} key={choice}>
+                    {choice}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              Specification
+              <select
+                required
+                value={spec}
+                onChange={(event) => setSpec(event.target.value)}
+              >
+                <option value="">Choose a specification</option>
+                {specs.map((item) => (
+                  <option value={item} key={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {subject.id === "psychology" && (
+              <label className="field">
+                Unit 3 option
+                <select value={option} onChange={(event) => setOption(event.target.value)}>
+                  <option value="">Not selected</option>
+                  <option value="health">Health psychology</option>
+                  <option value="criminological">Criminological psychology</option>
+                </select>
+              </label>
+            )}
+            <label className="field">
+              Extra-time allowance (%)
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={extra}
+                onChange={(event) => setExtra(Number(event.target.value))}
+              />
+            </label>
+            <label className="field">
+              Time zone
+              <input
+                value={timezone}
+                onChange={(event) => setTimezone(event.target.value)}
+              />
+            </label>
+          </div>
+          <fieldset className="stack">
+            <legend>Topics already taught</legend>
+            {topicChoices.length ? (
+              <div className="topic-choices">
+                {topicChoices.map((topic) => (
+                  <label className="topic-choice" key={topic}>
+                    <input
+                      type="checkbox"
+                      checked={topics.includes(topic)}
+                      onChange={() =>
+                        setTopics((current) =>
+                          current.includes(topic)
+                            ? current.filter((item) => item !== topic)
+                            : [...current, topic],
+                        )
+                      }
+                    />
+                    {topicLabel(topic)}
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">
+                Topics from the reviewed catalogue will appear here.
+              </p>
+            )}
+          </fieldset>
+          <ScheduleFields
+            kind="availability"
+            value={availability}
+            onChange={setAvailability}
+          />
+          <ScheduleFields kind="exams" value={examDates} onChange={setExamDates} />
+          <button className="button" type="submit">
+            Save {subject.label}
+          </button>
+        </form>
+      )}
+    </article>
+  );
+}
 export function FamilySettings({
   familyId,
+  learnerId,
   learners,
   enrolments,
   papers,
@@ -268,191 +533,44 @@ export function FamilySettings({
   refresh,
 }: {
   familyId: string;
+  learnerId: string;
   learners: any[];
   enrolments: any[];
   papers: any[];
   run: Run;
   refresh: () => Promise<void>;
 }) {
-  const [learner, setLearner] = useState(learners[0]?.id ?? ""),
-    [subject, setSubject] = useState("psychology"),
-    [session, setSession] = useState(""),
-    [spec, setSpec] = useState(""),
-    [topics, setTopics] = useState(""),
-    [option, setOption] = useState(""),
-    [extra, setExtra] = useState(0),
-    [timezone, setTimezone] = useState(
-      Intl.DateTimeFormat().resolvedOptions().timeZone,
-    ),
-    [availability, setAvailability] = useState(
-      '[{"day":1,"start":"17:00","minutes":20},{"day":4,"start":"17:00","minutes":20}]',
-    ),
-    [examDates, setExamDates] = useState("[]");
+  const student = learners.find((person) => person.id === learnerId);
+  const mine = enrolments.filter((item) => item.learner_id === learnerId);
+  const [editing, setEditing] = useState(mine[0]?.data.subject ?? "psychology");
   useEffect(() => {
-    const e = enrolments.find(
-      (e) => e.learner_id === learner && e.data.subject === subject,
-    )?.data;
-    setSession(e?.targetSession ?? "");
-    setSpec(e?.specification ?? "");
-    setTopics(e?.taughtTopics.join("\n") ?? "");
-    setOption(e?.option ?? "");
-    setExtra(e?.extraTimePercent ?? 0);
-    if (e) {
-      setTimezone(e.timezone);
-      setAvailability(JSON.stringify(e.availability, null, 2));
-      setExamDates(JSON.stringify(e.examDates, null, 2));
-    }
-  }, [learner, subject]);
-  const sessions = examSessionChoices();
+    setEditing(mine[0]?.data.subject ?? "psychology");
+  }, [learnerId]);
   return (
     <>
       <PageHeading
-        label="FAMILY SETTINGS"
-        title="Course settings."
-        text="Course settings determine eligible questions, timing allowances, and the study plan."
+        label="STUDENT"
+        title={student?.name ?? "Student"}
+        text="Both courses, the topics already taught, and when study can happen."
       />
-      <form
-        className="card stack"
-        onSubmit={(e) => {
-          e.preventDefault();
-          run(async () => {
-            await api("family/enrolment", {
-              familyId,
-              learnerId: learner,
-              course: {
-                subject,
-                specification: spec,
-                targetSession: session,
-                taughtTopics: topics
-                  .split("\n")
-                  .map((t) => t.trim())
-                  .filter(Boolean),
-                option: option || undefined,
-                timezone,
-                extraTimePercent: extra,
-                sessionMinutes: 20,
-                availability: JSON.parse(availability),
-                examDates: JSON.parse(examDates),
-                blockedDates: [],
-              },
-            });
-            await refresh();
-          });
-        }}
-      >
-        <div className="form-grid">
-          <label className="field">
-            Learner
-            <select
-              value={learner}
-              onChange={(e) => setLearner(e.target.value)}
-            >
-              {learners.map((l) => (
-                <option value={l.id} key={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Subject
-            <select
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-            >
-              <option value="psychology">Psychology · YPS01</option>
-              <option value="business">Business · YBS11</option>
-            </select>
-          </label>
-          <label className="field">
-            Target exam session
-            <select
-              required
-              value={sessions.includes(session) ? session : ""}
-              onChange={(e) => setSession(e.target.value)}
-            >
-              <option value="">Choose a session</option>
-              {sessions.map((choice) => (
-                <option value={choice} key={choice}>
-                  {choice}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            Specification version
-            <input
-              required
-              list="specifications"
-              value={spec}
-              onChange={(e) => setSpec(e.target.value)}
-            />
-            <datalist id="specifications">
-              {[
-                ...new Set(
-                  papers
-                    .filter((p) => p.subject === subject)
-                    .flatMap((p) => p.compatibleSpecifications),
-                ),
-              ].map((s) => (
-                <option key={String(s)} value={String(s)} />
-              ))}
-            </datalist>
-          </label>
-          <label className="field">
-            Psychology Unit 3 option
-            <select value={option} onChange={(e) => setOption(e.target.value)}>
-              <option value="">Not selected</option>
-              <option value="health">Health psychology</option>
-              <option value="criminological">Criminological psychology</option>
-            </select>
-          </label>
-          <label className="field">
-            Extra-time allowance (%)
-            <input
-              type="number"
-              min="0"
-              max="100"
-              value={extra}
-              onChange={(e) => setExtra(Number(e.target.value))}
-            />
-          </label>
-          <label className="field">
-            Time zone
-            <input
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-            />
-          </label>
-        </div>
-        <label className="field">
-          Taught topic identifiers · one per line
-          <textarea
-            required
-            value={topics}
-            onChange={(e) => setTopics(e.target.value)}
-            placeholder="Use the reviewed catalogue’s syllabus topic identifiers."
+      <div className="course-board">
+        {courseSubjects.map((subject) => (
+          <CoursePanel
+            key={`${learnerId}-${subject.id}`}
+            subject={subject}
+            enrolment={mine.find((item) => item.data.subject === subject.id)}
+            papers={papers}
+            familyId={familyId}
+            learnerId={learnerId}
+            open={editing === subject.id}
+            onOpen={() => setEditing(subject.id)}
+            run={run}
+            refresh={refresh}
           />
-        </label>
-        <details>
-          <summary>Weekly availability and confirmed exam dates</summary>
-          <ScheduleFields
-            kind="availability"
-            value={availability}
-            onChange={setAvailability}
-          />
-          <ScheduleFields
-            kind="exams"
-            value={examDates}
-            onChange={setExamDates}
-          />
-        </details>
-        <button className="button" type="submit">
-          Save course settings
-        </button>
-      </form>
+        ))}
+      </div>
       <section className="card stack" style={{ marginTop: 24 }}>
-        <h2>Reserved papers</h2>
+        <h2>Reserved papers for {student?.name ?? "this student"}</h2>
         <p className="muted">
           The newest two complete papers per unit are reserved from ordinary
           practice. Releasing a paper makes its questions available and may
@@ -477,7 +595,7 @@ export function FamilySettings({
                       await api("family/action", {
                         familyId,
                         action: "release",
-                        learnerId: learner,
+                        learnerId,
                         paperId: p.id,
                       });
                   })
