@@ -16,6 +16,9 @@ import { catalogue } from "./learning";
 import { RateCard, credit } from "./finance";
 export async function identity(actor: Actor) {
   const operator = await accountIsSuperuser(actor);
+  const person = await database().query('SELECT name FROM "user" WHERE id=$1', [
+    actor.id,
+  ]);
   const workspaces = (
     await database().query(
       operator
@@ -33,7 +36,11 @@ export async function identity(actor: Actor) {
     )
   ).rows;
   return {
-    user: { id: actor.id, email: actor.email },
+    user: {
+      id: actor.id,
+      email: actor.email,
+      name: (person.rows[0]?.name as string | undefined)?.trim() ?? "",
+    },
     superuser: operator,
     workspaces,
   };

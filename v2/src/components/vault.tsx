@@ -357,6 +357,7 @@ export function Vault() {
             <button
               className="link-button account-link"
               aria-current={page === "Account" ? "page" : undefined}
+              aria-label={`Account for ${identity.user.name || identity.user.email}`}
               onClick={() => {
                 setPage("Account");
                 setAttempt("");
@@ -364,9 +365,12 @@ export function Vault() {
               }}
             >
               <span className="avatar" aria-hidden>
-                {identity.user.email[0].toUpperCase()}
+                {(identity.user.name || identity.user.email)[0].toUpperCase()}
               </span>
-              Account
+              <span className="account-who">
+                <strong>{identity.user.name || identity.user.email}</strong>
+                {identity.user.name ? <span>{identity.user.email}</span> : null}
+              </span>
             </button>
             <button
               className="link-button"
