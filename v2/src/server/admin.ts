@@ -274,8 +274,10 @@ export async function acceptInvitationInTransaction(
   );
   if (inv.role === "parent")
     await tx.query(
-      "INSERT INTO parent_links(user_id,family_id,learner_id) VALUES($1,$2,$3) ON CONFLICT DO NOTHING",
-      [actor.id, inv.family_id, inv.learner_id],
+      `INSERT INTO parent_links(user_id,family_id,learner_id)
+       SELECT $1, $2, id FROM learners WHERE family_id=$2
+       ON CONFLICT DO NOTHING`,
+      [actor.id, inv.family_id],
     );
   await tx.query(
     "UPDATE invitations SET accepted_at=now(),accepted_by=$2 WHERE id=$1",
