@@ -89,7 +89,7 @@ export type Result = z.infer<typeof Result>;
 export const Enrolment = z.object({
   subject: z.enum(["psychology", "business"]),
   specification: z.string().min(1),
-  targetSession: z.string().min(1),
+  targetSession: z.string().regex(/^(January|June|October) 20\d{2}$/),
   taughtTopics: z.array(z.string()),
   option: z.enum(["health", "criminological"]).optional(),
   timezone: z.string().refine((v) => {
