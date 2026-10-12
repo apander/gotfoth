@@ -516,11 +516,21 @@ export function Vault() {
                       type="button"
                       className={`student-card${person.id === learner ? " selected" : ""}`}
                       aria-pressed={person.id === learner}
+                      aria-label={`Open courses for ${person.name}`}
                       key={person.id}
                       onClick={() => {
                         setLearner(person.id);
                         if (!courses.some((item: any) => item.id === course))
                           setCourse(courses[0]?.id ?? "");
+                        if (data.role !== "parent") return;
+                        setPage("Family");
+                        setAttempt("");
+                        setAssessment("");
+                        setTimeout(() => {
+                          document
+                            .getElementById("student-courses")
+                            ?.scrollIntoView({ block: "start" });
+                        }, 0);
                       }}
                     >
                       <strong>{person.name}</strong>

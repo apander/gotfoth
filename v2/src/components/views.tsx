@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, date } from "./api";
-import { PageHeading, Empty } from "./ui";
+import { PageHeading, Empty, Dialog } from "./ui";
 import { Button, Meter } from "./ui";
 import { score } from "./revision";
 import { ScheduleFields } from "./schedule-fields";
@@ -288,6 +288,7 @@ function CoursePanel({
   learnerId,
   open,
   onOpen,
+  onClose,
   run,
   refresh,
 }: {
@@ -298,6 +299,7 @@ function CoursePanel({
   learnerId: string;
   open: boolean;
   onOpen: () => void;
+  onClose: () => void;
   run: Run;
   refresh: () => Promise<void>;
 }) {
@@ -318,7 +320,8 @@ function CoursePanel({
         ],
       ),
     ),
-    [examDates, setExamDates] = useState(JSON.stringify(saved?.examDates ?? []));
+    [examDates, setExamDates] = useState(JSON.stringify(saved?.examDates ?? [])),
+    [confirming, setConfirming] = useState(false);
   useEffect(() => {
     setSession(saved?.targetSession ?? "");
     setSpec(saved?.specification ?? "");
@@ -343,7 +346,8 @@ function CoursePanel({
     ...new Set(
       papers
         .filter((paper) => paper.subject === subject.id)
-        .flatMap((paper) => paper.compatibleSpecifications ?? []),
+        .flatMap((paper) => paper.compatibleSpecifications ?? [])
+        .filter((item: string) => item),
     ),
   ];
   if (spec && !specs.includes(spec)) specs.unshift(spec);
@@ -356,41 +360,56 @@ function CoursePanel({
   ];
   const topicChoices = [...new Set([...catalogueTopics, ...topics])];
   return (
-    <article className="card course-card">
-      <header>
-        <div>
-          <h2>
-            {subject.label} · {subject.code}
-          </h2>
-          <p className="muted">
-            {saved
-              ? `${saved.targetSession} · ${saved.taughtTopics.length} taught topics`
-              : "Not set up"}
-          </p>
-        </div>
-        {!open && (
-          <button className="button secondary small" type="button" onClick={onOpen}>
-            {saved ? "Edit" : "Add"}
-          </button>
+    <>
+      <article className="card course-card">
+        <header>
+          <div>
+            <h2>
+              {subject.label} · {subject.code}
+            </h2>
+            <p className="muted">
+              {saved
+                ? `${saved.targetSession} · ${saved.taughtTopics.length} taught topics`
+                : "Not set up"}
+            </p>
+          </div>
+          <div className="row">
+            <button className="button small" type="button" onClick={onOpen}>
+              {saved ? "Edit" : "Add"}
+            </button>
+            {saved && (
+              <button
+                className="button secondary small"
+                type="button"
+                onClick={() => setConfirming(true)}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+        </header>
+        {saved && (
+          <div className="stack">
+            {saved.taughtTopics.length > 0 && (
+              <div className="topic-choices">
+                {saved.taughtTopics.map((topic: string) => (
+                  <span className="topic-choice" key={topic}>
+                    {topicLabel(topic)}
+                  </span>
+                ))}
+              </div>
+            )}
+            {saved.availability?.length > 0 && (
+              <p className="muted">{studyTimes(saved.availability)}</p>
+            )}
+          </div>
         )}
-      </header>
-      {!open && saved && (
-        <div className="stack">
-          {saved.taughtTopics.length > 0 && (
-            <div className="topic-choices">
-              {saved.taughtTopics.map((topic: string) => (
-                <span className="topic-choice" key={topic}>
-                  {topicLabel(topic)}
-                </span>
-              ))}
-            </div>
-          )}
-          {saved.availability?.length > 0 && (
-            <p className="muted">{studyTimes(saved.availability)}</p>
-          )}
-        </div>
-      )}
+      </article>
       {open && (
+        <Dialog
+          title={`${saved ? "Edit" : "Add"} ${subject.label}`}
+          onClose={onClose}
+        >
         <form
           className="stack"
           onSubmit={(event) => {
@@ -414,6 +433,7 @@ function CoursePanel({
                 },
               });
               await refresh();
+              onClose();
             });
           }}
         >
@@ -515,8 +535,47 @@ function CoursePanel({
             Save {subject.label}
           </button>
         </form>
+        </Dialog>
       )}
-    </article>
+      {confirming && (
+        <Dialog
+          title={`Delete ${subject.label}`}
+          onClose={() => setConfirming(false)}
+        >
+          <p>
+            Remove {subject.label} for this student. It can be added again
+            later.
+          </p>
+          <div className="row">
+            <button
+              className="button danger"
+              type="button"
+              onClick={() =>
+                run(async () => {
+                  await api("family/enrolment/delete", {
+                    familyId,
+                    learnerId,
+                    subject: subject.id,
+                  });
+                  setConfirming(false);
+                  onClose();
+                  await refresh();
+                })
+              }
+            >
+              Delete course
+            </button>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => setConfirming(false)}
+            >
+              Keep course
+            </button>
+          </div>
+        </Dialog>
+      )}
+    </>
   );
 }
 export function FamilySettings({
@@ -538,18 +597,18 @@ export function FamilySettings({
 }) {
   const student = learners.find((person) => person.id === learnerId);
   const mine = enrolments.filter((item) => item.learner_id === learnerId);
-  const [editing, setEditing] = useState(mine[0]?.data.subject ?? "psychology");
+  const [editing, setEditing] = useState<string | null>(null);
   useEffect(() => {
-    setEditing(mine[0]?.data.subject ?? "psychology");
+    setEditing(null);
   }, [learnerId]);
   return (
     <>
       <PageHeading
         label="STUDENT"
         title={student?.name ?? "Student"}
-        text="Both courses, the topics already taught, and when study can happen."
+        text="Add a course, or change one that is already set up."
       />
-      <div className="course-board">
+      <div className="course-board" id="student-courses">
         {courseSubjects.map((subject) => (
           <CoursePanel
             key={`${learnerId}-${subject.id}`}
@@ -560,6 +619,7 @@ export function FamilySettings({
             learnerId={learnerId}
             open={editing === subject.id}
             onOpen={() => setEditing(subject.id)}
+            onClose={() => setEditing(null)}
             run={run}
             refresh={refresh}
           />
