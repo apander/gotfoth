@@ -8,9 +8,10 @@ import {
   type Actor,
   type Tx,
 } from "./db";
-import { requireThat, missing } from "../lib/errors";
+import { requireThat, missing, AppError } from "../lib/errors";
 import { Paper } from "../lib/contracts";
 import { validatePaper } from "../lib/domain";
+import { deliverWelcome, welcomeLetter } from "./mail";
 const hash = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 const learnerName = z.string().trim().min(1).max(100);
@@ -496,6 +497,101 @@ export async function setMemberInTransaction(
     );
   await audit(tx, actor.id, "member.updated", { email, role }, data.familyId);
   return { saved: true };
+}
+export async function welcomeForToken(tx: Tx, value: string) {
+  const base = process.env.BETTER_AUTH_URL;
+  requireThat(base, "SETUP_REQUIRED", "Sign-in address is not configured.", 503);
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new AppError("INVITE", "This invitation link is not valid.");
+  }
+  requireThat(
+    url.origin === new URL(base).origin,
+    "INVITE",
+    "This invitation link is not valid.",
+  );
+  const token = url.searchParams.get("invite") ?? "";
+  requireThat(
+    token.length >= 20 && token.length <= 100,
+    "INVITE",
+    "This invitation link is not valid.",
+  );
+  const found = await tx.query(
+    `SELECT i.email, i.role, i.display_name, i.family_id, f.name AS family_name, l.name AS learner_name
+     FROM invitations i
+     JOIN families f ON f.id = i.family_id
+     LEFT JOIN learners l ON l.id = i.learner_id
+     WHERE i.token_hash=$1 AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at>now()`,
+    [hash(token)],
+  );
+  const row = found.rows[0];
+  requireThat(
+    row && (row.role === "student" || row.role === "parent" || row.role === "teacher"),
+    "INVITE",
+    "This invitation is invalid, expired, or already used.",
+  );
+  const letter = welcomeLetter({
+    name: row.display_name || row.learner_name || "",
+    email: row.email,
+    role: row.role,
+    familyName: row.family_name,
+    url: value,
+  });
+  return { ...letter, to: row.email as string, role: row.role as string, familyId: row.family_id as string };
+}
+export async function sendWelcome(actor: Actor, input: unknown) {
+  await superuser(actor);
+  const url = z.object({ url: z.string().min(20).max(500) }).parse(input).url;
+  const letter = await transaction((tx) => welcomeForToken(tx, url));
+  await deliverWelcome(letter);
+  await transaction(async (tx) => {
+    await audit(
+      tx,
+      actor.id,
+      "welcome.sent",
+      { email: letter.to, role: letter.role },
+      letter.familyId,
+    );
+  }, letter.familyId);
+  return { sent: true, email: letter.to };
+}
+export async function reissueInvite(actor: Actor, input: unknown) {
+  await superuser(actor);
+  const data = z
+    .object({ familyId: z.string().uuid(), email: z.email() })
+    .parse(input);
+  const token = randomBytes(32).toString("base64url");
+  const email = data.email.toLowerCase();
+  await transaction(async (tx) => {
+    const updated = await tx.query(
+      `UPDATE invitations
+       SET token_hash=$3, expires_at=now()+interval '7 days', revoked_at=NULL
+       WHERE id = (
+         SELECT id FROM invitations
+         WHERE family_id=$1 AND lower(email)=$2 AND accepted_at IS NULL
+         ORDER BY expires_at DESC
+         LIMIT 1
+       )
+       RETURNING id, role`,
+      [data.familyId, email, hash(token)],
+    );
+    requireThat(
+      updated.rows.length,
+      "NOT_FOUND",
+      "This person does not have a pending invitation.",
+      404,
+    );
+    await audit(
+      tx,
+      actor.id,
+      "invitation.reissued",
+      { email, role: updated.rows[0].role },
+      data.familyId,
+    );
+  }, data.familyId);
+  return { url: `${process.env.BETTER_AUTH_URL}/?invite=${token}` };
 }
 export async function catalogueAction(actor: Actor, input: unknown) {
   await superuser(actor);

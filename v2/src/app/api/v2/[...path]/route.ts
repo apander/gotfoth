@@ -17,6 +17,8 @@ import {
   adminSnapshot,
   catalogueAction,
   setMember,
+  sendWelcome,
+  reissueInvite,
 } from "@/server/admin";
 import {
   createAttempt,
@@ -98,6 +100,8 @@ async function handle(
       else if (path === "admin/family") result = await saveFamily(user, body);
       else if (path === "admin/invite") result = await invite(user, body);
       else if (path === "admin/member") result = await setMember(user, body);
+      else if (path === "admin/welcome") result = await sendWelcome(user, body);
+      else if (path === "admin/reissue") result = await reissueInvite(user, body);
       else if (path === "admin/catalogue")
         result = await catalogueAction(user, body);
       else if (path === "admin/operation")

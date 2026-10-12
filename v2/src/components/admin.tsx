@@ -16,6 +16,58 @@ type FamilyDraft = {
   students: StudentDraft[];
   adults: AdultDraft[];
 };
+type ShareLink = {
+  name: string;
+  email: string;
+  role: "student" | "parent" | "teacher";
+  url: string;
+};
+function pendingShares(family: any): ShareLink[] {
+  return (family.invites ?? []).map((invite: any) => ({
+    name: invite.display_name || invite.email,
+    email: invite.email,
+    role: invite.role,
+    url: "",
+  }));
+}
+function ShareLinkRow({
+  item,
+  note,
+  sending,
+  onCopy,
+}: {
+  item: { name?: string; detail?: string; url: string };
+  note?: string;
+  sending: boolean;
+  onCopy: () => void;
+}) {
+  const copied = note?.startsWith("Copied");
+  const failed = Boolean(note) && !note?.includes("Welcome email sent");
+  return (
+    <div className="invite-link">
+      <div>
+        {item.name ? <strong>{item.name}</strong> : null}
+        {item.detail ? <p className="muted">{item.detail}</p> : null}
+        {item.url ? <code>{item.url}</code> : null}
+        {note ? (
+          <p role="status" className={failed ? "form-error" : "muted"}>
+            {note}
+          </p>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        className="icon-button"
+        aria-label={item.name ? `Copy invitation for ${item.name}` : "Copy invitation link"}
+        title="Copy invitation link"
+        disabled={sending}
+        onClick={onCopy}
+      >
+        <Icon name={copied ? "Check" : "Copy"} />
+      </button>
+    </div>
+  );
+}
 function blankFamily(): FamilyDraft {
   return {
     name: "",
@@ -69,6 +121,9 @@ export function Admin({
     [draft, setDraft] = useState<FamilyDraft | null>(null),
     [removing, setRemoving] = useState<any>(null),
     [formError, setFormError] = useState(""),
+    [shares, setShares] = useState<ShareLink[]>([]),
+    [shareNote, setShareNote] = useState<Record<string, string>>({}),
+    [sendingShare, setSendingShare] = useState(""),
     [family, setFamily] = useState(""),
     [learner, setLearner] = useState(""),
     [email, setEmail] = useState(""),
@@ -104,6 +159,58 @@ export function Admin({
     setFamily((f) => f || r.families[0]?.id || "");
     if (r.rates[0]) setRate(JSON.stringify(r.rates[0].data, null, 2));
   }
+  async function copyShare(item: ShareLink) {
+    setSendingShare(item.email);
+    let url = item.url;
+    try {
+      if (!url) {
+        if (!draft?.id) throw new Error("Save the family before copying an invitation.");
+        const issued = await api("admin/reissue", {
+          familyId: draft.id,
+          email: item.email,
+        });
+        url = issued.url;
+        setShares((list) =>
+          list.map((share) =>
+            share.email === item.email ? { ...share, url } : share,
+          ),
+        );
+      }
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        throw new Error("Could not copy the invitation link.");
+      }
+    } catch (error) {
+      setShareNote((notes) => ({
+        ...notes,
+        [item.email]:
+          error instanceof Error
+            ? error.message
+            : "Could not copy the invitation link.",
+      }));
+      setSendingShare("");
+      return;
+    }
+    try {
+      const result = await api("admin/welcome", { url });
+      setShareNote((notes) => ({
+        ...notes,
+        [item.email]: `Copied. Welcome email sent to ${result.email}.`,
+      }));
+    } catch (error) {
+      setShareNote((notes) => ({
+        ...notes,
+        [item.email]: `Copied. ${
+          error instanceof Error
+            ? error.message
+            : "The welcome email could not be sent."
+        }`,
+      }));
+    } finally {
+      setSendingShare("");
+    }
+  }
   useEffect(() => {
     run(refresh);
   }, []);
@@ -132,6 +239,8 @@ export function Admin({
                 title="Add family"
                 onClick={() => {
                   setFormError("");
+                  setShares([]);
+                  setShareNote({});
                   setDraft(blankFamily());
                 }}
               >
@@ -205,6 +314,8 @@ export function Admin({
                               title={`Edit ${f.name}`}
                               onClick={() => {
                                 setFormError("");
+                                setShares(pendingShares(f));
+                                setShareNote({});
                                 setDraft(familyDraft(f));
                               }}
                             >
@@ -311,7 +422,7 @@ export function Admin({
                             familyId,
                             email: before.email,
                           });
-                      const links: string[] = [];
+                      const links: ShareLink[] = [];
                       for (const [index, student] of students.entries()) {
                         const learnerId = saved.learners?.[index]?.id ?? student.id;
                         const result = await api("admin/member", {
@@ -322,7 +433,13 @@ export function Admin({
                           role: "student",
                           learnerId,
                         });
-                        if (result.url) links.push(`${student.name}: ${result.url}`);
+                        if (result.url)
+                          links.push({
+                            name: student.name,
+                            email: student.email,
+                            role: "student",
+                            url: result.url,
+                          });
                       }
                       const previous = (data.families.find((item: any) => item.id === draft.id)
                         ?.members ?? []
@@ -365,11 +482,17 @@ export function Admin({
                           role: adult.role,
                           learnerId: null,
                         });
-                        if (result.url) links.push(`${adult.email}: ${result.url}`);
+                        if (result.url)
+                          links.push({
+                            name: adult.name,
+                            email: adult.email,
+                            role: adult.role,
+                            url: result.url,
+                          });
                       }
                       await refresh();
                       if (links.length) {
-                        setFormError(`Share these invitation links:\n${links.join("\n")}`);
+                        setShares(links);
                         return;
                       }
                       setDraft(null);
@@ -549,6 +672,24 @@ export function Admin({
                     Add parent or teacher
                   </button>
                 </div>
+                {shares.length ? (
+                  <div className="invite-share">
+                    <p>Share these invitation links</p>
+                    {shares.map((item) => (
+                      <ShareLinkRow
+                        key={item.email}
+                        item={{
+                          name: item.name,
+                          detail: `${item.role[0].toUpperCase()}${item.role.slice(1)} · ${item.email}`,
+                          url: item.url,
+                        }}
+                        note={shareNote[item.email]}
+                        sending={sendingShare === item.email}
+                        onCopy={() => copyShare(item)}
+                      />
+                    ))}
+                  </div>
+                ) : null}
                 {formError ? (
                   <p role="alert" className="form-error">
                     {formError}
@@ -700,17 +841,22 @@ export function Admin({
               Create seven-day invitation
             </button>
             {link && (
-              <label className="field">
-                Share this single-use link
-                <input readOnly value={link} />
-                <button
-                  type="button"
-                  className="button secondary"
-                  onClick={() => navigator.clipboard.writeText(link)}
-                >
-                  Copy invitation link
-                </button>
-              </label>
+              <div className="invite-share">
+                <p>Share this invitation link</p>
+                <ShareLinkRow
+                  item={{ url: link }}
+                  note={shareNote[email || link]}
+                  sending={sendingShare === (email || link)}
+                  onCopy={() =>
+                    copyShare({
+                      name: email,
+                      email,
+                      role: role as ShareLink["role"],
+                      url: link,
+                    })
+                  }
+                />
+              </div>
             )}
           </form>
           <section className="card" style={{ marginTop: 24 }}>
