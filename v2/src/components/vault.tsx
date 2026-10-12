@@ -509,7 +509,7 @@ export function Vault() {
           </div>
         ) : (
           <>
-            {data.learners.length > 0 && (
+            {data.role !== "student" && data.learners.length > 0 && (
               <div className="student-360" aria-label="Students">
                 {data.learners.map((person: any) => {
                   const courses = data.enrolments.filter(
