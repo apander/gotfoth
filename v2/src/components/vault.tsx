@@ -94,23 +94,32 @@ export function Vault() {
       )
         setFamily(linkedFamily);
       if (params.get("attempt")) setAttempt(params.get("attempt")!);
-      const invite = new URLSearchParams(location.search).get("invite");
+      const invite = params.get("invite");
+      const openWorkspace = () =>
+        setFamily((current) =>
+          value.workspaces.some((w: any) => w.id === current)
+            ? current
+            : (value.workspaces[0]?.id ?? ""),
+        );
+      if (value.workspaces.length) openWorkspace();
       if (invite) {
-        // Share the request when React replays the mount effect in development.
-        if (acceptingInvitation.current?.token !== invite)
-          acceptingInvitation.current = {
-            token: invite,
-            promise: api("invitation/accept", { token: invite }),
-          };
-        await acceptingInvitation.current.promise;
-        history.replaceState(null, "", "/");
-        return loadIdentity();
+        try {
+          // Share the request when React replays the mount effect in development.
+          if (acceptingInvitation.current?.token !== invite)
+            acceptingInvitation.current = {
+              token: invite,
+              promise: api("invitation/accept", { token: invite }),
+            };
+          await acceptingInvitation.current.promise;
+          history.replaceState(null, "", "/");
+          return loadIdentity();
+        } catch (error) {
+          if (!value.workspaces.length) throw error;
+          history.replaceState(null, "", "/");
+          acceptingInvitation.current = null;
+          return;
+        }
       }
-      setFamily((current) =>
-        value.workspaces.some((w: any) => w.id === current)
-          ? current
-          : (value.workspaces[0]?.id ?? ""),
-      );
       if (!value.workspaces.length && value.superuser) setPage("Families");
     } catch (e: any) {
       if (e.code !== "UNAUTHENTICATED") setError(e.message);
