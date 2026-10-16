@@ -18,6 +18,7 @@ import {
   type HistoryEvidence,
 } from "../lib/domain";
 import { createQuote, reserve, release } from "./finance";
+import { publishedPracticePapers } from "./exam-papers";
 export async function catalogue(tx: Tx) {
   return (
     await tx.query("SELECT data FROM catalogue WHERE status='published'")
@@ -147,7 +148,8 @@ export async function createAttemptInTransaction(
           .flatMap((r) => r.topics),
       ]),
     ];
-    const selection = chooseQuestions(
+    const budget = data.mode === "guided" ? 10 : 20;
+    let selection = chooseQuestions(
       papers,
       data.topic
         ? {
@@ -157,16 +159,22 @@ export async function createAttemptInTransaction(
             ),
           }
         : course,
-      data.mode === "guided" ? 10 : 20,
+      budget,
       gaps,
       due,
       data.retryOf ? new Set() : seen,
       releases,
     );
+    if (!selection.length)
+      selection = (await publishedPracticePapers(
+        tx,
+        course.subject,
+        budget,
+      )) as unknown as typeof selection;
     requireThat(
       selection.length,
       "NO_QUESTIONS",
-      "No eligible questions are available. Add the topics you have studied, or release a reserved paper from Study.",
+      "No published question is available for this course yet.",
     );
     questions = selection.map((s) => ({
       ...s.question,
