@@ -15,13 +15,22 @@ function paperLabel(input: {
   return `${year} ${input.subject} Paper ${Number(input.code)}`;
 }
 
-async function requireTeacher(actor: Actor) {
-  if (await accountIsSuperuser(actor)) return;
+async function canReviewPapers(actor: Actor) {
+  if (await accountIsSuperuser(actor)) return true;
   const found = await database().query(
     "SELECT 1 FROM memberships WHERE user_id=$1 AND role='teacher' AND active LIMIT 1",
     [actor.id],
   );
-  requireThat(found.rowCount, "FORBIDDEN", "Teacher access required.", 403);
+  return Boolean(found.rowCount);
+}
+
+async function requireTeacher(actor: Actor) {
+  requireThat(
+    await canReviewPapers(actor),
+    "FORBIDDEN",
+    "Teacher access required.",
+    403,
+  );
 }
 
 async function withPapers<T>(actor: Actor, fn: (client: Sql) => Promise<T>) {
@@ -364,15 +373,131 @@ export async function examPaperFile(actor: Actor, paperId: string) {
   });
 }
 
+export async function publishedPracticePapers(
+  tx: Sql,
+  subject: string,
+  budget: number,
+) {
+  const result = await tx.query(
+    `SELECT p.id AS paper_id, p.instructions, c.duration_minutes, c.total_marks, item
+     FROM paper_bank.papers p
+     JOIN paper_bank.components c ON c.id = p.component_id
+     JOIN paper_bank.specifications spec ON spec.id = c.specification_id
+     JOIN LATERAL (
+       SELECT snapshot FROM paper_bank.publications
+       WHERE paper_id = p.id
+       ORDER BY published_at DESC
+       LIMIT 1
+     ) pub ON true
+     CROSS JOIN LATERAL jsonb_array_elements(pub.snapshot->'questions') item
+     WHERE p.status = 'published' AND lower(spec.subject) = lower($1)
+     ORDER BY p.exam_date DESC NULLS LAST, item->>'id'`,
+    [subject],
+  );
+  type PracticePaper = {
+    id: string;
+    durationMinutes: number;
+    totalMarks: number;
+    resources: [];
+    generalRubric: string;
+    instructions: string;
+    questions: Record<string, unknown>[];
+    choices: [];
+  };
+  const papers = new Map<string, PracticePaper>();
+  const pool: { paper: PracticePaper; question: Record<string, unknown> }[] = [];
+  for (const row of result.rows) {
+    const item = row.item as {
+      id: string;
+      section: string;
+      stem: string;
+      marks: number;
+      command?: string;
+      responseFormat?: string;
+      extracts?: unknown[];
+      scheme?: { style?: string; objectives?: Record<string, number> };
+    };
+    if (!item?.stem || !item.marks) continue;
+    const objectives = item.scheme?.objectives ?? {};
+    const question = {
+      id: item.id,
+      number: String(item.id).split("-").at(-1) || item.id,
+      text: item.stem,
+      marks: item.marks,
+      format:
+        item.responseFormat === "calculation"
+          ? "number"
+          : item.responseFormat === "levels"
+            ? "essay"
+            : "short",
+      section: item.section,
+      resourceIds: [],
+      topics: ["Published paper"],
+      command: item.command ?? "",
+      objectives: [],
+      rubric: {
+        id: `${item.id}-scheme`,
+        text: [
+          item.scheme?.style ? `Style: ${item.scheme.style}.` : "",
+          `Knowledge ${objectives.knowledge ?? 0}, application ${objectives.application ?? 0}, analysis ${objectives.analysis ?? 0}, evaluation ${objectives.evaluation ?? 0}.`,
+        ]
+          .filter(Boolean)
+          .join(" "),
+        levels: item.responseFormat === "levels",
+        pages: [1],
+      },
+      pages: [1],
+      hints: [],
+      eligible: true,
+      extracts: item.extracts ?? [],
+    };
+    let paper = papers.get(row.paper_id);
+    if (!paper) {
+      paper = {
+        id: row.paper_id,
+        durationMinutes: Number(row.duration_minutes),
+        totalMarks: Number(row.total_marks),
+        resources: [],
+        generalRubric: "Published mark scheme.",
+        instructions: row.instructions || "",
+        questions: [],
+        choices: [],
+      };
+      papers.set(row.paper_id, paper);
+    }
+    paper.questions.push(question);
+    pool.push({ paper, question });
+  }
+  const selected = [];
+  let marks = 0;
+  for (const item of pool) {
+    if (selected.length && marks >= Math.max(1, budget)) break;
+    selected.push(item);
+    marks += Number(item.question.marks);
+  }
+  return selected;
+}
+
 export async function examFigure(actor: Actor, figureId: string) {
-  await requireTeacher(actor);
+  const reviewer = await canReviewPapers(actor);
   const client = await database().connect();
   try {
     await client.query("BEGIN");
     await client.query("SET LOCAL search_path TO paper_bank, public");
     const result = await client.query(
-      "SELECT png, media_type FROM figures WHERE id=$1",
-      [figureId],
+      reviewer
+        ? "SELECT png, media_type FROM figures WHERE id=$1"
+        : `SELECT f.png, f.media_type
+           FROM figures f
+           JOIN extracts e ON e.id = f.extract_id
+           JOIN sections sec ON sec.id = e.section_id
+           JOIN papers p ON p.id = sec.paper_id
+           WHERE f.id = $1 AND p.status = 'published'
+             AND EXISTS (
+               SELECT 1 FROM public.memberships m
+               WHERE m.user_id = $2 AND m.role = 'student' AND m.active
+             )`,
+      reviewer ? [figureId] : [figureId, actor.id],
     );
     await client.query("COMMIT");
     const row = result.rows[0] as { png: Buffer; media_type: string } | undefined;
