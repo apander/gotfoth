@@ -18,6 +18,9 @@ import {
 } from "./db";
 import { RateCard, tokenCost, settle, release, reserve } from "./finance";
 import { retrievalSchedule } from "../lib/retrieval";
+import { testLoginEnabled } from "./testing-config";
+import { testQuestionIds } from "../lib/test-accounts";
+import { simulatedFeedback } from "../lib/test-feedback";
 export const configurationHash = (rate: RateCard) =>
   createHash("sha256").update(JSON.stringify(rate)).digest("hex");
 export async function markAnswer(
@@ -27,6 +30,25 @@ export async function markAnswer(
   rate: RateCard,
   review = false,
 ) {
+  if (
+    testLoginEnabled() &&
+    rate.model === "gotfoth-ux-simulator" &&
+    testQuestionIds.has(q.id)
+  ) {
+    requireThat(
+      answer.length <= rate.maxAnswerChars,
+      "ANSWER_LIMIT",
+      "The answer exceeds this marking configuration’s limit.",
+    );
+    return {
+      result: validateResult(simulatedFeedback(q, answer), q, answer),
+      cost: 0,
+      tokens: { input: 0, output: 0 },
+      model: "gotfoth-ux-simulator",
+      responseId: `ux-${randomUUID()}`,
+      repairCount: 0,
+    };
+  }
   requireThat(
     process.env.OPENAI_API_KEY,
     "PROVIDER_SETUP",

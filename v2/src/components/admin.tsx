@@ -58,7 +58,11 @@ function ShareLinkRow({
       <button
         type="button"
         className="icon-button"
-        aria-label={item.name ? `Copy invitation for ${item.name}` : "Copy invitation link"}
+        aria-label={
+          item.name
+            ? `Copy invitation for ${item.name}`
+            : "Copy invitation link"
+        }
         title="Copy invitation link"
         disabled={sending}
         onClick={onCopy}
@@ -77,7 +81,9 @@ function blankFamily(): FamilyDraft {
   };
 }
 function familyDraft(family: any): FamilyDraft {
-  const learners = family.learners?.length ? family.learners : [{ name: "", email: "" }];
+  const learners = family.learners?.length
+    ? family.learners
+    : [{ name: "", email: "" }];
   const adults = [
     ...(family.members ?? []).filter(
       (member: any) => member.role === "parent" || member.role === "teacher",
@@ -86,7 +92,8 @@ function familyDraft(family: any): FamilyDraft {
       (invite: any) =>
         (invite.role === "parent" || invite.role === "teacher") &&
         !(family.members ?? []).some(
-          (member: any) => member.email.toLowerCase() === invite.email.toLowerCase(),
+          (member: any) =>
+            member.email.toLowerCase() === invite.email.toLowerCase(),
         ),
     ),
   ];
@@ -117,6 +124,7 @@ export function Admin({
   run: (fn: () => Promise<void>) => void;
   busy: boolean;
 }) {
+  const [familySearch, setFamilySearch] = useState("");
   const [data, setData] = useState<any>(null),
     [draft, setDraft] = useState<FamilyDraft | null>(null),
     [removing, setRemoving] = useState<any>(null),
@@ -164,7 +172,8 @@ export function Admin({
     let url = item.url;
     try {
       if (!url) {
-        if (!draft?.id) throw new Error("Save the family before copying an invitation.");
+        if (!draft?.id)
+          throw new Error("Save the family before copying an invitation.");
         const issued = await api("admin/reissue", {
           familyId: draft.id,
           email: item.email,
@@ -232,6 +241,15 @@ export function Admin({
           <section className="card family-grid">
             <div className="row">
               <h2>Families</h2>
+              <label className="field">
+                Find a family
+                <input
+                  type="search"
+                  value={familySearch}
+                  onChange={(e) => setFamilySearch(e.target.value)}
+                  placeholder="Family or student name"
+                />
+              </label>
               <button
                 type="button"
                 className="icon-button"
@@ -248,7 +266,10 @@ export function Admin({
               </button>
             </div>
             {data.families.length === 0 ? (
-              <Empty title="No families" text="Add a family to give it students and members." />
+              <Empty
+                title="No families"
+                text="Add a family to give it students and members."
+              />
             ) : (
               <div className="overflow">
                 <table>
@@ -264,79 +285,90 @@ export function Admin({
                     </tr>
                   </thead>
                   <tbody>
-                    {data.families.map((f: any) => (
-                      <tr key={f.id}>
-                        <td>{f.name}</td>
-                        <td>
-                          {f.learners.length
-                            ? f.learners
-                                .map((learner: any) =>
-                                  learner.email
-                                    ? `${learner.name} · ${learner.email}`
-                                    : learner.name,
-                                )
-                                .join(", ")
-                            : "—"}
-                        </td>
-                        <td>
-                          {[
-                            ...(f.members ?? []).filter(
-                              (member: any) =>
-                                member.role === "parent" || member.role === "teacher",
-                            ),
-                            ...(f.invites ?? []).filter(
-                              (invite: any) =>
-                                (invite.role === "parent" || invite.role === "teacher") &&
-                                !(f.members ?? []).some(
-                                  (member: any) =>
-                                    member.email.toLowerCase() === invite.email.toLowerCase(),
-                                ),
-                            ),
-                          ]
-                            .map((member: any) =>
-                              member.name || member.display_name
-                                ? `${member.name || member.display_name} · ${member.email}`
-                                : member.email,
-                            )
-                            .join(", ") || "—"}
-                        </td>
-                        <td>
-                          <span className={`badge${f.suspended ? " warm" : ""}`}>
-                            {f.suspended ? "Suspended" : "Active"}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="table-actions">
-                            <button
-                              type="button"
-                              className="icon-button"
-                              aria-label={`Edit ${f.name}`}
-                              title={`Edit ${f.name}`}
-                              onClick={() => {
-                                setFormError("");
-                                setShares(pendingShares(f));
-                                setShareNote({});
-                                setDraft(familyDraft(f));
-                              }}
+                    {data.families
+                      .filter((f: any) =>
+                        `${f.name} ${f.learners.map((l: any) => l.name).join(" ")}`
+                          .toLowerCase()
+                          .includes(familySearch.toLowerCase()),
+                      )
+                      .map((f: any) => (
+                        <tr key={f.id}>
+                          <td>{f.name}</td>
+                          <td>
+                            {f.learners.length
+                              ? f.learners
+                                  .map((learner: any) =>
+                                    learner.email
+                                      ? `${learner.name} · ${learner.email}`
+                                      : learner.name,
+                                  )
+                                  .join(", ")
+                              : "—"}
+                          </td>
+                          <td>
+                            {[
+                              ...(f.members ?? []).filter(
+                                (member: any) =>
+                                  member.role === "parent" ||
+                                  member.role === "teacher",
+                              ),
+                              ...(f.invites ?? []).filter(
+                                (invite: any) =>
+                                  (invite.role === "parent" ||
+                                    invite.role === "teacher") &&
+                                  !(f.members ?? []).some(
+                                    (member: any) =>
+                                      member.email.toLowerCase() ===
+                                      invite.email.toLowerCase(),
+                                  ),
+                              ),
+                            ]
+                              .map((member: any) =>
+                                member.name || member.display_name
+                                  ? `${member.name || member.display_name} · ${member.email}`
+                                  : member.email,
+                              )
+                              .join(", ") || "—"}
+                          </td>
+                          <td>
+                            <span
+                              className={`badge${f.suspended ? " warm" : ""}`}
                             >
-                              <Icon name="Edit" />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-button danger"
-                              aria-label={`Delete ${f.name}`}
-                              title={`Delete ${f.name}`}
-                              onClick={() => {
-                                setFormError("");
-                                setRemoving(f);
-                              }}
-                            >
-                              <Icon name="Delete" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              {f.suspended ? "Suspended" : "Active"}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="table-actions">
+                              <button
+                                type="button"
+                                className="icon-button"
+                                aria-label={`Edit ${f.name}`}
+                                title={`Edit ${f.name}`}
+                                onClick={() => {
+                                  setFormError("");
+                                  setShares(pendingShares(f));
+                                  setShareNote({});
+                                  setDraft(familyDraft(f));
+                                }}
+                              >
+                                <Icon name="Edit" />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-button danger"
+                                aria-label={`Delete ${f.name}`}
+                                title={`Delete ${f.name}`}
+                                onClick={() => {
+                                  setFormError("");
+                                  setRemoving(f);
+                                }}
+                              >
+                                <Icon name="Delete" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -368,8 +400,14 @@ export function Admin({
                       setFormError("Add at least one student.");
                       return;
                     }
-                    if (students.some((student) => !student.name || !student.email)) {
-                      setFormError("Each student needs a name and a school email.");
+                    if (
+                      students.some(
+                        (student) => !student.name || !student.email,
+                      )
+                    ) {
+                      setFormError(
+                        "Each student needs a name and a school email.",
+                      );
                       return;
                     }
                     const adults = draft.adults
@@ -379,10 +417,16 @@ export function Admin({
                         role: adult.role,
                       }))
                       .filter((adult) => adult.name || adult.email);
-                    const incomplete = adults.filter((adult) => !adult.name || !adult.email);
+                    const incomplete = adults.filter(
+                      (adult) => !adult.name || !adult.email,
+                    );
                     if (incomplete.length) {
-                      const parents = incomplete.some((adult) => adult.role === "parent");
-                      const teachers = incomplete.some((adult) => adult.role === "teacher");
+                      const parents = incomplete.some(
+                        (adult) => adult.role === "parent",
+                      );
+                      const teachers = incomplete.some(
+                        (adult) => adult.role === "teacher",
+                      );
                       setFormError(
                         parents && teachers
                           ? "Each parent needs a name and an email. Each teacher needs a name and a school email."
@@ -392,7 +436,10 @@ export function Admin({
                       );
                       return;
                     }
-                    const emails = [...students.map((student) => student.email), ...adults.map((adult) => adult.email)];
+                    const emails = [
+                      ...students.map((student) => student.email),
+                      ...adults.map((adult) => adult.email),
+                    ];
                     if (new Set(emails).size !== emails.length) {
                       setFormError("Each person needs a different email.");
                       return;
@@ -419,12 +466,17 @@ export function Admin({
                       );
                       const familyId = draft.id ?? saved.id;
                       const previousLearners = draft.id
-                        ? (data.families.find((item: any) => item.id === draft.id)?.learners ?? [])
+                        ? (data.families.find(
+                            (item: any) => item.id === draft.id,
+                          )?.learners ?? [])
                         : [];
                       for (const before of previousLearners)
                         if (
                           before.email &&
-                          !students.some((student) => student.email === before.email.toLowerCase())
+                          !students.some(
+                            (student) =>
+                              student.email === before.email.toLowerCase(),
+                          )
                         )
                           await api("admin/member", {
                             action: "remove",
@@ -433,7 +485,8 @@ export function Admin({
                           });
                       const links: ShareLink[] = [];
                       for (const [index, student] of students.entries()) {
-                        const learnerId = saved.learners?.[index]?.id ?? student.id;
+                        const learnerId =
+                          saved.learners?.[index]?.id ?? student.id;
                         const result = await api("admin/member", {
                           action: "set",
                           familyId,
@@ -450,31 +503,42 @@ export function Admin({
                             url: result.url,
                           });
                       }
-                      const previous = (data.families.find((item: any) => item.id === draft.id)
-                        ?.members ?? []
+                      const previous = (
+                        data.families.find((item: any) => item.id === draft.id)
+                          ?.members ?? []
                       ).filter(
                         (member: any) =>
                           member.role === "parent" || member.role === "teacher",
                       );
                       for (const member of previous)
-                        if (!adults.some((adult) => adult.email === member.email.toLowerCase()))
+                        if (
+                          !adults.some(
+                            (adult) =>
+                              adult.email === member.email.toLowerCase(),
+                          )
+                        )
                           await api("admin/member", {
                             action: "remove",
                             familyId,
                             email: member.email,
                           });
                       const previousInvites = (
-                        data.families.find((item: any) => item.id === draft.id)?.invites ?? []
+                        data.families.find((item: any) => item.id === draft.id)
+                          ?.invites ?? []
                       ).filter(
                         (invite: any) =>
                           invite.role === "parent" || invite.role === "teacher",
                       );
                       for (const invite of previousInvites)
                         if (
-                          !adults.some((adult) => adult.email === invite.email.toLowerCase()) &&
+                          !adults.some(
+                            (adult) =>
+                              adult.email === invite.email.toLowerCase(),
+                          ) &&
                           !previous.some(
                             (member: any) =>
-                              member.email.toLowerCase() === invite.email.toLowerCase(),
+                              member.email.toLowerCase() ===
+                              invite.email.toLowerCase(),
                           )
                         )
                           await api("admin/member", {
@@ -619,8 +683,14 @@ export function Admin({
                       />
                       <input
                         type="email"
-                        aria-label={adult.role === "teacher" ? "Teacher school email" : "Parent email"}
-                        placeholder={adult.role === "teacher" ? "School email" : "Email"}
+                        aria-label={
+                          adult.role === "teacher"
+                            ? "Teacher school email"
+                            : "Parent email"
+                        }
+                        placeholder={
+                          adult.role === "teacher" ? "School email" : "Email"
+                        }
                         value={adult.email}
                         onChange={(event) =>
                           setDraft({
@@ -643,7 +713,8 @@ export function Admin({
                               item.key === adult.key
                                 ? {
                                     ...item,
-                                    role: event.target.value as "parent" | "teacher",
+                                    role: event.target.value as
+                                      "parent" | "teacher",
                                   }
                                 : item,
                             ),
@@ -660,7 +731,9 @@ export function Admin({
                         onClick={() =>
                           setDraft({
                             ...draft,
-                            adults: draft.adults.filter((item) => item.key !== adult.key),
+                            adults: draft.adults.filter(
+                              (item) => item.key !== adult.key,
+                            ),
                           })
                         }
                       >
@@ -676,7 +749,12 @@ export function Admin({
                         ...draft,
                         adults: [
                           ...draft.adults,
-                          { key: crypto.randomUUID(), name: "", email: "", role: "parent" },
+                          {
+                            key: crypto.randomUUID(),
+                            name: "",
+                            email: "",
+                            role: "parent",
+                          },
                         ],
                       })
                     }
@@ -719,7 +797,10 @@ export function Admin({
                         type="checkbox"
                         checked={draft.suspended}
                         onChange={(event) =>
-                          setDraft({ ...draft, suspended: event.target.checked })
+                          setDraft({
+                            ...draft,
+                            suspended: event.target.checked,
+                          })
                         }
                       />
                       Suspend access
@@ -824,7 +905,9 @@ export function Admin({
                   onChange={(e) => setLearner(e.target.value)}
                 >
                   {role !== "student" ? (
-                    <option value="">Parents and teachers belong to the family</option>
+                    <option value="">
+                      Parents and teachers belong to the family
+                    </option>
                   ) : (
                     data.families
                       .find((f: any) => f.id === family)
@@ -854,7 +937,10 @@ export function Admin({
                 </select>
               </label>
             </div>
-            <button className="button" disabled={busy || (role === "student" && !learner)}>
+            <button
+              className="button"
+              disabled={busy || (role === "student" && !learner)}
+            >
               Create seven-day invitation
             </button>
             {link && (
@@ -1060,33 +1146,36 @@ export function Admin({
           <div className="grid">
             <section className="card stack">
               <h2>Marking configuration</h2>
-              <p className="muted">
-                Prices use EUR micro-units per million tokens. New attempts pin
-                this configuration. Auto-release remains disabled without a
-                passing evaluation.
-              </p>
-              <label className="field">
-                Rate card
-                <textarea
-                  className="json-editor"
-                  value={rate}
-                  onChange={(e) => setRate(e.target.value)}
-                />
-              </label>
-              <button
-                className="button"
-                onClick={() =>
-                  run(async () => {
-                    await api("admin/operation", {
-                      action: "rate",
-                      rate: JSON.parse(rate),
-                    });
-                    await refresh();
-                  })
-                }
-              >
-                Activate rate card
-              </button>
+              <details>
+                <summary>Advanced structured rate card</summary>
+                <p className="muted">
+                  Prices use EUR micro-units per million tokens. New attempts
+                  pin this configuration. Auto-release remains disabled without
+                  a passing evaluation.
+                </p>
+                <label className="field">
+                  Rate card
+                  <textarea
+                    className="json-editor"
+                    value={rate}
+                    onChange={(e) => setRate(e.target.value)}
+                  />
+                </label>
+                <button
+                  className="button"
+                  onClick={() =>
+                    run(async () => {
+                      await api("admin/operation", {
+                        action: "rate",
+                        rate: JSON.parse(rate),
+                      });
+                      await refresh();
+                    })
+                  }
+                >
+                  Activate rate card
+                </button>
+              </details>
             </section>
             <section className="card stack">
               <h2>Operational evidence</h2>

@@ -8,9 +8,9 @@
   --muted: #64666f;
   --line: #dedfe3;
   --tone: #efeff2;
-  --accent: #5041d8;
-  --accent-soft: #ece9ff;
-  --accent-ink: #4534c5;
+  --accent: #b31f3a;
+  --accent-soft: #fbeef0;
+  --accent-ink: #9b1932;
   --green: var(--accent);
   --success: #246447;
   --error: #a32935;
@@ -354,7 +354,7 @@ svg {
 }
 .button:hover:not(:disabled) {
   filter: brightness(0.94);
-  box-shadow: 0 2px 7px #5041d81a;
+  box-shadow: 0 2px 7px #142b501a;
 }
 .button:active:not(:disabled) {
   transform: translateY(1px);
@@ -954,7 +954,7 @@ details > label {
   justify-content: center;
 }
 .login-story .brand-icon {
-  background: #a99bff;
+  background: #ffffff;
   color: #202126;
 }
 .login-story h1 {
@@ -969,7 +969,7 @@ details > label {
 }
 .login-story .badge {
   background: #35343f;
-  color: #e2dcff;
+  color: #eaf0f7;
 }
 .login-form {
   padding: clamp(32px, 5vw, 80px);

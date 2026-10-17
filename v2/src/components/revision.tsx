@@ -71,7 +71,7 @@ export function Home({
         </p>
         <div className="row">
           <Button
-            disabled={busy || (!next && !courseReady)}
+            disabled={busy}
             onClick={() =>
               next
                 ? onAttempt(next.id)
@@ -248,7 +248,7 @@ export function PracticePicker({ selected, busy, onCreate, onPapers }: any) {
           <span className="muted">
             {selected
               ? `${selected.data.subject} · Taught topics only`
-              : "Add a course in Study first."}
+              : "Add a course in My subjects first."}
           </span>
           <Button disabled={!selected || busy} onClick={() => onCreate(mode)}>
             Start practice
@@ -335,8 +335,8 @@ export function Subjects({
   return (
     <>
       <PageHeading
-        label="SUBJECTS"
-        title="Know your next move."
+        label="MY SUBJECTS"
+        title="Your subjects. Your possibilities."
         text="Your courses, past papers and taught topics in one place."
       />
       <div className="subject-switch" aria-label="Choose subject">
@@ -361,7 +361,7 @@ export function Subjects({
       {!courses.length ? (
         <Empty
           title="Add your first course"
-          text="Set up Psychology or Business in Study, including the topics you have covered."
+          text="Set up Psychology or Business in My subjects, including the topics you have covered."
         />
       ) : (
         <>
@@ -422,7 +422,7 @@ export function Subjects({
               ) : (
                 <Empty
                   title="No taught topics selected"
-                  text="Add the topics you have covered in Study."
+                  text="Add the topics you have covered in My subjects."
                 />
               )}
             </section>

@@ -1,179 +1,156 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createAuthClient } from "better-auth/react";
-import { api, euro, date } from "./api";
+import { api, date } from "./api";
 import { Player } from "./player";
 import { Progress, FamilySettings, Plan, Assessment } from "./views";
-import { ParentMonitor, TeacherGuidance, TeacherStudents } from "./roles";
 import { Admin } from "./admin";
-import { Brand, PageHeading, Empty, Icon } from "./ui";
-import { Home, Subjects, PracticePicker, PaperList } from "./revision";
+import { Brand, Button, Dialog, Empty, PageHeading } from "./ui";
+import { Subjects, PracticePicker, PaperList } from "./revision";
 import { PaperDesk } from "./paper-desk";
 import { AccountPage } from "./account";
+import { PersonaShell, StudyCompanion } from "./persona-shell";
+import { StudentToday } from "./student-today";
+import { FamilyDataSettings, Funding, ParentSpace } from "./parent-space";
+import { TeacherWorkspace, type TeacherFilters } from "./teacher-workspace";
+import { OperatorOverview } from "./operator-overview";
+import { capabilities, pageForRole, type Persona } from "../lib/personas";
+import { TestLoginLink } from "./testing-lab";
+
 function authBaseURL() {
   if (typeof window !== "undefined") return window.location.origin;
-  const configured = process.env.BETTER_AUTH_URL;
-  if (configured) {
-    try {
-      const url = new URL(configured);
-      if (url.protocol === "http:" || url.protocol === "https:") return url.origin;
-    } catch {
-      // A production pull can replace this sensitive value with a non-URL placeholder.
-    }
+  try {
+    return new URL(process.env.BETTER_AUTH_URL ?? "https://gotfoth.vercel.app")
+      .origin;
+  } catch {
+    return "https://gotfoth.vercel.app";
   }
-  return "https://gotfoth.vercel.app";
 }
 const authClient = createAuthClient({ baseURL: authBaseURL() });
-const accountKinds = [
-  { role: "student", label: "Student" },
-  { role: "parent", label: "Parent" },
-  { role: "teacher", label: "Teacher" },
-  { role: "superuser", label: "Superuser" },
-] as const;
-function signedInKinds(
-  identity: {
-    superuser: boolean;
-    workspaces: { id: string; role?: string | null }[];
-  },
-  familyId: string,
-) {
-  const role = identity.workspaces.find((workspace) => workspace.id === familyId)?.role;
-  return accountKinds.filter(
-    (kind) => kind.role === role || (kind.role === "superuser" && identity.superuser),
-  );
+type Route = TeacherFilters & {
+  context: string;
+  page: string;
+  family: string;
+  learner: string;
+  course: string;
+  attempt: string;
+  assessment: string;
+  topic: string;
+  tab: string;
+};
+const emptyRoute: Route = {
+  context: "",
+  page: "",
+  family: "",
+  learner: "",
+  course: "",
+  attempt: "",
+  assessment: "",
+  topic: "",
+  tab: "",
+};
+function contextsFor(identity: any) {
+  return [
+    ...(identity.superuser
+      ? [{ id: "admin", name: "Administration", role: "superuser" }]
+      : []),
+    ...(identity.workspaces.some((w: any) => w.role === "teacher")
+      ? [{ id: "teacher", name: "All my teaching families", role: "teacher" }]
+      : []),
+    ...identity.workspaces
+      .filter((w: any) => ["student", "parent"].includes(w.role))
+      .map((w: any) => ({ ...w, name: `${w.name} · ${w.role}` })),
+  ];
 }
+function resolveRoute(input: Partial<Route>, identity: any): Route {
+  const contexts = contextsFor(identity);
+  let context = contexts.find((c) => c.id === input.context);
+  if (!context && input.family) {
+    const workspace = identity.workspaces.find(
+      (w: any) => w.id === input.family,
+    );
+    context = contexts.find(
+      (c) =>
+        c.id === (workspace?.role === "teacher" ? "teacher" : workspace?.id),
+    );
+  }
+  context ??= contexts[0];
+  const role: Persona = context?.role ?? "student";
+  const route = {
+    ...emptyRoute,
+    ...input,
+    context: context?.id ?? "",
+    page: pageForRole(input.page ?? "", role),
+  };
+  if (!["admin", "teacher"].includes(route.context))
+    route.family = route.context;
+  if (role !== "student") route.attempt = "";
+  if (role === "superuser") {
+    route.family = "";
+    route.assessment = "";
+  }
+  if (input.page === "Catalogue" && role === "superuser")
+    route.tab = "catalogue";
+  return route;
+}
+function routeURL(route: Route) {
+  const params = new URLSearchParams();
+  Object.entries(route).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  return `/?${params}`;
+}
+
 export function Vault() {
-  const acceptingInvitation = useRef<{
-    token: string;
-    promise: Promise<unknown>;
-  } | null>(null);
   const [identity, setIdentity] = useState<any>(null),
-    [family, setFamily] = useState(""),
+    [route, setRoute] = useState<Route>(emptyRoute),
     [data, setData] = useState<any>(null),
-    [page, setPage] = useState("Today"),
-    [learner, setLearner] = useState(""),
-    [course, setCourse] = useState(""),
-    [historyTopic, setHistoryTopic] = useState(""),
-    [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
-    [attempt, setAttempt] = useState(""),
-    [assessment, setAssessment] = useState(""),
-    [notice, setNotice] = useState("");
-  async function loadIdentity() {
-    try {
-      const value = await api("identity");
-      setIdentity(value);
-      const params = new URLSearchParams(location.search);
-      const linkedPage = params.get("page");
-      if (
-        linkedPage &&
-        [
-          "Today",
-          "Subjects",
-          "Practice",
-          "Papers",
-          "Progress",
-          "Plan",
-          "Overview",
-          "Reviews",
-          "Family",
-          "Credit",
-          "Families",
-          "Invitations",
-          "Catalogue",
-          "Operations",
-          "Account",
-        ].includes(linkedPage)
-      )
-        setPage(linkedPage);
-      const linkedFamily = params.get("family");
-      if (
-        linkedFamily &&
-        value.workspaces.some((w: any) => w.id === linkedFamily)
-      )
-        setFamily(linkedFamily);
-      if (params.get("attempt")) setAttempt(params.get("attempt")!);
-      const invite = params.get("invite");
-      const openWorkspace = () =>
-        setFamily((current) =>
-          value.workspaces.some((w: any) => w.id === current)
-            ? current
-            : (value.workspaces[0]?.id ?? ""),
-        );
-      if (value.workspaces.length) openWorkspace();
-      if (invite) {
-        try {
-          // Share the request when React replays the mount effect in development.
-          if (acceptingInvitation.current?.token !== invite)
-            acceptingInvitation.current = {
-              token: invite,
-              promise: api("invitation/accept", { token: invite }),
-            };
-          await acceptingInvitation.current.promise;
-          history.replaceState(null, "", "/");
-          return loadIdentity();
-        } catch (error) {
-          if (!value.workspaces.length) throw error;
-          history.replaceState(null, "", "/");
-          acceptingInvitation.current = null;
-          return;
-        }
-      }
-      if (!value.workspaces.length && value.superuser) setPage("Families");
-    } catch (e: any) {
-      if (e.code !== "UNAUTHENTICATED") setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+    [error, setError] = useState(""),
+    [refreshKey, setRefreshKey] = useState(0),
+    [signOut, setSignOut] = useState(false),
+    [celebrate, setCelebrate] = useState(false);
+  const routeRef = useRef(route),
+    identityRef = useRef<any>(null),
+    saveBeforeLeave = useRef<null | (() => Promise<void>)>(null),
+    accepting = useRef<{ token: string; promise: Promise<any> } | null>(null);
+  const dataFamily = useRef("");
+  const contexts = identity ? contextsFor(identity) : [];
+  const role: Persona =
+    contexts.find((c) => c.id === route.context)?.role ?? "student";
+  const currentFamily = !["teacher", "admin"].includes(route.context)
+    ? route.context
+    : "";
+  const learner = data?.learners.some((l: any) => l.id === route.learner)
+    ? route.learner
+    : (data?.learners[0]?.id ?? "");
+  const selected =
+    data?.enrolments.find(
+      (c: any) => c.id === route.course && c.learner_id === learner,
+    ) ?? data?.enrolments.find((c: any) => c.learner_id === learner);
+  function commit(next: Route, replace = false) {
+    routeRef.current = next;
+    setRoute(next);
+    const url = routeURL(next);
+    if (`${location.pathname}${location.search}` !== url)
+      history[replace ? "replaceState" : "pushState"](null, "", url);
+  }
+  function navigate(patch: Partial<Route>, replace = false) {
+    commit(
+      resolveRoute({ ...routeRef.current, ...patch }, identityRef.current),
+      replace,
+    );
+  }
+  function onPage(page: string) {
+    navigate({ page, attempt: "", assessment: "", offset: "0" });
+  }
+  function openAssessment(id: string, family = currentFamily) {
+    navigate({ assessment: id, family, attempt: "" });
   }
   async function refresh() {
-    if (!family) return;
-    const value = await api(`family/snapshot?family=${family}`);
-    setData(value);
-    setPage((current) => {
-      if (current === "Account") return current;
-      if (value.role === "teacher")
-        return current === "Students" || current === "Guidance" ? current : "Students";
-      if (value.role === "parent")
-        return current === "Progress" || current === "Credit" ? current : "Progress";
-      if (value.role === "superuser")
-        return ["Papers", "Families", "Invitations", "Catalogue", "Operations"].includes(
-          current,
-        )
-          ? current
-          : "Families";
-      if (current === "Family") return "Study";
-      return [
-        "Today",
-        "Study",
-        "Subjects",
-        "Practice",
-        "Papers",
-        "Progress",
-        "Plan",
-      ].includes(current)
-        ? current
-        : "Today";
-    });
-    setLearner((current) =>
-      value.learners.some((l: any) => l.id === current)
-        ? current
-        : (value.learners[0]?.id ?? ""),
-    );
-    setCourse((current) =>
-      value.enrolments.some((e: any) => e.id === current)
-        ? current
-        : (value.enrolments[0]?.id ?? ""),
-    );
+    setRefreshKey((n) => n + 1);
   }
-  useEffect(() => {
-    void loadIdentity();
-  }, []);
-  useEffect(() => {
-    setData(null);
-    void refresh().catch((e) => setError(e.message));
-  }, [family]);
   async function run(fn: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -185,468 +162,466 @@ export function Vault() {
       setBusy(false);
     }
   }
-  const selected =
-    data?.enrolments.find(
-      (c: any) => c.id === course && c.learner_id === learner,
-    ) ?? data?.enrolments.find((c: any) => c.learner_id === learner);
-  const isAdmin = [
-    "Families",
-    "Invitations",
-    "Catalogue",
-    "Operations",
-  ].includes(page);
-  const paperDesk = page === "Papers" && !!identity?.superuser && data?.role !== "student";
-  const nav =
-    data?.role === "teacher"
-      ? ["Students", "Guidance"]
-      : data?.role === "parent"
-        ? ["Progress", "Credit"]
-        : data?.role === "superuser"
-          ? []
-          : ["Today", "Study", "Practice", "Papers", "Progress", "Plan"];
-  const kinds = identity ? signedInKinds(identity, family) : [];
+  async function loadIdentity() {
+    try {
+      let value = await api("identity");
+      const params = new URLSearchParams(location.search),
+        token = params.get("invite");
+      if (token) {
+        try {
+          if (accepting.current?.token !== token)
+            accepting.current = {
+              token,
+              promise: api("invitation/accept", { token }),
+            };
+          const accepted = await accepting.current.promise;
+          value = await api("identity");
+          if (accepted.familyId) params.set("family", accepted.familyId);
+        } catch (e) {
+          if (!value.workspaces.length) throw e;
+        }
+        params.delete("invite");
+      }
+      identityRef.current = value;
+      setIdentity(value);
+      commit(resolveRoute(Object.fromEntries(params), value), true);
+    } catch (e: any) {
+      if (e.code !== "UNAUTHENTICATED") setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    void loadIdentity();
+    if (localStorage.getItem("gotfoth:large-text") === "true")
+      document.documentElement.style.fontSize = "19px";
+  }, []);
+  useEffect(() => {
+    async function pop() {
+      if (!identityRef.current) return;
+      const requested = resolveRoute(
+        Object.fromEntries(new URLSearchParams(location.search)),
+        identityRef.current,
+      );
+      if (
+        routeRef.current.attempt &&
+        (requested.attempt !== routeRef.current.attempt ||
+          requested.family !== routeRef.current.family)
+      ) {
+        try {
+          await saveBeforeLeave.current?.();
+        } catch {
+          history.pushState(null, "", routeURL(routeRef.current));
+          setError(
+            "Your writing could not sync. Stay here and try saving again; a recovery copy remains on this device.",
+          );
+          return;
+        }
+      }
+      commit(requested, true);
+    }
+    window.addEventListener("popstate", pop);
+    return () => window.removeEventListener("popstate", pop);
+  }, []);
+  useEffect(() => {
+    let alive = true;
+    if (dataFamily.current !== currentFamily) {
+      setData(null);
+      dataFamily.current = currentFamily;
+    }
+    setError("");
+    if (currentFamily && identity)
+      api(`family/snapshot?family=${currentFamily}`)
+        .then((value) => {
+          if (alive) setData(value);
+        })
+        .catch((e) => {
+          if (alive) setError(e.message);
+        });
+    return () => {
+      alive = false;
+    };
+  }, [currentFamily, identity?.user.id, refreshKey]);
+  useEffect(() => {
+    document.title = `${route.attempt ? "Practice" : route.assessment ? "Feedback" : route.page || "Welcome"} · GotFoth`;
+    if (!route.attempt)
+      document.getElementById("main-content")?.focus({ preventScroll: true });
+  }, [route.page, route.assessment, route.attempt, route.context]);
   async function create(
     mode: string,
     paperId?: string,
     topic?: string,
     retryOf?: string,
+    subject?: string,
   ) {
-    if (!selected) throw new Error("Set up your course in Study first.");
+    const course = subject
+      ? data?.enrolments.find(
+          (c: any) => c.learner_id === learner && c.data.subject === subject,
+        )
+      : selected;
+    if (!course) throw new Error("Add your course in My subjects first.");
     const result = await api("family/attempt/create", {
-      familyId: family,
+      familyId: currentFamily,
       learnerId: learner,
-      enrolmentId: selected.id,
+      enrolmentId: course.id,
       mode,
       paperId,
       topic,
       retryOf,
     });
-    setAttempt(result.id);
+    navigate({ attempt: result.id, assessment: "", family: currentFamily });
   }
-  useEffect(() => {
-    document.title = `${attempt ? "Question" : assessment ? "Results" : page === "Today" ? "Home" : page} · GotFoth`;
-  }, [page, attempt, assessment]);
-  if (loading) return <main className="loading">Opening your workspace…</main>;
+  if (loading)
+    return (
+      <main className="loading" role="status">
+        Opening your workspace…
+      </main>
+    );
   if (!identity)
     return (
       <main className="login">
         <section className="login-story">
           <Brand />
+          <StudyCompanion />
           <h1>
-            Find your focus.
-            <br />
-            Make it count.
+            A little practice.
+            <br />A lot more possibility.
           </h1>
-          <p>Past-paper practice. Clear feedback. A precise next step.</p>
-          <div
-            className="row"
-            style={{ justifyContent: "flex-start", marginTop: 30 }}
-          >
-            <span className="badge">PSYCHOLOGY</span>
-            <span className="badge">BUSINESS</span>
+          <p>
+            Real exam questions. Feedback that helps. A next step that feels
+            possible.
+          </p>
+          <div className="subject-tags">
+            <span className="subject-tag psychology">Psychology</span>
+            <span className="subject-tag business">Business</span>
           </div>
           <p className="login-foot">
-            Pearson Edexcel International A Level · Independent revision
+            GotFoth · Independent revision, supported by the people around you.
           </p>
         </section>
         <section className="login-form">
-          <p className="eyebrow">YOUR NEXT SESSION</p>
-          <h2>Welcome to GotFoth.</h2>
+          <p className="eyebrow">YOUR SPACE TO GROW</p>
+          <h2>Good to see you.</h2>
           <p className="muted">
-            Sign in with the Google account on your invitation. Your work stays
-            in your family’s private workspace.
+            Sign in with the Google account on your invitation. We’ll open the
+            right workspace for you.
           </p>
           {error && (
-            <div role="alert" className="error">
+            <p role="alert" className="error">
               {error}
-            </div>
+            </p>
           )}
-          <button
-            className="button"
+          <Button
             disabled={busy}
             onClick={() =>
               run(async () => {
-                const r = await authClient.signIn.social({
+                const result = await authClient.signIn.social({
                   provider: "google",
                   callbackURL: location.href,
                 });
-                if (r.error) throw new Error(r.error.message);
+                if (result.error) throw new Error(result.error.message);
               })
             }
           >
-            Continue with Google <span aria-hidden>→</span>
-          </button>
+            Continue with Google →
+          </Button>
           <p className="login-foot muted">
-            Invitation only. Ask your Study Vault administrator for access.
+            Invitation only. Ask your GotFoth administrator for access.
           </p>
+          <TestLoginLink />
         </section>
       </main>
     );
+  const page = route.page;
   return (
-    <div className={`shell ${attempt ? "focus-mode" : ""}`}>
-      <a className="skip-link" href="#main-content">
-        Skip to content
-      </a>
-      <aside className="sidebar">
-        <Brand />
-        {identity.superuser && identity.workspaces.length > 0 && (
-          <select
-            className="workspace"
-            disabled={!!attempt}
-            aria-label="Family workspace"
-            value={family}
-            onChange={(e) => {
-              setFamily(e.target.value);
-              setAttempt("");
-              setAssessment("");
+    <PersonaShell
+      role={role}
+      page={page}
+      identity={identity}
+      contexts={contexts}
+      context={route.context}
+      focus={!!route.attempt}
+      onContext={(context) => {
+        setCelebrate(false);
+        commit(resolveRoute({ ...emptyRoute, context }, identity));
+      }}
+      onPage={onPage}
+      onSignOut={() => setSignOut(true)}
+    >
+      {error && (
+        <div role="alert" className="error">
+          {error}
+          <button
+            className="link-button"
+            onClick={() => {
+              setError("");
+              void refresh();
             }}
           >
-            {identity.workspaces.map((w: any) => (
-              <option value={w.id} key={w.id}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <nav className="primary-nav" aria-label="Main navigation">
-          {nav.map((n) => (
-            <button
-              key={n}
-              aria-current={page === n && !attempt ? "page" : undefined}
-              disabled={!!attempt}
-              className={`nav-button ${page === n && !attempt ? "active" : ""}`}
-              onClick={() => {
-                setPage(n);
-                setAttempt("");
-                setAssessment("");
-              }}
-            >
-              <Icon name={n} />
-              {n === "Today" ? "Home" : n}
-            </button>
-          ))}
-        </nav>
-        {identity.superuser && (
-          <>
-            <p className="eyebrow" style={{ marginBottom: -20 }}>
-              ADMINISTRATION
-            </p>
-            <nav aria-label="Administration">
-              {["Papers", "Families", "Invitations", "Catalogue", "Operations"].map(
-                (n) => (
-                  <button
-                    key={n}
-                    disabled={!!attempt}
-                    className={`nav-button ${page === n ? "active" : ""}`}
-                    onClick={() => {
-                      setPage(n);
-                      setAttempt("");
-                      setAssessment("");
-                    }}
-                  >
-                    <Icon name={n} />
-                    {n}
-                  </button>
-                ),
-              )}
-            </nav>
-          </>
-        )}
-        <div className="sidebar-footer">
-          A focused place to work.
-          <br />
-          GotFoth / IAL
+            Try again
+          </button>
         </div>
-      </aside>
-      <main className="main" id="main-content" tabIndex={-1}>
-        <header className="topbar">
-          <span>
-            {new Date().toLocaleDateString(undefined, {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-            })}
-          </span>
-          <div className="topbar-actions">
-            <button
-              className="link-button"
-              aria-label="Increase text size"
-              onClick={() =>
-                (document.documentElement.style.fontSize =
-                  document.documentElement.style.fontSize === "19px"
-                    ? "16px"
-                    : "19px")
-              }
-            >
-              Aa
-            </button>
-            <button
-              className="link-button account-link"
-              aria-current={page === "Account" ? "page" : undefined}
-              aria-label={`Account for ${identity.user.name || identity.user.email}${
-                kinds.length ? `, ${kinds.map((kind) => kind.label).join(" and ")}` : ""
-              }`}
-              onClick={() => {
-                setPage("Account");
-                setAttempt("");
-                setAssessment("");
-              }}
-            >
-              {kinds.length > 0 && (
-                <span className="account-icons">
-                  {kinds.map((kind) => (
-                    <span className={`account-icon ${kind.role}`} key={kind.role} title={kind.label}>
-                      <Icon name={kind.label} />
-                    </span>
-                  ))}
-                </span>
-              )}
-              <span className="account-who">
-                <strong>{identity.user.name || identity.user.email}</strong>
-                {identity.user.name ? <span>{identity.user.email}</span> : null}
-              </span>
-            </button>
-            <button
-              className="link-button"
-              onClick={() =>
-                run(async () => {
-                  if (
-                    Object.keys(localStorage).some((k) =>
-                      k.startsWith("sv-draft:"),
-                    ) &&
-                    !confirm(
-                      "Unsynced writing may remain on this device. Sign out without clearing it?",
-                    )
-                  )
-                    return;
-                  await authClient.signOut();
-                  setIdentity(null);
-                  setData(null);
-                })
-              }
-            >
-              Sign out
-            </button>
-          </div>
-        </header>
-        {error && (
-          <div role="alert" className="error">
-            {error}
-            <button
-              className="link-button"
-              style={{ float: "right" }}
-              onClick={() => setError("")}
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-        {notice && (
-          <div role="status" className="notice">
-            {notice}
-          </div>
-        )}
-        {page === "Account" ? (
+      )}
+      {page === "Account" ? (
+        <>
+          {role === "parent" && (
+            <div className="account-context-actions">
+              <Button
+                variant="secondary"
+                onClick={() => onPage("FamilySettings")}
+              >
+                Family settings and data
+              </Button>
+            </div>
+          )}
           <AccountPage
             run={run}
             busy={busy}
             onRenamed={(name) => {
-              setIdentity((current: any) =>
-                current
-                  ? { ...current, user: { ...current.user, name } }
-                  : current,
-              );
-              if (family) void refresh();
+              const next = { ...identity, user: { ...identity.user, name } };
+              identityRef.current = next;
+              setIdentity(next);
             }}
             onDeleted={async () => {
               try {
                 await authClient.signOut();
-              } catch {
-                // The sign-in is already gone.
-              }
+              } catch {}
+              identityRef.current = null;
               setIdentity(null);
               setData(null);
-              setPage("Today");
             }}
           />
-        ) : paperDesk ? (
-          <PaperDesk
-            familyId={family || "00000000-0000-4000-8000-000000000001"}
-            run={run}
-          />
-        ) : isAdmin ? (
-          <Admin page={page} run={run} busy={busy} />
-        ) : attempt ? (
-          <Player
-            familyId={family}
-            id={attempt}
-            onDone={() => {
-              setAttempt("");
-              void refresh();
-            }}
-          />
-        ) : assessment ? (
+        </>
+      ) : route.attempt && role === "student" ? (
+        <Player
+          key={route.attempt}
+          familyId={currentFamily}
+          id={route.attempt}
+          onNavigationReady={(fn) => {
+            saveBeforeLeave.current = fn;
+          }}
+          onDone={(completed) => {
+            setCelebrate(!!completed);
+            navigate({ attempt: "", page: "Today" });
+            void refresh();
+          }}
+        />
+      ) : route.assessment ? (
+        <>
+          <p className="assessment-context">
+            {identity.workspaces.find((w: any) => w.id === route.family)
+              ?.name ?? "Student work"}
+          </p>
           <Assessment
-            familyId={family}
-            id={assessment}
-            reviewer={data?.role === "teacher"}
+            key={`${route.family}:${route.assessment}`}
+            familyId={route.family}
+            id={route.assessment}
+            reviewer={capabilities[role].review}
+            canQuery={capabilities[role].query}
             run={run}
             onBack={() => {
-              setAssessment("");
+              navigate({ assessment: "" });
               void refresh();
             }}
             onRetry={
-              data?.role === "student"
-                ? (id, topic) => run(() => create("guided", undefined, topic, id))
+              role === "student"
+                ? (id, topic, subject) =>
+                    run(() => create("guided", undefined, topic, id, subject))
                 : undefined
             }
           />
-        ) : !data ? (
-          <div className="empty">
-            <h3>
-              {family ? "Loading your workspace…" : "Your invitation is ready"}
-            </h3>
-            <p>
-              {family
-                ? "One moment."
-                : "Open your invitation link to join the family workspace."}
-            </p>
-          </div>
-        ) : (
+        </>
+      ) : role === "superuser" ? (
+        page === "Overview" ? (
+          <OperatorOverview onPage={onPage} />
+        ) : page === "Content" ? (
           <>
-            {data.role === "student" &&
-              page !== "Study" &&
-              data.enrolments.filter((item: any) => item.learner_id === learner)
-                .length > 0 && (
-                <div className="subject-switch" aria-label="Your courses">
-                  {data.enrolments
-                    .filter((item: any) => item.learner_id === learner)
-                    .map((item: any) => (
-                      <button
-                        type="button"
-                        className={`subject-button${item.id === selected?.id ? " selected" : ""}`}
-                        aria-pressed={item.id === selected?.id}
-                        key={item.id}
-                        onClick={() => setCourse(item.id)}
-                      >
-                        <span>
-                          <strong>
-                            {item.data.subject === "psychology"
-                              ? "Psychology"
-                              : "Business"}
-                          </strong>
-                          <small>{item.data.targetSession}</small>
-                        </span>
-                      </button>
-                    ))}
-                </div>
-              )}
-            {["Today", "Overview"].includes(page) && (
-              <Home
+            <div
+              className="segmented"
+              role="group"
+              aria-label="Content workflow"
+            >
+              <button
+                aria-pressed={route.tab !== "catalogue"}
+                onClick={() => navigate({ tab: "papers" })}
+              >
+                Paper library
+              </button>
+              <button
+                aria-pressed={route.tab === "catalogue"}
+                onClick={() => navigate({ tab: "catalogue" })}
+              >
+                Catalogue publication
+              </button>
+            </div>
+            {route.tab === "catalogue" ? (
+              <Admin page="Catalogue" run={run} busy={busy} />
+            ) : (
+              <PaperDesk
+                familyId="00000000-0000-4000-8000-000000000001"
+                run={run}
+              />
+            )}
+          </>
+        ) : (
+          <Admin key={page} page={page} run={run} busy={busy} />
+        )
+      ) : role === "teacher" ? (
+        <TeacherWorkspace
+          page={page}
+          filters={{
+            filterFamily: route.filterFamily,
+            student: route.student,
+            subject: route.subject,
+            status: route.status,
+            search: route.search,
+            offset: route.offset,
+          }}
+          onFilter={(filters) =>
+            navigate({
+              filterFamily: "",
+              student: "",
+              subject: "",
+              status: "",
+              search: "",
+              offset: "0",
+              ...filters,
+            })
+          }
+          onPage={onPage}
+          onAssessment={openAssessment}
+        />
+      ) : !data ? (
+        <Empty
+          title={
+            currentFamily
+              ? error
+                ? "Workspace unavailable"
+                : "Opening your workspace…"
+              : "Your invitation is ready"
+          }
+          text={
+            currentFamily
+              ? error
+                ? "Try again when you’re ready."
+                : "Your work will be here in a moment."
+              : "Open your invitation link to get started."
+          }
+        />
+      ) : role === "parent" ? (
+        page === "Credit" ? (
+          <Funding
+            familyId={currentFamily}
+            data={data}
+            refresh={refresh}
+            run={run}
+            busy={busy}
+          />
+        ) : page === "FamilySettings" ? (
+          <FamilyDataSettings familyId={currentFamily} run={run} busy={busy} />
+        ) : (
+          <ParentSpace
+            page={page}
+            data={data}
+            learner={learner}
+            onLearner={(id: string) => navigate({ learner: id })}
+            onPage={onPage}
+            onAssessment={openAssessment}
+          />
+        )
+      ) : (
+        <>
+          {!["Today", "Subjects", "Study"].includes(page) &&
+            data.enrolments.length > 0 && (
+              <div className="subject-switch" aria-label="Your courses">
+                {data.enrolments
+                  .filter((c: any) => c.learner_id === learner)
+                  .map((c: any) => (
+                    <button
+                      key={c.id}
+                      className={`subject-button ${c.data.subject} ${c.id === selected?.id ? "selected" : ""}`}
+                      aria-pressed={c.id === selected?.id}
+                      onClick={() => navigate({ course: c.id, topic: "" })}
+                    >
+                      <strong className="capitalize">{c.data.subject}</strong>
+                      <small>{c.data.targetSession}</small>
+                    </button>
+                  ))}
+              </div>
+            )}
+          {page === "Today" && (
+            <>
+              <StudentToday
                 data={data}
+                familyId={currentFamily}
                 learner={learner}
                 selected={selected}
                 busy={busy}
-                onAttempt={setAttempt}
-                onAssessment={setAssessment}
+                celebrate={celebrate}
+                onAttempt={(id: string) => navigate({ attempt: id })}
+                onAssessment={openAssessment}
                 onCreate={(mode: string) => run(() => create(mode))}
-                onPage={setPage}
+                onPage={onPage}
               />
-            )}
-            {["Today", "Overview"].includes(page) &&
-              data.recoveries?.filter((r: any) => r.learner_id === learner)
-                .length > 0 && (
-                <section className="card" style={{ marginTop: 24 }}>
-                  <h2>Interrupted practice revisions</h2>
-                  <p className="muted">
-                    Recovered writing is separate from the original timed result
-                    and has not been charged or marked.
-                  </p>
+              {data.recoveries?.length > 0 && (
+                <details className="section">
+                  <summary>Recovered writing</summary>
                   {data.recoveries
                     .filter((r: any) => r.learner_id === learner)
                     .map((r: any) => (
-                      <details className="list-item" key={r.id}>
-                        <summary>Recovered {date(r.created_at)}</summary>
-                        {Object.entries(r.text).map(([questionId, text]) => (
-                          <label className="field" key={questionId}>
-                            Question {questionId}
-                            <textarea readOnly value={String(text)} />
-                          </label>
+                      <section key={r.id}>
+                        <h3>Recovered {date(r.created_at)}</h3>
+                        <p className="muted">
+                          Separate from the original timed result. This writing
+                          has not been charged or marked.
+                        </p>
+                        {Object.entries(r.text).map(([id, text]) => (
+                          <p className="question-text" key={id}>
+                            {String(text)}
+                          </p>
                         ))}
-                      </details>
+                      </section>
                     ))}
-                </section>
+                </details>
               )}
-            {page === "Subjects" && (
+            </>
+          )}
+          {page === "Subjects" && (
+            <>
+              <div className="section-title">
+                <span className="eyebrow">YOUR SUBJECTS</span>
+                <Button variant="secondary" onClick={() => onPage("Study")}>
+                  {selected ? "Manage courses" : "Set up a course"}
+                </Button>
+              </div>
               <Subjects
                 data={data}
                 learner={learner}
                 selected={selected}
                 busy={busy}
-                onSelect={setCourse}
+                onSelect={(id: string) => navigate({ course: id, topic: "" })}
                 onPractice={(mode: string, paper?: string) =>
                   run(() => create(mode, paper))
                 }
                 onTopic={(topic: string) =>
                   run(() => create("independent", undefined, topic))
                 }
-                onHistory={(topic: string) => {
-                  setHistoryTopic(topic);
-                  setPage("Progress");
-                }}
-              />
-            )}
-            {page === "Practice" && (
-              <PracticePicker
-                selected={selected}
-                busy={busy}
-                onCreate={(mode: string) => run(() => create(mode))}
-                onPapers={() => setPage("Papers")}
-              />
-            )}
-            {page === "Papers" && data.role === "student" && (
-              <>
-                <PageHeading
-                  label="PAST PAPERS"
-                  title="Train under exam conditions."
-                  text="Complete papers, original choices and a fixed deadline. Previously seen content is labelled."
-                />
-                <PaperList
-                  papers={data.papers}
-                  selected={selected}
-                  learner={learner}
-                  busy={busy}
-                  onCreate={(mode: string, paper: string) =>
-                    run(() => create(mode, paper))
-                  }
-                />
-              </>
-            )}
-            {page === "Progress" && data.role === "student" && (
-              <Progress
-                initialTopic={historyTopic}
-                familyId={family}
-                learnerId={learner}
-                course={selected}
-                run={run}
-                onAssessment={setAssessment}
-                onPractice={(topic) =>
-                  run(() => create("independent", undefined, topic))
+                onHistory={(topic: string) =>
+                  navigate({ topic, page: "Progress" })
                 }
               />
-            )}
-            {page === "Progress" && data.role === "parent" && (
-              <ParentMonitor data={data} onAssessment={setAssessment} />
-            )}
-            {page === "Students" && data.role === "teacher" && (
-              <TeacherStudents data={data} onAssessment={setAssessment} />
-            )}
-            {page === "Guidance" && data.role === "teacher" && (
-              <TeacherGuidance data={data} />
-            )}
-            {page === "Study" && data.role === "student" && (
+            </>
+          )}
+          {page === "Study" && (
+            <>
+              <button
+                className="link-button"
+                onClick={() => onPage("Subjects")}
+              >
+                ← My subjects
+              </button>
               <FamilySettings
-                familyId={family}
+                familyId={currentFamily}
                 learnerId={learner}
                 learners={data.learners}
                 enrolments={data.enrolments}
@@ -654,156 +629,102 @@ export function Vault() {
                 run={run}
                 refresh={refresh}
               />
-            )}
-            {page === "Reviews" && (
-              <>
-                <PageHeading
-                  label="CAREFUL, SUPPORTIVE ASSESSMENT"
-                  title="Marking reviews."
-                  text="Check the answer against the rubric. Preserve earned marks and give one useful next step."
-                />
-                {data.assessments
-                  .filter((a: any) =>
-                    ["needs_review", "failed", "awaiting_funds"].includes(
-                      a.state,
-                    ),
-                  )
-                  .map((a: any) => (
-                    <section
-                      className="list-item row"
-                      style={{ marginBottom: 15 }}
-                      key={a.id}
-                    >
-                      <div>
-                        <strong>
-                          {
-                            data.learners.find(
-                              (l: any) => l.id === a.learner_id,
-                            )?.name
-                          }
-                        </strong>
-                        <p className="muted" style={{ margin: 0 }}>
-                          {date(a.submitted_at)} ·{" "}
-                          {a.state.replaceAll("_", " ")}
-                        </p>
-                      </div>
-                      <button
-                        className="button"
-                        onClick={() => setAssessment(a.id)}
-                      >
-                        Review
-                      </button>
-                    </section>
-                  ))}
-                {!data.assessments.some((a: any) =>
-                  ["needs_review", "failed", "awaiting_funds"].includes(
-                    a.state,
-                  ),
-                ) && (
-                  <Empty
-                    title="Nothing needs your attention"
-                    text="Marking exceptions and student queries will appear here."
-                  />
-                )}
-              </>
-            )}
-            {page === "Credit" && (
-              <>
-                <PageHeading
-                  label="FAMILY FUNDING"
-                  title="Credit and spending."
-                  text="Prepaid credit, clear limits, and no automatic top-ups."
-                />
-                <div className="grid">
-                  <section className="card">
-                    <p className="eyebrow">FAMILY BALANCE</p>
-                    <div className="metric">
-                      {euro(data.wallet?.balance ?? 0)}
-                    </div>
-                    <p className="muted">
-                      {euro(data.wallet?.reserved ?? 0)} reserved for authorised
-                      marking.
-                    </p>
-                    <div className="row">
-                      {[1000, 2500].map((cents) => (
-                        <button
-                          key={cents}
-                          className="button"
-                          disabled={busy}
-                          onClick={() =>
-                            run(async () => {
-                              const r = await api("family/checkout", {
-                                familyId: family,
-                                cents,
-                              });
-                              location.assign(r.url);
-                            })
-                          }
-                        >
-                          Add €{cents / 100}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                  <section className="card">
-                    <p className="eyebrow">MONTHLY STUDENT LIMITS</p>
-                    {data.learners.map((l: any) => (
-                      <label className="field" key={l.id}>
-                        {l.name} · EUR
-                        <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          defaultValue={Number(l.monthly_cap) / 1e6}
-                          onBlur={(e) =>
-                            run(async () => {
-                              await api("family/action", {
-                                familyId: family,
-                                action: "cap",
-                                learnerId: l.id,
-                                micros: Math.round(
-                                  Number(e.target.value) * 1e6,
-                                ),
-                              });
-                              await refresh();
-                            })
-                          }
-                        />
-                      </label>
-                    ))}
-                    <p className="muted">
-                      Adding credit does not change these limits.
-                    </p>
-                  </section>
+            </>
+          )}
+          {page === "Practice" && (
+            <>
+              {!selected && (
+                <div className="notice">
+                  <p>Add your first course to find suitable practice.</p>
+                  <Button onClick={() => onPage("Study")}>
+                    Set up a course
+                  </Button>
                 </div>
-                <section className="card" style={{ marginTop: 25 }}>
-                  <h2>Account activity</h2>
-                  {data.wallet?.ledger.map((l: any, i: number) => (
-                    <div key={i} className="list-item row">
-                      <span>
-                        {date(l.created_at)} · {l.kind}
-                      </span>
-                      <strong>{euro(l.amount)}</strong>
-                    </div>
-                  ))}
-                </section>
-              </>
-            )}
-            {page === "Plan" && (
-              <Plan
-                familyId={family}
-                learnerId={learner}
-                course={selected}
-                sessions={data.sessions}
-                calendar={data.calendar}
-                run={run}
-                refresh={refresh}
-                onAttempt={setAttempt}
+              )}
+              <PracticePicker
+                selected={selected}
+                busy={busy}
+                onCreate={(mode: string) => run(() => create(mode))}
+                onPapers={() => onPage("Papers")}
               />
-            )}
-          </>
-        )}
-      </main>
-    </div>
+            </>
+          )}
+          {page === "Papers" && (
+            <>
+              <button
+                className="link-button"
+                onClick={() => onPage("Practice")}
+              >
+                ← Practice
+              </button>
+              <PageHeading
+                label="PAST PAPERS"
+                title="Ready for the whole paper?"
+                text="Original questions and a fixed deadline. Previously seen content is labelled."
+              />
+              <PaperList
+                papers={data.papers}
+                selected={selected}
+                learner={learner}
+                busy={busy}
+                onCreate={(mode: string, paper: string) =>
+                  run(() => create(mode, paper))
+                }
+              />
+            </>
+          )}
+          {page === "Progress" && (
+            <Progress
+              key={`${selected?.id}:${route.topic}`}
+              initialTopic={route.topic}
+              familyId={currentFamily}
+              learnerId={learner}
+              course={selected}
+              run={run}
+              onAssessment={openAssessment}
+              onPractice={(topic) =>
+                run(() => create("independent", undefined, topic))
+              }
+            />
+          )}
+          {page === "Plan" && (
+            <Plan
+              familyId={currentFamily}
+              learnerId={learner}
+              course={selected}
+              sessions={data.sessions}
+              calendar={data.calendar}
+              run={run}
+              refresh={refresh}
+              onAttempt={(id) => navigate({ attempt: id })}
+            />
+          )}
+        </>
+      )}
+      {signOut && (
+        <Dialog title="Sign out of GotFoth" onClose={() => setSignOut(false)}>
+          <p>
+            {Object.keys(localStorage).some((k) => k.startsWith("sv-draft:"))
+              ? "A recovery copy of your writing remains on this device. Signing out keeps it available when you return."
+              : "Your saved work will be here when you return."}
+          </p>
+          <Button
+            disabled={busy}
+            onClick={() =>
+              run(async () => {
+                await authClient.signOut();
+                setSignOut(false);
+                identityRef.current = null;
+                setIdentity(null);
+                setData(null);
+                history.replaceState(null, "", "/");
+              })
+            }
+          >
+            Sign out
+          </Button>
+        </Dialog>
+      )}
+    </PersonaShell>
   );
 }

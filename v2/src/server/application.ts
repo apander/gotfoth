@@ -69,13 +69,13 @@ export async function snapshot(actor: Actor, familyId: string) {
     ).rows;
     const attempts = (
       await tx.query(
-        "SELECT id,learner_id,mode,state,started_at,deadline,created_at,data->>'subject' AS subject FROM attempts WHERE learner_id=ANY($1::uuid[]) ORDER BY created_at DESC LIMIT 50",
+        "SELECT id,learner_id,mode,state,started_at,deadline,created_at,data->>'subject' AS subject,data->>'durationMinutes' AS duration_minutes FROM attempts WHERE learner_id=ANY($1::uuid[]) ORDER BY created_at DESC LIMIT 50",
         [ids],
       )
     ).rows;
     const assessments = (
       await tx.query(
-        `SELECT r.id,r.learner_id,r.state,r.error_code,r.published_at,s.id AS submission_id,s.submitted_at,a.mode,CASE WHEN r.state='published' THEN r.effective ELSE NULL END AS effective FROM assessments r JOIN submissions s ON s.id=r.submission_id JOIN attempts a ON a.id=s.attempt_id WHERE r.learner_id=ANY($1::uuid[]) ORDER BY s.submitted_at DESC LIMIT 100`,
+        `SELECT r.id,r.learner_id,r.state,r.error_code,r.published_at,s.id AS submission_id,s.submitted_at,a.mode,a.data->>'subject' AS subject,CASE WHEN r.state='published' THEN r.effective ELSE NULL END AS effective FROM assessments r JOIN submissions s ON s.id=r.submission_id JOIN attempts a ON a.id=s.attempt_id WHERE r.learner_id=ANY($1::uuid[]) ORDER BY s.submitted_at DESC LIMIT 100`,
         [ids],
       )
     ).rows;
@@ -246,6 +246,7 @@ export async function assessmentDetail(
       effective: r.state === "published" ? r.effective : undefined,
       submission,
       questions,
+      subject: attempt.data.subject,
       choiceGroups: attempt.data.choices,
       resources: attempt.data.resources,
       decisions:
