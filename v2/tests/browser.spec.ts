@@ -52,6 +52,14 @@ test("student can navigate topic evidence and submit typed practice through the 
         papers: [],
         calendar: "disconnected",
       };
+    else if (path.endsWith("/motivation"))
+      result = {
+        goal: 3,
+        timezone: "UTC",
+        weekly: 0,
+        total: 0,
+        milestones: [],
+      };
     else if (path.endsWith("/history"))
       result = [
         {
@@ -112,7 +120,7 @@ test("student can navigate topic evidence and submit typed practice through the 
   });
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: /Back to work/ }),
+    page.getByRole("heading", { name: /Your next step/ }),
   ).toBeVisible();
   await page.screenshot({
     path: "test-results/today-desktop.png",
@@ -142,7 +150,7 @@ test("invite-only landing is accessible at desktop and mobile widths", async ({
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Welcome to GotFoth." }),
+    page.getByRole("heading", { name: "Good to see you." }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Continue with Google/ }),

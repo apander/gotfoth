@@ -1,4 +1,4 @@
-# Study Vault v2
+# GotFoth v2
 
 The v2 application lives here independently of the original root application. No v1 code, database, or records are migrated. The approved product contract is [V2_SPEC.md](../V2_SPEC.md).
 
@@ -66,7 +66,7 @@ Only passing evaluations enable automatic release for that exact specification/c
 npm run typecheck
 npm test
 npm run build
-# Browser checks run against the Vercel deployment, not a local server.
+# Set TEST_BASE_URL to the preview deployment or a local production build.
 npm run test:browser
 ```
 
@@ -84,6 +84,57 @@ This is an implemented application baseline, **not an approved production launch
 - Validate each imported full mock, including diagram resources and all optional routes.
 - Recheck dependency advisories at deployment. The final installed dependency audit reported zero vulnerabilities after non-breaking fixes and overrides.
 
-Parent review includes candidate selection, editable awarded marks, evidence and justification, and explicit resolution of invalid question choices without changing the original submission. Approved plans freeze an exact attempt; calendar links reopen that attempt. Retrieval scheduling is reproducible from published evidence and advances through 3, 7 and 21 days after successful independent retrieval, resetting after weak evidence. Refund and dispute reconciliation uses authoritative Stripe state and an idempotent ledger. These paths still require deployment integration and family-pilot acceptance checks before launch.
+Teacher review includes candidate selection, editable awarded marks, evidence and justification, and explicit resolution of invalid question choices without changing the original submission. Approved plans freeze an exact attempt; calendar links reopen that attempt. Retrieval scheduling is reproducible from published evidence and advances through 3, 7 and 21 days after successful independent retrieval, resetting after weak evidence. Refund and dispute reconciliation uses authoritative Stripe state and an idempotent ledger. These paths still require deployment integration and family-pilot acceptance checks before launch.
 
 Marking commits a checkpoint after each question and required blind review. Workflow steps continue from the outbox without putting an entire paper in one server execution. Operators can recover failed or stale jobs. A provider request interrupted before its usage is saved is conservatively held for reconciliation; do not reset operator usage merely to bypass a spending limit.
+
+## Persona redesign (October 2026)
+
+The four workspaces now have separate navigation and layouts. Students own course setup and planning; teachers review across their active family memberships; parents monitor and fund; superusers operate a separate administration context. See section 4 of V2_SPEC.md for the current UX contract.
+
+Deploy the additive `0006_persona_goals` migration with the normal migration command before enabling the updated application against a database. It adds learner goal/timezone preferences and an assessment-queue index; it does not rewrite learning records. The UI remains compatible with old invitation, calendar, attempt and page links.
+
+New authenticated endpoints: `GET teacher/workspace` (view, offset, family, learner, subject, status, search), `GET family/motivation` (family, learner), and `POST family/motivation` (familyId, learnerId, goal, timezone). Teacher reads use per-family RLS transactions and never return candidate answers in list summaries. Goals use authoritative submissions and count distinct completed attempts.
+
+Run `npm run typecheck`, `npm test`, and `npm run build`. On Windows installations where Turbopack cannot start its CSS subprocess, `npm run build -- --webpack` verifies the same production application using the supported alternate compiler. Browser fixtures in `redesign.spec.ts` exercise all four personas at 375, 768, 1024 and 1440px and save visual references under `test-results`. Set `TEST_BASE_URL` to the preview URL and, if needed, `PLAYWRIGHT_EXECUTABLE_PATH` to an installed Chromium browser. Synthetic browser fixtures do not replace a real authenticated preview smoke test.
+
+Release checklist: configure separate preview v2 database and OAuth settings, apply migrations there, exercise real role memberships and goal persistence, visually review the fixture screenshots, then run the migration and deploy in production. Do not reuse the legacy preview database or copy production credentials into preview. Rollback the application if needed; the additive columns can remain in place.
+
+### Verification record — 16 October 2026
+
+- Type checking passed; all 35 domain/database tests passed.
+- The local production build passed with webpack; the Vercel preview production build passed with Turbopack.
+- All 31 browser cases passed against the local production build (29 main cases plus 2 focused regression cases). Coverage includes four viewport widths, course setup, autosave and failed-save recovery, deadline freeze, review publication and queue context, mixed admin/member switching, parent read-only feedback, explicit funding-limit save, insufficient credit, goal reloads, enlarged text and keyboard drawer dismissal.
+- Desktop and mobile synthetic screenshots were visually inspected. References are in `test-results/redesign-*.png`, including all persona landing screens, practice, feedback and teacher review.
+- Preview deployment: https://gotfoth-aj0tewdth-apanders-projects-8cc2f736.vercel.app (ready). Deployment protection prevents unauthenticated browser automation; the preview environment also still needs separate v2 database and OAuth configuration. A real authenticated preview smoke test remains outstanding.
+- No live database migration or production rollout was performed. Apply `0006_persona_goals` in the configured preview database before testing real learner goals.
+
+### Isolated preview preparation
+
+`scripts/prepare-persona-preview.ts` uses the existing ignored development and operator configuration, checks that their destination differs from production, and prints a read-only plan by default:
+
+```powershell
+npx --no-install tsx scripts/prepare-persona-preview.ts
+```
+
+After explicit approval for the external database and login creation, run the same command with `--apply`. It creates only `gotfoth_persona_preview` and the restricted `gotfoth_persona_preview_runtime` role on the development server, applies the current migrations, grants runtime access to the new database, and writes ignored `.env.persona-preview` / `.env.persona-preview-operator` files. It refuses mismatched targets and existing resources without matching local configuration. It does not alter Vercel settings or deploy automatically.
+
+Configure the runtime values only for Preview branch `codex/persona-experiences`. Keep the owner connection out of Vercel. The proposed stable alias is `https://gotfoth-persona-preview.vercel.app`; its Google OAuth redirect URI is `https://gotfoth-persona-preview.vercel.app/api/auth/callback/google`. That URI must be registered on the existing Google client before real sign-in can complete. Preview protection also needs authorised test access or a normal Vercel browser sign-in.
+
+### Hosted preview verification — 17 October 2026
+
+The approved isolated database and restricted runtime role are provisioned, all seven migrations are applied, and the ten runtime variables are scoped only to Preview branch `codex/persona-experiences`. The owner connection is retained locally. The stable preview alias now points to deployment `dpl_7xEvBGBLWPxEcCczssTDnrF5QJeD`.
+
+All 31 browser checks passed against `https://gotfoth-persona-preview.vercel.app` using the authorised Vercel protection session. Persona journeys use synthetic API fixtures; the live unauthenticated checks also verify the welcome page, private-file isolation and cron authentication. Playwright accepts `PLAYWRIGHT_STORAGE_STATE` for an ignored local browser-state file when a protected preview needs an authorised session.
+
+Live `GET /api/v2/identity` returns `401 UNAUTHENTICATED`, and `GET /api/auth/get-session` returns a null session as expected. The live sign-in endpoint initiates Google OAuth successfully with the correct stable callback URL. The preview callback was subsequently registered on the Google OAuth client. A fresh browser check reaches the normal Google sign-in screen without `redirect_uri_mismatch`. Completing a real Google login and checking the resulting authenticated persona workspaces remain outstanding. No production migration or rollout has been performed.
+
+The student/parent access follow-up found that the fresh preview database had no family or invitations, and the plain preview URL required Vercel membership. With explicit approval, an isolated preview family and seven-day email-bound student/parent invitations were created through the existing audited domain functions. A seven-day Vercel share link was created only for the stable preview alias; project-wide deployment protection remains enabled. Fresh browsers without Vercel sessions verified that both combined invitation/share links preserve the invitation, reach GotFoth, receive the expected unauthenticated API response, and open Google sign-in without an OAuth error. Users must complete Google sign-in with the invited address to accept their invitation. The private links and preparation scripts are retained only in ignored `.vercel` files.
+
+### UX test accounts
+
+The isolated preview now includes a password-based test account picker at `/testing`, with twelve fictional students, parents, teachers and a mixed-role account across four families. See [TEST_WORKSPACES.md](TEST_WORKSPACES.md) for scenarios, reset instructions, environment restrictions and live workflow tests. The test password is held in ignored `.vercel/persona-test-logins.json`, and only password hashes are stored in the database.
+
+### Guided student course setup
+
+My subjects now uses subject cards and a three-step setup: course details, covered topics, and an optional study rhythm. The only available specification is preselected for confirmation. Weekly study times use day/time/duration fields with no drag grid or nested scrolling; exact saved minute values are preserved. Extra time, timezone and confirmed exam dates are disclosed on demand. Closing a changed draft asks before discarding, save errors retain choices, and dialog dismissal restores keyboard focus. Existing enrolment mutations and learning rules remain unchanged.

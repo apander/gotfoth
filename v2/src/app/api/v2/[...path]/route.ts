@@ -33,6 +33,11 @@ import { proposePlan, planAction } from "@/server/planning";
 import { database } from "@/server/db";
 import { accountView, deleteAccount, updateAccount } from "@/server/account";
 import {
+  motivation,
+  saveMotivation,
+  teacherWorkspace,
+} from "@/server/personas";
+import {
   examPaper,
   examQuestion,
   listExamPapers,
@@ -71,6 +76,14 @@ async function handle(
     let result: unknown;
     if (request.method === "GET") {
       if (path === "identity") result = await identity(user);
+      else if (path === "teacher/workspace")
+        result = await teacherWorkspace(user, url.searchParams);
+      else if (path === "family/motivation")
+        result = await motivation(
+          user,
+          familyId,
+          z.string().uuid().parse(url.searchParams.get("learner")),
+        );
       else if (path === "admin") result = await adminSnapshot(user);
       else if (path === "family/snapshot")
         result = await snapshot(user, familyId);
@@ -86,17 +99,27 @@ async function handle(
           familyId,
           z.string().uuid().parse(url.searchParams.get("id")),
         );
-      else if (path === "family/exam-papers") result = await listExamPapers(user);
+      else if (path === "family/exam-papers")
+        result = await listExamPapers(user);
       else if (path === "family/exam-paper")
-        result = await examPaper(user, z.string().uuid().parse(url.searchParams.get("id")));
+        result = await examPaper(
+          user,
+          z.string().uuid().parse(url.searchParams.get("id")),
+        );
       else if (path === "family/exam-question")
-        result = await examQuestion(user, z.string().min(3).parse(url.searchParams.get("id")));
+        result = await examQuestion(
+          user,
+          z.string().min(3).parse(url.searchParams.get("id")),
+        );
       else if (path === "account") result = await accountView(user);
       else
         throw new AppError("NOT_FOUND", "This endpoint is unavailable.", 404);
     } else {
       if (path === "account") result = await updateAccount(user, body);
-      else if (path === "account/delete") result = await deleteAccount(user, body);
+      else if (path === "family/motivation")
+        result = await saveMotivation(user, familyId, body);
+      else if (path === "account/delete")
+        result = await deleteAccount(user, body);
       else if (path === "invitation/accept")
         result = await acceptInvitation(
           user,
@@ -106,7 +129,8 @@ async function handle(
       else if (path === "admin/invite") result = await invite(user, body);
       else if (path === "admin/member") result = await setMember(user, body);
       else if (path === "admin/welcome") result = await sendWelcome(user, body);
-      else if (path === "admin/reissue") result = await reissueInvite(user, body);
+      else if (path === "admin/reissue")
+        result = await reissueInvite(user, body);
       else if (path === "admin/catalogue")
         result = await catalogueAction(user, body);
       else if (path === "admin/operation")
@@ -166,7 +190,10 @@ async function handle(
           z.boolean().parse(body.confirmed),
         );
       else if (path === "family/exam-publish")
-        result = await publishExamPaper(user, z.string().uuid().parse(body.paperId));
+        result = await publishExamPaper(
+          user,
+          z.string().uuid().parse(body.paperId),
+        );
       else if (path === "calendar/connect")
         result = await calendarConnect(user);
       else if (path === "calendar/disconnect") {

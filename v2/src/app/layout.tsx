@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./personas.css";
 export const metadata: Metadata = {
   title: "GotFoth · Focused revision",
   description: "A focused workspace for International A Level practice.",

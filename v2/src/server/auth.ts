@@ -1,9 +1,11 @@
 import "server-only";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { headers } from "next/headers";
 import { accountIsSuperuser, database, type Actor } from "./db";
 import { AppError } from "../lib/errors";
+import { testLoginEnabled, testRequestAllowed } from "./testing-config";
+import { isTestAccount } from "../lib/test-accounts";
 let instance: ReturnType<typeof betterAuth> | undefined;
 export function auth() {
   if (instance) return instance;
@@ -21,7 +23,28 @@ export function auth() {
     database: database(),
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: process.env.BETTER_AUTH_URL,
-    emailAndPassword: { enabled: false },
+    rateLimit: testLoginEnabled()
+      ? { customRules: { "/sign-in/email": { window: 60, max: 60 } } }
+      : undefined,
+    emailAndPassword: {
+      enabled: testLoginEnabled(),
+      disableSignUp: true,
+      requireEmailVerification: true,
+      minPasswordLength: 12,
+    },
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (
+          ctx.path === "/sign-in/email" &&
+          (!testRequestAllowed(ctx.request) ||
+            !isTestAccount(String(ctx.body?.email ?? "")))
+        )
+          throw new APIError("FORBIDDEN", {
+            message:
+              "Test sign-in is only available for the listed preview accounts.",
+          });
+      }),
+    },
     socialProviders: {
       google: {
         clientId: process.env.GOOGLE_CLIENT_ID,
@@ -52,7 +75,7 @@ export function auth() {
             );
             if (!pending.rows.length)
               throw new APIError("FORBIDDEN", {
-                message: "Study Vault is invitation only.",
+                message: "GotFoth is invitation only.",
               });
             return { data: user };
           },

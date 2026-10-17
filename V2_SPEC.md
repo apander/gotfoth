@@ -1,4 +1,4 @@
-# Study Vault v2 — Full consolidated plan
+# GotFoth v2 — Full consolidated plan
 
 Version: 2.0  
 Date: 3 October 2026  
@@ -13,7 +13,7 @@ Status: Approved specification baseline. Application implementation is in [v2](v
 - [Practice progression](#5-practice-progression)
 - [Answer player, autosave and timed behaviour](#6-answer-player-autosave-and-timed-behaviour)
 - [One-time paper importer](#7-one-time-paper-importer)
-- [Marking and parent review](#8-marking-and-parent-review)
+- [Marking and teacher review](#8-marking-and-teacher-review)
 - [Feedback and syllabus-topic history](#9-feedback-and-syllabus-topic-history)
 - [Study planning and Google Calendar](#10-study-planning-and-google-calendar)
 - [Credit, payments and processing costs](#11-credit-payments-and-processing-costs)
@@ -26,7 +26,7 @@ Status: Approved specification baseline. Application implementation is in [v2](v
 
 ## 1. Purpose and launch scope
 
-Study Vault v2 helps students build confidence and exam readiness through a progression from individual syllabus questions to complete past papers under timed conditions.
+GotFoth v2 helps students build confidence and exam readiness through a progression from individual syllabus questions to complete past papers under timed conditions.
 
 The central learning cycle is:
 
@@ -39,7 +39,7 @@ The first release will support:
 - Typed answers within the app.
 - Guided questions, independent question sets, timed sections and full-paper mocks.
 - A one-time import of the supplied paper and mark-scheme collection.
-- Automated marking with independent checking and a parent exception queue.
+- Automated marking with independent checking and a teacher exception queue.
 - Supportive feedback, syllabus-topic history and progress dashboards.
 - Parent-funded prepaid credit.
 - Study planning and optional Google Calendar publishing.
@@ -65,7 +65,7 @@ The configured superuser:
 - Can sign in without an invitation.
 - Creates family workspaces.
 - Issues and revokes invitations.
-- Assigns parent or student membership through invitations.
+- Assigns parent, teacher or student membership through invitations.
 - Administers catalogue import and publication.
 - Manages operational settings and processing failures.
 - Can suspend access, with an audit record.
@@ -80,7 +80,7 @@ Each invitation identifies:
 
 - Recipient email.
 - Family workspace.
-- Parent or student role.
+- Parent, teacher or student role.
 - Linked learner where applicable.
 - Expiry and acceptance status.
 
@@ -92,9 +92,11 @@ Uninvited users cannot provision an application account or enter a family worksp
 
 ### Family roles
 
-**Parents** can manage enrolled courses, learner availability, study plans, marking reviews and family funding. They can view the work of learners explicitly linked to them.
+**Parents** monitor published results and study activity, fund the family wallet, and set monthly learner limits. Assessment views are read-only. Authorised family data export and deletion live in family settings.
 
-**Students** can access their own answers, assessments, progress, plans and assigned catalogue content. They cannot access siblings’ work, purchase credit, change budgets or grant membership.
+**Teachers** review assessments and student queries, publish rubric-supported decisions, and use existing evidence to guide students. Their overview, roster and review queue aggregate only families where they have active teacher membership. They do not manage funding or student courses.
+
+**Students** manage their own courses, taught topics, availability, exam dates and study plans, and can access their own answers, assessments, progress and assigned catalogue content. They cannot access siblings’ work, purchase credit, change budgets or grant membership.
 
 A user may belong to multiple workspaces, with an explicit workspace switcher. Every private record, file and background job checks workspace membership and learner permissions.
 
@@ -131,38 +133,25 @@ Require the Psychology Unit 3 choice—criminological or health psychology—bef
 
 Do not assume that old papers perfectly match the current specification. Preserve their original wording and mark schemes, and explicitly map their suitability for current-course practice.
 
-Exact examination dates are entered and confirmed by the parent.
+Exact examination dates are entered and confirmed by the student.
 
-## 4. Student and parent experience
+## 4. Four persona experiences
 
-Student navigation:
+Student navigation: **Today · My subjects · Practice · Progress · My week**. Past papers sit inside Practice and each subject. Today prioritises an unfinished attempt, then an approved planned session, then a short practice. Course setup stays actionable before any course exists.
 
-**Today · Practice · Papers · Progress · Plan**
+Teacher navigation: **Overview · Students · Reviews**. The teacher workspace combines authorised families with family, student, subject and status filters. Pending reviews remain discoverable even when the learner has a newer result. Funding and processing blockers are separate from teacher decisions. Review shows the original answer, rubric, candidates and editable decision together.
 
-Parent navigation:
+Parent navigation: **Overview · Progress · Funding**. Show recent activity, upcoming approved sessions and published feedback. Missing evidence is not a poor score. Funding shows available balance, reservations, transaction history and explicitly saved monthly limits. No assessment-query, course-editing or marking decisions are exposed to parents.
 
-**Overview · Reviews · Family · Credit**
+Superuser navigation: **Overview · Families · Invitations · Content · Operations**. Content groups paper browsing and catalogue publication. Administration is a separate context from explicit family memberships; switching never impersonates another person.
 
-Superuser administration:
+One component system supports four distinct compositions: red, white and navy student learning suited to A-level study, warm amber parent summaries, restrained teal teaching, and charcoal administration. The book companion appears only in student welcome, goals and completion states. Colour is never the only indication of role, status or performance.
 
-**Families · Invitations · Catalogue · Operations**
+Student motivation defaults to three sessions per Monday–Sunday week, configurable from one to seven in a saved IANA timezone (initially UTC, visible and editable). A completed attempt counts once when the attempt is submitted and at least one submitted answer contains content. Multiple guided question submissions, empty table cells, marking state and payment state do not inflate or suppress the count. Completion milestones at 1, 5 and 10 sessions celebrate participation, not mastery. A brief celebration appears after a successful submission and is remembered per learner/attempt on the device. No daily streak, XP or leaderboard.
 
-The student’s Today page should answer one question: **“What should I do next?”**
+Page, workspace, selected student/course, review filters and assessment links are URL-backed. Preserve old invitation, calendar and attempt links. Users with multiple memberships have a context switcher. Browser navigation out of an answer player flushes writing first and stays on the attempt if saving fails.
 
-Show:
-
-- One recommended task.
-- Its expected duration.
-- A short explanation of why it is useful.
-- Continue draft and Choose something else actions.
-
-Avoid overwhelming the student with charts before they can start working.
-
-The parent overview shows progress, marking exceptions and funding. Routine use should not require copying prompts, comparing chat windows or pasting YAML.
-
-Provide accessible keyboard navigation, clear save states, adjustable text size, screen-reader labels and sufficient contrast. Colour must not be the sole indication of performance.
-
-Desktop and tablet layouts prioritise long answers. Phones support short answers, feedback, progress and planning.
+At widths below 640px, students use five-item bottom navigation; adults use a modal navigation drawer. Long answers use two columns on desktop and stacked panels on smaller screens. Preserve keyboard navigation, focus restoration, save announcements, adjustable text, reduced motion, sufficient contrast and 44px primary controls.
 
 ## 5. Practice progression
 
@@ -233,7 +222,7 @@ These are configurable product defaults. Fill unavailable categories from other 
 
 Avoid recently answered questions unless the task is a correction or planned retest.
 
-Reserve the two most recent complete, compatible papers per unit for unseen mocks by default. Exclude their questions from ordinary practice selection. Parents may release a reserved paper with an exposure warning.
+Reserve the two most recent complete, compatible papers per unit for unseen mocks by default. Exclude their questions from ordinary practice selection. Students may release a reserved paper with an exposure warning.
 
 Record exposure across the application. Opening a complete paper or mark scheme counts as exposure to the questions it discloses.
 
@@ -362,7 +351,7 @@ The final report lists imported papers, duplicates, eligible questions, incomple
 
 The operator must confirm permission for the intended shared catalogue use before distribution. Pearson’s published reproduction permissions are conditional. [Pearson copyright policy](https://qualifications.pearson.com/en/support/support-topics/exams/past-papers/pearson-copyright-policy.html)
 
-## 8. Marking and parent review
+## 8. Marking and teacher review
 
 ### Marking inputs
 
@@ -399,7 +388,7 @@ Application code calculates totals and percentages. Model-generated aggregate ar
 3. Run the primary marker.
 4. Validate returned marks, evidence and coverage.
 5. Obtain an independent review where required.
-6. Publish or hold for parent review.
+6. Publish or hold for teacher review.
 7. Generate the concise feedback presentation and proposed corrective task.
 
 Blank submitted answers can receive zero. Processing failures, missing rubrics and unsupported inputs cannot.
@@ -415,22 +404,22 @@ Review:
 
 The reviewer marks independently before seeing the first result.
 
-During the pilot, score disagreements or unresolved rubric conflicts go to the parent. Do not automatically average the marks or choose the higher result.
+During the pilot, score disagreements or unresolved rubric conflicts go to the teacher. Do not automatically average the marks or choose the higher result.
 
 Use bounded retries and one targeted repair for malformed output. Avoid unlimited model adjudication loops.
 
-### Parent review
+### Teacher review
 
 Show the answer, original question, rubric and competing marking explanations.
 
-The parent can:
+The teacher can:
 
 - Accept a supported assessment.
 - Make a rubric-supported correction with a reason.
 - Request controlled reprocessing.
 - Mark the result unresolvable.
 
-Preserve original candidate marks and all decisions. Parents cannot edit the student’s original submission.
+Preserve original candidate marks and all decisions. Teachers cannot edit the student’s original submission.
 
 Students can query a result through this review flow.
 
@@ -538,7 +527,7 @@ Missed work is offered for rescheduling without creating an ever-growing overdue
 For Google Calendar:
 
 - Request permission separately from sign-in.
-- Create a dedicated Study Vault calendar.
+- Create a dedicated GotFoth calendar.
 - Publish approved sessions.
 - Update or cancel only the app’s own events.
 - Keep the app as the source of truth.
@@ -668,7 +657,7 @@ Use authenticated, validated application endpoints for:
 - Revision-checked answer saving.
 - Cost quotes and submission.
 - Job status and published assessments.
-- Student assessment queries and parent decisions.
+- Student assessment queries and teacher decisions.
 - Topic History.
 - Credit and checkout.
 - Study-plan approval.
@@ -741,7 +730,7 @@ Exit criteria: private test families are isolated; the importer resumes safely; 
 
 ### Stage B — Complete practice loop
 
-Build guided and independent practice, typed answers, autosave, immutable submission, marking adapters, parent review and feedback.
+Build guided and independent practice, typed answers, autosave, immutable submission, marking adapters, teacher review and feedback.
 
 Use test credit and human publication while evaluating marking.
 
@@ -798,7 +787,7 @@ There is no v1 migration stage.
 
 - Invalid marks, missing questions and inconsistent totals are rejected.
 - Processing failure is not treated as a wrong answer.
-- Reviewer disagreements reach the parent queue.
+- Reviewer disagreements reach the teacher queue.
 - Moderation remains auditable.
 - Topic history uses submission dates and correct mark-weighted aggregates.
 - Mixed-topic questions do not create invented topic scores or duplicated totals.

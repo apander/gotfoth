@@ -26,6 +26,8 @@ export const learners = pgTable("learners", {
     .references(() => families.id),
   name: text().notNull(),
   email: text(),
+  weeklyGoal: integer("weekly_goal").notNull().default(3),
+  goalTimezone: text("goal_timezone").notNull().default("UTC"),
   monthlyCap: bigint("monthly_cap", { mode: "number" })
     .notNull()
     .default(10000000),

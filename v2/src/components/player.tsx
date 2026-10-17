@@ -7,12 +7,15 @@ export function Player({
   familyId,
   id,
   onDone,
+  onNavigationReady,
 }: {
   familyId: string;
   id: string;
-  onDone: () => void;
+  onDone: (completed?: boolean) => void;
+  onNavigationReady?: (save: (() => Promise<void>) | null) => void;
 }) {
   const [attempt, setAttempt] = useState<any>(null),
+    [discardRecovery, setDiscardRecovery] = useState(false),
     [index, setIndex] = useState(0),
     [answers, setAnswers] = useState<Record<string, any>>({}),
     [token, setToken] = useState(""),
@@ -84,6 +87,13 @@ export function Player({
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
+  }, [id]);
+  useEffect(() => {
+    onNavigationReady?.(async () => {
+      await flush();
+      if (dirty.current.size) throw new Error("Writing has not synced yet.");
+    });
+    return () => onNavigationReady?.(null);
   }, [id]);
   useEffect(() => {
     const interval = setInterval(() => {
@@ -215,7 +225,7 @@ export function Player({
         delete current.current[question.id];
         localStorage.removeItem(draftKey);
       } else localStorage.removeItem(draftKey);
-      onDone();
+      onDone(true);
     }
   }
   if (!attempt)
@@ -225,7 +235,7 @@ export function Player({
           {error || "Opening your practice…"}
         </p>
         {error && (
-          <button className="button secondary" onClick={onDone}>
+          <button className="button secondary" onClick={() => onDone()}>
             Back to study
           </button>
         )}
@@ -246,6 +256,10 @@ export function Player({
           onClick={() =>
             run(async () => {
               await flush();
+              if (dirty.current.size)
+                throw new Error(
+                  "Your writing has not synced. A recovery copy remains on this device.",
+                );
               onDone();
             })
           }
@@ -294,40 +308,58 @@ export function Player({
         </div>
       )}
       {recovery && (
-        <div className="notice">
-          <strong>Writing was recovered on this device.</strong>
-          <p>It has not replaced the saved answer.</p>
-          <div className="row">
-            <button
-              className="button secondary"
-              onClick={() =>
-                run(async () => {
-                  await action({ action: "recover", answers: recovery });
-                  if (editable)
-                    for (const [qid, text] of Object.entries(recovery))
-                      if (current.current[qid]) edit(qid, text);
-                  setRecovery(null);
-                  if (!editable) localStorage.removeItem(draftKey);
-                })
-              }
+        <>
+          {discardRecovery && (
+            <Dialog
+              title="Discard recovered writing?"
+              onClose={() => setDiscardRecovery(false)}
             >
-              {editable
-                ? "Restore into this practice"
-                : "Save as interrupted practice revision"}
-            </button>
-            <button
-              className="link-button"
-              onClick={() => {
-                if (confirm("Discard this local recovery copy?")) {
+              <p>
+                This removes the recovery copy on this device. Your saved
+                account answers stay intact.
+              </p>
+              <button
+                className="button"
+                onClick={() => {
                   localStorage.removeItem(draftKey);
                   setRecovery(null);
+                  setDiscardRecovery(false);
+                }}
+              >
+                Discard local copy
+              </button>
+            </Dialog>
+          )}
+          <div className="notice">
+            <strong>Writing was recovered on this device.</strong>
+            <p>It has not replaced the saved answer.</p>
+            <div className="row">
+              <button
+                className="button secondary"
+                onClick={() =>
+                  run(async () => {
+                    await action({ action: "recover", answers: recovery });
+                    if (editable)
+                      for (const [qid, text] of Object.entries(recovery))
+                        if (current.current[qid]) edit(qid, text);
+                    setRecovery(null);
+                    if (!editable) localStorage.removeItem(draftKey);
+                  })
                 }
-              }}
-            >
-              Discard recovery
-            </button>
+              >
+                {editable
+                  ? "Restore into this practice"
+                  : "Save as interrupted practice revision"}
+              </button>
+              <button
+                className="link-button"
+                onClick={() => setDiscardRecovery(true)}
+              >
+                Discard recovery
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
       {attempt.state === "draft" && (
         <section className="card stack" style={{ marginBottom: 25 }}>
@@ -482,7 +514,9 @@ export function Player({
           </p>
           <QuestionExtracts
             key={question.id}
-            extracts={(question.extracts ?? []).filter((extract: any) => extract.cited !== false)}
+            extracts={(question.extracts ?? []).filter(
+              (extract: any) => extract.cited !== false,
+            )}
             reveal
           />
           {attempt.data.resources

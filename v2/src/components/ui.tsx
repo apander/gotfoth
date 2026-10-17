@@ -25,22 +25,24 @@ const paths: Record<string, string> = {
   Delete: "M4 7h16 M9 7V5h6v2 M7 7l1 13h8l1-13",
   Copy: "M8 8h12v12H8z M4 4h12v12",
   Check: "m5 12 4 4L19 6",
-  Student: "M12 11.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4 M6.2 20.2v-1.1a5.8 5.8 0 0 1 11.6 0v1.1",
+  Student:
+    "M12 11.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4 M6.2 20.2v-1.1a5.8 5.8 0 0 1 11.6 0v1.1",
   Parent:
     "M8 10.6a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2 M3 20.2v-.6a5 5 0 0 1 10 0v.6 M17.6 12a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8 M15.2 20.2v-.4a2.6 2.6 0 0 1 4.8 0v.4",
   Teacher:
     "M7 11a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2 M2.6 20.2v-.6a4.4 4.4 0 0 1 8.8 0v.6 M14.2 5.2h7.2v9.2h-7.2z M14.2 8.6h7.2",
-  Superuser: "M12 3.2 19.2 6.4v5.6c0 4-3 6.8-7.2 8.2-4.2-1.4-7.2-4.2-7.2-8.2V6.4z",
+  Superuser:
+    "M12 3.2 19.2 6.4v5.6c0 4-3 6.8-7.2 8.2-4.2-1.4-7.2-4.2-7.2-8.2V6.4z",
 };
 export function Icon({ name }: { name: string }) {
   const aliases: Record<string, string> = {
-  Overview: "Today",
-  Families: "Family",
-  Invitations: "Arrow",
-  Catalogue: "Papers",
-  Study: "Plan",
-  Students: "Family",
-  Guidance: "Reviews",
+    Overview: "Today",
+    Families: "Family",
+    Invitations: "Arrow",
+    Catalogue: "Papers",
+    Study: "Plan",
+    Students: "Family",
+    Guidance: "Reviews",
   };
   return (
     <svg
@@ -142,22 +144,33 @@ export function Dialog({
   title,
   onClose,
   children,
+  className,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement;
-    ref.current?.showModal();
+    const dialog = ref.current;
+    dialog?.showModal();
     return () => {
-      ref.current?.close();
+      dialog?.close();
       previous?.focus();
     };
   }, []);
   return (
-    <dialog ref={ref} aria-label={title} onCancel={onClose}>
+    <dialog
+      ref={ref}
+      className={className}
+      aria-label={title}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+    >
       <div className="row">
         <h2>{title}</h2>
         <button

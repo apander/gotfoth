@@ -58,7 +58,7 @@ export async function checkout(actor: Actor, familyId: string, input: unknown) {
           price_data: {
             currency: "eur",
             unit_amount: cents,
-            product_data: { name: "Study Vault family credit" },
+            product_data: { name: "GotFoth family credit" },
           },
         },
       ],
@@ -346,7 +346,7 @@ export async function calendarCallback(
           Authorization: `Bearer ${token.access_token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ summary: "Study Vault" }),
+        body: JSON.stringify({ summary: "GotFoth" }),
       },
     );
     requireThat(

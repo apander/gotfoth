@@ -4,8 +4,9 @@ import { api, date } from "./api";
 import { PageHeading, Empty, Dialog, Icon } from "./ui";
 import { Button, Meter } from "./ui";
 import { score } from "./revision";
-import { ScheduleFields } from "./schedule-fields";
-import { examSessionChoices } from "../lib/sessions";
+import { CourseSetup } from "./course-setup";
+import { QuestionExtracts } from "./extracts";
+import { friendlyStatus } from "../lib/personas";
 type Run = (fn: () => Promise<void>) => void;
 export function Progress({
   initialTopic,
@@ -83,7 +84,9 @@ export function Progress({
             <select value={topic} onChange={(e) => setTopic(e.target.value)}>
               <option value="">Choose a topic</option>
               {course?.data.taughtTopics.map((t: string) => (
-                <option key={t}>{t}</option>
+                <option key={t} value={t}>
+                  {topicLabel(t)}
+                </option>
               ))}
             </select>
           </label>
@@ -92,7 +95,9 @@ export function Progress({
             <select value={mode} onChange={(e) => setMode(e.target.value)}>
               <option value="">Independent attempts</option>
               {["guided", "independent", "timed", "mock"].map((m) => (
-                <option key={m}>{m}</option>
+                <option key={m} value={m}>
+                  {friendlyStatus(m)}
+                </option>
               ))}
             </select>
           </label>
@@ -125,7 +130,7 @@ export function Progress({
       {rows && rows.length > 0 ? (
         <section className="card" style={{ marginTop: 24 }}>
           <div className="row">
-            <h2>{topic}</h2>
+            <h2>{topicLabel(topic)}</h2>
             <button
               className="button secondary small"
               onClick={() => onPractice(topic)}
@@ -280,216 +285,6 @@ function studyTimes(slots: { day: number; start: string; minutes: number }[]) {
     })
     .join(" · ");
 }
-function CoursePanel({
-  subject,
-  enrolment,
-  papers,
-  familyId,
-  learnerId,
-  open,
-  onClose,
-  run,
-  refresh,
-}: {
-  subject: (typeof courseSubjects)[number];
-  enrolment: any;
-  papers: any[];
-  familyId: string;
-  learnerId: string;
-  open: boolean;
-  onClose: () => void;
-  run: Run;
-  refresh: () => Promise<void>;
-}) {
-  const saved = enrolment?.data;
-  const [session, setSession] = useState(saved?.targetSession ?? ""),
-    [spec, setSpec] = useState(saved?.specification ?? ""),
-    [topics, setTopics] = useState<string[]>(saved?.taughtTopics ?? []),
-    [option, setOption] = useState(saved?.option ?? ""),
-    [extra, setExtra] = useState(saved?.extraTimePercent ?? 0),
-    [timezone, setTimezone] = useState(
-      saved?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
-    ),
-    [availability, setAvailability] = useState(
-      JSON.stringify(
-        saved?.availability ?? [
-          { day: 1, start: "17:00", minutes: 20 },
-          { day: 4, start: "17:00", minutes: 20 },
-        ],
-      ),
-    ),
-    [examDates, setExamDates] = useState(JSON.stringify(saved?.examDates ?? []));
-  useEffect(() => {
-    setSession(saved?.targetSession ?? "");
-    setSpec(saved?.specification ?? "");
-    setTopics(saved?.taughtTopics ?? []);
-    setOption(saved?.option ?? "");
-    setExtra(saved?.extraTimePercent ?? 0);
-    setTimezone(
-      saved?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
-    );
-    setAvailability(
-      JSON.stringify(
-        saved?.availability ?? [
-          { day: 1, start: "17:00", minutes: 20 },
-          { day: 4, start: "17:00", minutes: 20 },
-        ],
-      ),
-    );
-    setExamDates(JSON.stringify(saved?.examDates ?? []));
-  }, [learnerId, enrolment?.id]);
-  const sessions = examSessionChoices();
-  const specs = [
-    ...new Set(
-      papers
-        .filter((paper) => paper.subject === subject.id)
-        .flatMap((paper) => paper.compatibleSpecifications ?? [])
-        .filter((item: string) => item),
-    ),
-  ];
-  if (spec && !specs.includes(spec)) specs.unshift(spec);
-  const catalogueTopics = [
-    ...new Set(
-      papers
-        .filter((paper) => paper.subject === subject.id)
-        .flatMap((paper) => paper.topics ?? []),
-    ),
-  ];
-  const topicChoices = [...new Set([...catalogueTopics, ...topics])];
-  if (!open) return null;
-  return (
-        <Dialog
-          title={`${saved ? "Edit" : "Add"} ${subject.label}`}
-          onClose={onClose}
-        >
-        <form
-          className="stack"
-          onSubmit={(event) => {
-            event.preventDefault();
-            run(async () => {
-              await api("family/enrolment", {
-                familyId,
-                learnerId,
-                course: {
-                  subject: subject.id,
-                  specification: spec || subject.code,
-                  targetSession: session,
-                  taughtTopics: topics,
-                  option: subject.id === "psychology" && option ? option : undefined,
-                  timezone,
-                  extraTimePercent: extra,
-                  sessionMinutes: 20,
-                  availability: JSON.parse(availability),
-                  examDates: JSON.parse(examDates),
-                  blockedDates: saved?.blockedDates ?? [],
-                },
-              });
-              await refresh();
-              onClose();
-            });
-          }}
-        >
-          <div className="form-grid">
-            <label className="field">
-              Target exam session
-              <select
-                required
-                value={sessions.includes(session) ? session : ""}
-                onChange={(event) => setSession(event.target.value)}
-              >
-                <option value="">Choose a session</option>
-                {sessions.map((choice) => (
-                  <option value={choice} key={choice}>
-                    {choice}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {specs.length > 0 && (
-              <label className="field">
-                Specification
-                <select
-                  required
-                  value={spec}
-                  onChange={(event) => setSpec(event.target.value)}
-                >
-                  <option value="">Choose a specification</option>
-                  {specs.map((item) => (
-                    <option value={item} key={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {subject.id === "psychology" && (
-              <label className="field">
-                Unit 3 option
-                <select value={option} onChange={(event) => setOption(event.target.value)}>
-                  <option value="">Not selected</option>
-                  <option value="health">Health psychology</option>
-                  <option value="criminological">Criminological psychology</option>
-                </select>
-              </label>
-            )}
-            <label className="field">
-              Extra-time allowance (%)
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={extra}
-                onChange={(event) => setExtra(Number(event.target.value))}
-              />
-            </label>
-            <label className="field">
-              Time zone
-              <input
-                value={timezone}
-                onChange={(event) => setTimezone(event.target.value)}
-              />
-            </label>
-          </div>
-          <fieldset className="stack">
-            <legend>Topics already taught</legend>
-            {topicChoices.length ? (
-              <div className="topic-choices">
-                {topicChoices.map((topic) => (
-                  <label className="topic-choice" key={topic}>
-                    <input
-                      type="checkbox"
-                      checked={topics.includes(topic)}
-                      onChange={() =>
-                        setTopics((current) =>
-                          current.includes(topic)
-                            ? current.filter((item) => item !== topic)
-                            : [...current, topic],
-                        )
-                      }
-                    />
-                    {topicLabel(topic)}
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <p className="muted">
-                Topics from the reviewed catalogue will appear here.
-              </p>
-            )}
-          </fieldset>
-          <ScheduleFields
-            kind="availability"
-            value={availability}
-            onChange={setAvailability}
-          />
-          <ScheduleFields kind="exams" value={examDates} onChange={setExamDates} />
-          <button className="button" type="submit">
-            Save {subject.label}
-          </button>
-        </form>
-        </Dialog>
-  );
-}
 export function FamilySettings({
   familyId,
   learnerId,
@@ -513,6 +308,7 @@ export function FamilySettings({
   const mine = enrolments.filter((item) => item.learner_id === learnerId);
   const [editing, setEditing] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [releasing, setReleasing] = useState<any>(null);
   useEffect(() => {
     setEditing(null);
     setRemoving(null);
@@ -520,83 +316,93 @@ export function FamilySettings({
   useEffect(() => {
     if (courseEdit) setEditing(courseEdit.subject);
   }, [courseEdit]);
-  const removingSubject = courseSubjects.find((subject) => subject.id === removing);
+  const removingSubject = courseSubjects.find(
+    (subject) => subject.id === removing,
+  );
   return (
     <>
       <PageHeading
-        label="YOUR STUDY"
-        title={student?.name ?? "Your courses"}
-        text="Set each course, the topics you have covered, and when you can study."
+        label="MY SUBJECTS / COURSE SETTINGS"
+        title={
+          mine.length
+            ? "Make room for your subjects."
+            : "Let’s find your starting point."
+        }
+        text="Choose a subject, tell us where you’re starting, and take it at your pace."
       />
-      <section className="card family-grid" id="student-courses">
-        <div className="overflow">
-          <table>
-            <thead>
-              <tr>
-                <th>Course</th>
-                <th>Session</th>
-                <th>Topics</th>
-                <th>Study times</th>
-                <th>
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {courseSubjects.map((subject) => {
-                const enrolment = mine.find((item) => item.data.subject === subject.id);
-                const saved = enrolment?.data;
-                const topics = saved?.taughtTopics ?? [];
-                return (
-                  <tr key={`${learnerId}-${subject.id}`}>
-                    <td>
-                      {subject.label}
-                      <span className="muted"> · {subject.code}</span>
-                    </td>
-                    <td>{saved?.targetSession || "—"}</td>
-                    <td>
-                      {topics.length
-                        ? topics.map((topic: string) => topicLabel(topic)).join(", ")
-                        : "—"}
-                    </td>
-                    <td>
-                      {saved?.availability?.length
-                        ? studyTimes(saved.availability)
-                        : "—"}
-                    </td>
-                    <td>
-                      <div className="table-actions">
-                        <button
-                          type="button"
-                          className="icon-button"
-                          aria-label={`${saved ? "Edit" : "Add"} ${subject.label}`}
-                          title={`${saved ? "Edit" : "Add"} ${subject.label}`}
-                          onClick={() => setEditing(subject.id)}
-                        >
-                          <Icon name={saved ? "Edit" : "Plus"} />
-                        </button>
-                        {saved && (
-                          <button
-                            type="button"
-                            className="icon-button danger"
-                            aria-label={`Delete ${subject.label}`}
-                            title={`Delete ${subject.label}`}
-                            onClick={() => setRemoving(subject.id)}
-                          >
-                            <Icon name="Delete" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      <section
+        className="subject-cards"
+        id="student-courses"
+        aria-label="Your subjects"
+      >
+        {courseSubjects.map((subject) => {
+          const saved = mine.find(
+            (item) => item.data.subject === subject.id,
+          )?.data;
+          const topics = saved?.taughtTopics ?? [];
+          return (
+            <article
+              className={`card subject-setup-card ${subject.id}`}
+              key={subject.id}
+            >
+              <div className="subject-card-icon">
+                <Icon name="Subjects" />
+              </div>
+              <p className="eyebrow">{saved ? "YOUR COURSE" : "A NEW START"}</p>
+              <h2>{subject.label}</h2>
+              <p className="muted">
+                {saved
+                  ? saved.targetSession
+                  : subject.id === "psychology"
+                    ? "Explore how people think, feel and behave."
+                    : "Understand the decisions that shape a business."}
+              </p>
+              {saved ? (
+                <div className="subject-course-summary">
+                  <p>
+                    {topics.length
+                      ? `${topics.length} topics ready for practice`
+                      : "Choose a topic to unlock practice"}
+                  </p>
+                  <p className="muted">
+                    {saved.availability?.length
+                      ? studyTimes(saved.availability)
+                      : "Study whenever you’re ready. Add a routine anytime."}
+                  </p>
+                </div>
+              ) : (
+                <p className="subject-course-summary">
+                  Tell us what you’re studying. We’ll help you find a place to
+                  begin.
+                </p>
+              )}
+              <div className="subject-card-actions">
+                <button
+                  type="button"
+                  className={`button ${saved ? "secondary" : ""}`}
+                  aria-label={`${saved ? "Edit" : "Add"} ${subject.label}`}
+                  onClick={() => setEditing(subject.id)}
+                >
+                  <Icon name={saved ? "Edit" : "Plus"} />
+                  {saved ? "Edit course" : `Add ${subject.label}`}
+                </button>
+                {saved && (
+                  <button
+                    type="button"
+                    className="link-button"
+                    aria-label={`Delete ${subject.label}`}
+                    onClick={() => setRemoving(subject.id)}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </article>
+          );
+        })}
       </section>
       {courseSubjects.map((subject) => (
-        <CoursePanel
+        <CourseSetup
           key={`${learnerId}-${subject.id}`}
           subject={subject}
           enrolment={mine.find((item) => item.data.subject === subject.id)}
@@ -663,76 +469,40 @@ export function FamilySettings({
               </span>
               <button
                 className="button secondary small"
-                onClick={() =>
-                  run(async () => {
-                    if (
-                      confirm(
-                        "Release this reserved paper into ordinary practice?",
-                      )
-                    )
-                      await api("family/action", {
-                        familyId,
-                        action: "release",
-                        learnerId,
-                        paperId: p.id,
-                      });
-                  })
-                }
+                onClick={() => setReleasing(p)}
               >
                 Release for practice
               </button>
             </div>
           ))}
       </section>
-      <section className="card" style={{ marginTop: 24 }}>
-        <h2>Your family’s data</h2>
-        <div className="row">
-          <button
-            className="button secondary"
+      {releasing && (
+        <Dialog
+          title="Release paper for practice?"
+          onClose={() => setReleasing(null)}
+        >
+          <p>
+            This makes the questions available for ordinary practice and reduces
+            your unseen mock options.
+          </p>
+          <Button
             onClick={() =>
               run(async () => {
-                const result = await api("family/action", {
+                await api("family/action", {
                   familyId,
-                  action: "export",
+                  action: "release",
+                  learnerId,
+                  paperId: releasing.id,
                 });
-                const url = URL.createObjectURL(
-                  new Blob([JSON.stringify(result, null, 2)], {
-                    type: "application/json",
-                  }),
-                );
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = "study-vault-export.json";
-                link.click();
-                URL.revokeObjectURL(url);
+                setReleasing(null);
+                await refresh();
               })
             }
           >
-            Export linked learners’ records
-          </button>
-          <button
-            className="link-button"
-            onClick={() =>
-              run(async () => {
-                if (
-                  prompt(
-                    "Type DELETE FAMILY to request removal of this family’s records within 30 days.",
-                  ) === "DELETE FAMILY"
-                ) {
-                  await api("family/action", {
-                    familyId,
-                    action: "delete",
-                    confirmation: "DELETE FAMILY",
-                  });
-                  location.reload();
-                }
-              })
-            }
-          >
-            Request family deletion
-          </button>
-        </div>
-      </section>
+            Release paper
+          </Button>
+        </Dialog>
+      )}
     </>
   );
 }
@@ -756,10 +526,12 @@ export function Plan({
   onAttempt: (id: string) => void;
 }) {
   const [week, setWeek] = useState(new Date().toISOString().slice(0, 10));
+  const [rescheduling, setRescheduling] = useState<string | null>(null);
+  const [startTime, setStartTime] = useState("");
   return (
     <>
       <PageHeading
-        label="PLAN"
+        label="MY WEEK"
         title="Make time for focused work."
         text="Approve a manageable week. Missed work can move, while completed attempts always retain their actual submission date."
       />
@@ -809,7 +581,7 @@ export function Plan({
         </button>
       </section>
       <p className="muted" style={{ marginTop: 15 }}>
-        Calendar connection: {calendar}. Only approved Study Vault sessions are
+        Calendar connection: {calendar}. Only approved GotFoth sessions are
         published.
       </p>
       {sessions
@@ -818,7 +590,7 @@ export function Plan({
           <section className="card" style={{ marginTop: 18 }} key={s.id}>
             <div className="row">
               <div>
-                <span className="badge">{s.state}</span>
+                <span className="badge">{friendlyStatus(s.state)}</span>
                 <h2 style={{ marginTop: 12 }}>{s.data.title}</h2>
                 <p className="muted">
                   {new Date(s.data.start).toLocaleString()} · {s.data.minutes}{" "}
@@ -854,22 +626,11 @@ export function Plan({
                 )}
                 <button
                   className="link-button"
-                  onClick={() =>
-                    run(async () => {
-                      const start = prompt(
-                        "New date and time, including time zone (example: 2027-01-15T17:00:00+01:00)",
-                      );
-                      if (start) {
-                        await api("family/plan/action", {
-                          familyId,
-                          id: s.id,
-                          action: "reschedule",
-                          start: new Date(start).toISOString(),
-                        });
-                        await refresh();
-                      }
-                    })
-                  }
+                  disabled={s.state === "completed"}
+                  onClick={() => {
+                    setRescheduling(s.id);
+                    setStartTime("");
+                  }}
                 >
                   Reschedule
                 </button>
@@ -895,8 +656,46 @@ export function Plan({
       {!sessions.length && (
         <Empty
           title="No sessions planned"
-          text="Set your availability in Study, then propose a plan."
+          text="Set your availability in My subjects, then propose a plan."
         />
+      )}
+      {rescheduling && (
+        <Dialog
+          title="Move this study session"
+          onClose={() => setRescheduling(null)}
+        >
+          <form
+            className="stack"
+            onSubmit={(event) => {
+              event.preventDefault();
+              run(async () => {
+                await api("family/plan/action", {
+                  familyId,
+                  id: rescheduling,
+                  action: "reschedule",
+                  start: new Date(startTime).toISOString(),
+                });
+                setRescheduling(null);
+                await refresh();
+              });
+            }}
+          >
+            <label className="field">
+              New date and time
+              <input
+                required
+                type="datetime-local"
+                value={startTime}
+                onChange={(event) => setStartTime(event.target.value)}
+              />
+            </label>
+            <p className="muted">
+              Time zone: {Intl.DateTimeFormat().resolvedOptions().timeZone}{" "}
+              (this device).
+            </p>
+            <Button>Save new time</Button>
+          </form>
+        </Dialog>
       )}
     </>
   );
@@ -905,6 +704,7 @@ export function Assessment({
   familyId,
   id,
   reviewer,
+  canQuery = false,
   run,
   onBack,
   onRetry,
@@ -912,9 +712,10 @@ export function Assessment({
   familyId: string;
   id: string;
   reviewer: boolean;
+  canQuery?: boolean;
   run: Run;
   onBack: () => void;
-  onRetry?: (id: string, topic: string) => void;
+  onRetry?: (id: string, topic: string, subject?: string) => void;
 }) {
   const [data, setData] = useState<any>(null),
     [results, setResults] = useState(""),
@@ -955,7 +756,7 @@ export function Assessment({
         ),
       );
     });
-  }, [id]);
+  }, [familyId, id]);
   if (!data) return <p>Loading assessment…</p>;
   async function decide(action: string) {
     await api("family/review", {
@@ -974,225 +775,256 @@ export function Assessment({
         ← Back
       </button>
       <PageHeading
-        label={`FEEDBACK · ${data.state.replaceAll("_", " ")}`}
+        label={`FEEDBACK · ${friendlyStatus(data.state)}`}
         title={
-          data.state === "published"
-            ? "The marks. The next move."
-            : "Your feedback is being checked."
+          reviewer
+            ? "Review the work. Shape the next step."
+            : data.state === "published"
+              ? "See what’s working. Find your next step."
+              : "Your feedback is being checked."
         }
         text={`Submitted ${date(data.submission.submitted_at)}. Your original response is preserved.`}
       />
       {data.state === "published" && (
-        <ResultSummary data={data} onRetry={onRetry} />
+        <ResultSummary
+          data={data}
+          onRetry={
+            onRetry
+              ? (id, topic) => onRetry(id, topic, data.subject)
+              : undefined
+          }
+        />
       )}
-      {data.questions.map((q: any) => {
-        const result = data.effective?.find((r: any) => r.questionId === q.id);
-        return (
-          <section
-            className="feedback-section stack"
-            key={q.id}
-            style={{ marginBottom: 20 }}
-          >
-            <div className="row">
-              <h2>Question {q.number}</h2>
-              <span className="badge">
-                {result ? `${result.awarded} / ` : ""}
-                {q.marks} marks
-              </span>
-            </div>
-            <p className="question-text">{q.text}</p>
-            <details>
-              <summary>Your submitted answer</summary>
-              <p className="question-text">
-                {data.submission.answers.find(
-                  (a: any) => a.question_id === q.id,
-                )?.text || "(Blank)"}
-              </p>
-            </details>
-            {result && (
-              <>
-                <div className="feedback-win">
-                  <h3>What worked</h3>
-                  {result.achievements.map((a: string, i: number) => (
-                    <p key={i}>{a}</p>
-                  ))}
+      <div className={`assessment-workspace ${reviewer ? "is-review" : ""}`}>
+        <div>
+          {data.questions.map((q: any) => {
+            const result = data.effective?.find(
+              (r: any) => r.questionId === q.id,
+            );
+            return (
+              <section
+                className="feedback-section stack"
+                key={q.id}
+                style={{ marginBottom: 20 }}
+              >
+                <div className="row">
+                  <h2>Question {q.number}</h2>
+                  <span className="badge">
+                    {result ? `${result.awarded} / ` : ""}
+                    {q.marks} marks
+                  </span>
                 </div>
-                <div className="notice">
-                  <strong>
-                    {result.awarded < result.available
-                      ? "Where to gain marks"
-                      : "Keep building on this"}
-                  </strong>
-                  <p>{result.improvement}</p>
-                </div>
-                <p className="muted">{result.justification}</p>
-                {onRetry && (
-                  <button
-                    className="button secondary"
-                    onClick={() => onRetry(data.id, q.topics[0])}
-                  >
-                    Practise an improvement
-                  </button>
+                <p className="question-text">{q.text}</p>
+                <QuestionExtracts extracts={q.extracts ?? []} reveal />
+                <details open={reviewer}>
+                  <summary>Submitted answer</summary>
+                  <p className="question-text">
+                    {data.submission.answers.find(
+                      (a: any) => a.question_id === q.id,
+                    )?.text || "(Blank)"}
+                  </p>
+                </details>
+                {result && (
+                  <>
+                    <div className="feedback-win">
+                      <h3>What worked</h3>
+                      {result.achievements.map((a: string, i: number) => (
+                        <p key={i}>{a}</p>
+                      ))}
+                    </div>
+                    <div className="notice">
+                      <strong>
+                        {result.awarded < result.available
+                          ? "Where to gain marks"
+                          : "Keep building on this"}
+                      </strong>
+                      <p>{result.improvement}</p>
+                    </div>
+                    <p className="muted">{result.justification}</p>
+                    {onRetry && (
+                      <button
+                        className="button secondary"
+                        onClick={() =>
+                          onRetry(data.id, q.topics[0], data.subject)
+                        }
+                      >
+                        Practise an improvement
+                      </button>
+                    )}
+                  </>
                 )}
-              </>
-            )}
-            {q.rubric && (
-              <details>
-                <summary>Approved marking rubric</summary>
-                <p className="question-text">{q.rubric.text}</p>
+                {q.rubric && (
+                  <details open={reviewer}>
+                    <summary>Approved marking rubric</summary>
+                    <p className="question-text">{q.rubric.text}</p>
+                  </details>
+                )}
+                {reviewer &&
+                  data.candidates
+                    ?.filter((c: any) => c.primary.questionId === q.id)
+                    .map((c: any, i: number) => (
+                      <div className="grid" key={i}>
+                        {[c.primary, c.reviewer]
+                          .filter(Boolean)
+                          .map((r: any, j: number) => (
+                            <section className="source" key={j}>
+                              <strong>
+                                {j ? "Independent reviewer" : "Primary marker"}{" "}
+                                · {r.awarded}/{r.available}
+                              </strong>
+                              <p>{r.justification}</p>
+                              <button
+                                className="button secondary small"
+                                onClick={() => {
+                                  const current = JSON.parse(results);
+                                  setResults(
+                                    JSON.stringify(
+                                      [
+                                        ...current.filter(
+                                          (x: any) =>
+                                            x.questionId !== r.questionId,
+                                        ),
+                                        r,
+                                      ],
+                                      null,
+                                      2,
+                                    ),
+                                  );
+                                }}
+                              >
+                                Use this assessment
+                              </button>
+                              {r.evidence.map((e: any, k: number) => (
+                                <p key={k}>
+                                  “{e.quote}”<br />
+                                  Rubric: {e.rubricReference}
+                                </p>
+                              ))}
+                            </section>
+                          ))}
+                      </div>
+                    ))}
+              </section>
+            );
+          })}
+        </div>
+        {(reviewer || canQuery) && (
+          <section
+            className={`card stack ${reviewer ? "review-decision" : ""}`}
+          >
+            <h2>{reviewer ? "Review decision" : "Query this result"}</h2>
+            {reviewer && data.decisions?.length > 0 && (
+              <details
+                open={data.decisions.some(
+                  (d: any) => d.data.action === "query",
+                )}
+              >
+                <summary>Questions and decision history</summary>
+                {data.decisions.map((d: any, i: number) => (
+                  <article className="review-history" key={i}>
+                    <strong>
+                      {d.data.action === "query"
+                        ? "Student question"
+                        : "Recorded decision"}
+                    </strong>
+                    <small className="meta"> · {date(d.created_at)}</small>
+                    <p>{d.data.reason}</p>
+                  </article>
+                ))}
               </details>
             )}
-            {reviewer &&
-              data.candidates
-                ?.filter((c: any) => c.primary.questionId === q.id)
-                .map((c: any, i: number) => (
-                  <div className="grid" key={i}>
-                    {[c.primary, c.reviewer]
-                      .filter(Boolean)
-                      .map((r: any, j: number) => (
-                        <section className="source" key={j}>
-                          <strong>
-                            {j ? "Independent reviewer" : "Primary marker"} ·{" "}
-                            {r.awarded}/{r.available}
-                          </strong>
-                          <p>{r.justification}</p>
-                          <button
-                            className="button secondary small"
-                            onClick={() => {
-                              const current = JSON.parse(results);
-                              setResults(
-                                JSON.stringify(
-                                  [
-                                    ...current.filter(
-                                      (x: any) => x.questionId !== r.questionId,
-                                    ),
-                                    r,
-                                  ],
-                                  null,
-                                  2,
-                                ),
-                              );
-                            }}
-                          >
-                            Use this assessment
-                          </button>
-                          {r.evidence.map((e: any, k: number) => (
-                            <p key={k}>
-                              “{e.quote}”<br />
-                              Rubric: {e.rubricReference}
-                            </p>
-                          ))}
-                        </section>
+            <div>
+              {reviewer && data.error_code === "INVALID_CHOICES" && (
+                <section className="notice">
+                  <h3>Resolve the saved question choices</h3>
+                  <p>
+                    Select the intended permitted route, with a reason below.
+                    The original saved choices remain in the submission.
+                  </p>
+                  {data.choiceGroups.map((g: any) => (
+                    <fieldset key={g.id}>
+                      <legend>
+                        {g.id}: choose {g.choose}
+                      </legend>
+                      {g.questionIds.map((qid: string) => (
+                        <label key={qid} style={{ display: "block" }}>
+                          <input
+                            type="checkbox"
+                            checked={choices.includes(qid)}
+                            onChange={(e) =>
+                              setChoices(
+                                e.target.checked
+                                  ? [...choices, qid]
+                                  : choices.filter((x) => x !== qid),
+                              )
+                            }
+                          />{" "}
+                          Question{" "}
+                          {
+                            data.questions.find((q: any) => q.id === qid)
+                              ?.number
+                          }
+                        </label>
                       ))}
-                  </div>
-                ))}
-          </section>
-        );
-      })}
-      <section className="card stack">
-        <h2>{reviewer ? "Review decision" : "Query this result"}</h2>
-        <div>
-          {reviewer && data.error_code === "INVALID_CHOICES" && (
-            <section className="notice">
-              <h3>Resolve the saved question choices</h3>
-              <p>
-                Select the intended permitted route, with a reason below. The
-                original saved choices remain in the submission.
-              </p>
-              {data.choiceGroups.map((g: any) => (
-                <fieldset key={g.id}>
-                  <legend>
-                    {g.id}: choose {g.choose}
-                  </legend>
-                  {g.questionIds.map((qid: string) => (
-                    <label key={qid} style={{ display: "block" }}>
-                      <input
-                        type="checkbox"
-                        checked={choices.includes(qid)}
-                        onChange={(e) =>
-                          setChoices(
-                            e.target.checked
-                              ? [...choices, qid]
-                              : choices.filter((x) => x !== qid),
-                          )
-                        }
-                      />{" "}
-                      Question{" "}
-                      {data.questions.find((q: any) => q.id === qid)?.number}
-                    </label>
+                    </fieldset>
                   ))}
-                </fieldset>
-              ))}
-              <button
-                className="button secondary"
-                disabled={reason.length < 5}
-                onClick={() => run(() => decide("resolve_choices"))}
-              >
-                Record resolved choices
-              </button>
-            </section>
-          )}
-        </div>
-        <label className="field">
-          Reason
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Explain the rubric-supported decision or your question."
-          />
-        </label>
-        {reviewer && <ResultEditor value={results} onChange={setResults} />}
-        {reviewer && (
-          <details>
-            <summary>
-              Effective assessments · editable structured result
-            </summary>
+                  <button
+                    className="button secondary"
+                    disabled={reason.length < 5}
+                    onClick={() => run(() => decide("resolve_choices"))}
+                  >
+                    Record resolved choices
+                  </button>
+                </section>
+              )}
+            </div>
             <label className="field">
-              <span className="sr-only">Assessment results JSON</span>
+              Reason
               <textarea
-                className="json-editor"
-                value={results}
-                onChange={(e) => setResults(e.target.value)}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Explain the rubric-supported decision or your question."
               />
             </label>
-          </details>
+            {reviewer && <ResultEditor value={results} onChange={setResults} />}
+            <div className="row">
+              {reviewer ? (
+                <>
+                  <button
+                    className="button"
+                    disabled={reason.length < 5}
+                    onClick={() => run(() => decide("publish"))}
+                  >
+                    Publish supported result
+                  </button>
+                  <button
+                    className="button secondary"
+                    disabled={reason.length < 5}
+                    onClick={() => run(() => decide("reprocess"))}
+                  >
+                    Reprocess
+                  </button>
+                  <button
+                    className="link-button"
+                    disabled={reason.length < 5}
+                    onClick={() => run(() => decide("unresolvable"))}
+                  >
+                    Mark unresolvable
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="button"
+                  disabled={reason.length < 5 || data.state !== "published"}
+                  onClick={() => run(() => decide("query"))}
+                >
+                  Ask your teacher to review
+                </button>
+              )}
+            </div>
+          </section>
         )}
-        <div className="row">
-          {reviewer ? (
-            <>
-              <button
-                className="button"
-                disabled={reason.length < 5}
-                onClick={() => run(() => decide("publish"))}
-              >
-                Publish supported result
-              </button>
-              <button
-                className="button secondary"
-                disabled={reason.length < 5}
-                onClick={() => run(() => decide("reprocess"))}
-              >
-                Reprocess
-              </button>
-              <button
-                className="link-button"
-                disabled={reason.length < 5}
-                onClick={() => run(() => decide("unresolvable"))}
-              >
-                Mark unresolvable
-              </button>
-            </>
-          ) : (
-            <button
-              className="button"
-              disabled={reason.length < 5 || data.state !== "published"}
-              onClick={() => run(() => decide("query"))}
-            >
-              Ask your teacher to review
-            </button>
-          )}
-        </div>
-      </section>
+      </div>
     </>
   );
 }
@@ -1219,6 +1051,21 @@ function ResultSummary({
     .find((item: any) => item.question?.topics?.length);
   return (
     <>
+      <section className="feedback-lead">
+        <p className="eyebrow">BUILD ON WHAT WORKED</p>
+        <h2>A little clearer. A little further.</h2>
+        {data.effective
+          .flatMap((r: any) => r.achievements ?? [])
+          .slice(0, 2)
+          .map((text: string, i: number) => (
+            <p key={i}>{text}</p>
+          ))}
+        <h3>Your next improvement</h3>
+        <p>
+          {next?.result.improvement ||
+            "Keep practising independently to build on this result."}
+        </p>
+      </section>
       <section className="score-summary" aria-label="Result summary">
         <div>
           <p className="eyebrow">REVIEWED SCORE</p>
@@ -1236,7 +1083,7 @@ function ResultSummary({
           />
         </div>
         <div>
-          <h2>Where you lost marks</h2>
+          <h2>Opportunities to improve</h2>
           {missed.length ? (
             missed.map((r: any) => (
               <div className="lost-row" key={r.questionId}>
