@@ -26,6 +26,7 @@ try {
     "0004_one_student_family",
     "0005_people_names",
     "0006_persona_goals",
+    "0007_companion",
   ];
   for (const name of migrations) {
     const done = await client.query(

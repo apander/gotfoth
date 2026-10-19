@@ -4,6 +4,7 @@ import { api, date } from "./api";
 import { Button, Empty, PageHeading } from "./ui";
 import { friendlyStatus } from "../lib/personas";
 import { score } from "./revision";
+import { useRead } from "./workspace-data";
 function guidance(student: any) {
   if (!student.courses.length)
     return "They haven’t added a course yet. Help them find the right starting point.";
@@ -23,6 +24,7 @@ function guidance(student: any) {
     : `Their latest result is ${marks.percentage}%. Discuss their feedback and readiness for a fresh paper.`;
 }
 export type TeacherFilters = {
+  group?: string;
   filterFamily?: string;
   student?: string;
   subject?: string;
@@ -43,6 +45,7 @@ export function TeacherWorkspace({
   onPage: (page: string) => void;
   onAssessment: (id: string, family: string) => void;
 }) {
+  const groups = useRead("teacher/groups");
   const [data, setData] = useState<any>(null),
     [error, setError] = useState(""),
     [retry, setRetry] = useState(0);
@@ -54,6 +57,7 @@ export function TeacherWorkspace({
     ...(filters.subject ? { subject: filters.subject } : {}),
     ...(filters.status ? { status: filters.status } : {}),
     ...(filters.search ? { search: filters.search } : {}),
+    ...(filters.group ? { group: filters.group } : {}),
   }).toString();
   useEffect(() => {
     let alive = true;
@@ -156,6 +160,20 @@ export function TeacherWorkspace({
             <option value="">All subjects</option>
             <option value="psychology">Psychology</option>
             <option value="business">Business</option>
+          </select>
+        </label>
+        <label className="field">
+          Group
+          <select
+            value={filters.group ?? ""}
+            onChange={(e) => change({ group: e.target.value })}
+          >
+            <option value="">All students</option>
+            {groups.data?.groups.map((g: any) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
           </select>
         </label>
         {page !== "Overview" && (

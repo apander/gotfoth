@@ -23,7 +23,7 @@ export function Progress({
   course: any;
   run: Run;
   onAssessment: (id: string) => void;
-  onPractice: (topic: string) => void;
+  onPractice?: (topic: string) => void;
 }) {
   const [topic, setTopic] = useState(""),
     [rows, setRows] = useState<any[] | null>(null),
@@ -128,15 +128,17 @@ export function Progress({
         </label>
       </section>
       {rows && rows.length > 0 ? (
-        <section className="card" style={{ marginTop: 24 }}>
+        <section className="card topic-history" style={{ marginTop: 24 }}>
           <div className="row">
             <h2>{topicLabel(topic)}</h2>
-            <button
-              className="button secondary small"
-              onClick={() => onPractice(topic)}
-            >
-              Practise this topic →
-            </button>
+            {onPractice && (
+              <button
+                className="button secondary small"
+                onClick={() => onPractice(topic)}
+              >
+                Practise this topic →
+              </button>
+            )}
           </div>
           <div className="history-stats">
             <div>
@@ -704,6 +706,7 @@ export function Assessment({
   familyId,
   id,
   reviewer,
+  audience,
   canQuery = false,
   run,
   onBack,
@@ -712,6 +715,7 @@ export function Assessment({
   familyId: string;
   id: string;
   reviewer: boolean;
+  audience?: string;
   canQuery?: boolean;
   run: Run;
   onBack: () => void;
@@ -779,11 +783,15 @@ export function Assessment({
         title={
           reviewer
             ? "Review the work. Shape the next step."
-            : data.state === "published"
-              ? "See what’s working. Find your next step."
-              : "Your feedback is being checked."
+            : audience === "teacher"
+              ? data.state === "published"
+                ? "Published work and feedback."
+                : "Submitted work, ready for review."
+              : data.state === "published"
+                ? "See what’s working. Find your next step."
+                : "Your feedback is being checked."
         }
-        text={`Submitted ${date(data.submission.submitted_at)}. Your original response is preserved.`}
+        text={`Submitted ${date(data.submission.submitted_at)}. The original response is preserved.`}
       />
       {data.state === "published" && (
         <ResultSummary
@@ -794,6 +802,40 @@ export function Assessment({
               : undefined
           }
         />
+      )}
+      {!!data.resources?.length && (
+        <details className="card section">
+          <summary>Question sources and supporting material</summary>
+          {data.resources.map((source: any) => (
+            <section className="section" key={source.id}>
+              <h3>{source.title}</h3>
+              <p className="question-text">{source.text}</p>
+              {source.table && (
+                <div className="overflow">
+                  <table>
+                    <caption>{source.table.caption}</caption>
+                    <thead>
+                      <tr>
+                        {source.table.columns.map((c: string, i: number) => (
+                          <th key={i}>{c}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {source.table.rows.map((row: string[], i: number) => (
+                        <tr key={i}>
+                          {row.map((c: string, j: number) => (
+                            <td key={j}>{c}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          ))}
+        </details>
       )}
       <div className={`assessment-workspace ${reviewer ? "is-review" : ""}`}>
         <div>

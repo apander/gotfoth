@@ -30,6 +30,18 @@ export async function purgeFamily(tx: Tx, familyId: string) {
     familyId,
   ]);
   await tx.query("DELETE FROM usage_events WHERE family_id=$1", [familyId]);
+  if (
+    (await tx.query("SELECT to_regclass('public.reminder_state') AS present"))
+      .rows[0].present
+  ) {
+    await tx.query("DELETE FROM reminder_state WHERE family_id=$1", [familyId]);
+    await tx.query("DELETE FROM reminder_preferences WHERE family_id=$1", [
+      familyId,
+    ]);
+    await tx.query("DELETE FROM teacher_group_members WHERE family_id=$1", [
+      familyId,
+    ]);
+  }
   for (const table of [
     "corrective_tasks",
     "review_decisions",

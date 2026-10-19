@@ -214,6 +214,23 @@ export async function seedTestFixtures(tx: Tx, reset = false) {
     ).rows[0];
     if (!owner.allowed) throw new Error("Reset requires the owner connection.");
     await tx.query("SELECT set_config('app.privacy_purge','true',true)");
+    if (
+      (await tx.query("SELECT to_regclass('public.teacher_groups') AS present"))
+        .rows[0].present
+    ) {
+      await tx.query(
+        "DELETE FROM teacher_groups WHERE owner_id=ANY($1::text[])",
+        [testAccounts.map((a) => a.id)],
+      );
+      await tx.query(
+        "DELETE FROM reminder_state WHERE user_id=ANY($1::text[])",
+        [testAccounts.map((a) => a.id)],
+      );
+      await tx.query(
+        "DELETE FROM reminder_preferences WHERE user_id=ANY($1::text[])",
+        [testAccounts.map((a) => a.id)],
+      );
+    }
     for (const table of [
       "corrective_tasks",
       "review_decisions",
@@ -544,10 +561,61 @@ export async function seedTestFixtures(tx: Tx, reset = false) {
     ],
   );
   await seedExamExamples(tx);
+  await seedTestGroups(tx);
   return {
     families: 4,
     students: students.length,
     accounts: testAccounts.length,
     papers: 4,
   };
+}
+
+/** Add missing companion examples without resetting existing fictional work or edited groups. */
+export async function seedTestGroups(tx: Tx) {
+  if (
+    !(await tx.query("SELECT to_regclass('public.teacher_groups') AS present"))
+      .rows[0].present
+  )
+    return;
+  const groups = [
+    { owner: "morgan", name: "Revision overview", students: [0, 1, 2] },
+    { owner: "lee", name: "Study support", students: [2, 3, 4] },
+    { owner: "avery", name: "Hill check-in", students: [2] },
+  ];
+  for (const group of groups) {
+    const id = fixtureId(`companion-group-${group.owner}`),
+      owner = `ux-fixture-${group.owner}`;
+    const account = (
+      await tx.query('SELECT id,email FROM "user" WHERE id=$1', [owner])
+    ).rows[0];
+    if (!account) continue;
+    if (account.email !== `${group.owner}@ux.gotfoth.test`)
+      throw new Error("A reserved fixture identity has changed.");
+    const existing = (
+      await tx.query("SELECT owner_id FROM teacher_groups WHERE id=$1", [id])
+    ).rows[0];
+    if (existing) {
+      if (existing.owner_id !== owner)
+        throw new Error("A reserved test group belongs to another account.");
+      continue;
+    }
+    await tx.query(
+      "INSERT INTO teacher_groups(id,owner_id,name) VALUES($1,$2,$3)",
+      [id, owner, group.name],
+    );
+    for (const index of group.students) {
+      const learnerId = testLearnerId(index);
+      const learner = (
+        await tx.query(
+          "SELECT l.family_id FROM learners l JOIN memberships m ON m.family_id=l.family_id JOIN families f ON f.id=l.family_id WHERE l.id=$1 AND m.user_id=$2 AND m.active AND m.role='teacher' AND NOT f.suspended AND f.deleted_at IS NULL",
+          [learnerId, owner],
+        )
+      ).rows[0];
+      if (learner && Object.values(testFamilyIds).includes(learner.family_id))
+        await tx.query(
+          "INSERT INTO teacher_group_members(group_id,owner_id,family_id,learner_id) VALUES($1,$2,$3,$4)",
+          [id, owner, learner.family_id, learnerId],
+        );
+    }
+  }
 }

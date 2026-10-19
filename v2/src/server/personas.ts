@@ -2,6 +2,7 @@ import { z } from "zod";
 import { database, family, learnerAccess, type Actor } from "./db";
 import { requireThat } from "../lib/errors";
 import { completionSummary } from "../lib/motivation";
+import { groupScope } from "./groups";
 type Access = {
   database: () => Pick<ReturnType<typeof database>, "query">;
   family: typeof family;
@@ -105,6 +106,7 @@ export async function teacherWorkspace(
         ])
         .optional(),
       search: z.string().max(100).default(""),
+      group: z.string().uuid().optional(),
     })
     .parse(Object.fromEntries(params));
   const memberships = (
@@ -121,6 +123,7 @@ export async function teacherWorkspace(
     "Teacher access required.",
     403,
   );
+  const group = filters.group ? await groupScope(actor, filters.group) : null;
   const students: any[] = [],
     reviews: any[] = [];
   let studentTotal = 0,
@@ -145,8 +148,16 @@ export async function teacherWorkspace(
       ];
       const scope = `($1::uuid IS NULL OR l.id=$1) AND ($2::text IS NULL OR EXISTS(SELECT 1 FROM enrolments e WHERE e.learner_id=l.id AND e.data->>'subject'=$2)) AND strpos(lower(l.name),lower($3))>0 AND ($5::text IS NULL OR EXISTS(SELECT 1 FROM assessments r WHERE r.learner_id=l.id AND r.state=$5))`;
       const people = await tx.query(
-        `SELECT l.id,l.name,COALESCE((SELECT jsonb_agg(e.data) FROM enrolments e WHERE e.learner_id=l.id),'[]') AS courses, (SELECT count(*)::int FROM assessments r WHERE r.learner_id=l.id AND r.state='needs_review') AS pending, (SELECT count(*)::int FROM attempts a WHERE a.learner_id=l.id AND a.state IN ('draft','in_progress')) AS open_attempts, (SELECT jsonb_build_object('state',r.state,'effective',CASE WHEN r.state='published' THEN r.effective ELSE NULL END) FROM assessments r JOIN submissions s ON s.id=r.submission_id WHERE r.learner_id=l.id ORDER BY s.submitted_at DESC,r.id DESC LIMIT 1) AS latest, count(*) OVER()::int AS total FROM learners l WHERE ${scope} ORDER BY lower(l.name),l.id LIMIT $4`,
-        [...values, filters.status ?? null],
+        `SELECT l.id,l.name,COALESCE((SELECT jsonb_agg(e.data) FROM enrolments e WHERE e.learner_id=l.id),'[]') AS courses, (SELECT count(*)::int FROM assessments r WHERE r.learner_id=l.id AND r.state='needs_review') AS pending, (SELECT count(*)::int FROM attempts a WHERE a.learner_id=l.id AND a.state IN ('draft','in_progress')) AS open_attempts, (SELECT jsonb_build_object('state',r.state,'effective',CASE WHEN r.state='published' THEN r.effective ELSE NULL END) FROM assessments r JOIN submissions s ON s.id=r.submission_id WHERE r.learner_id=l.id ORDER BY s.submitted_at DESC,r.id DESC LIMIT 1) AS latest, count(*) OVER()::int AS total FROM learners l WHERE ${scope} AND ($6::uuid[] IS NULL OR l.id=ANY($6::uuid[])) ORDER BY lower(l.name),l.id LIMIT $4`,
+        [
+          ...values,
+          filters.status ?? null,
+          group
+            ? group.members
+                .filter((m) => m.family_id === workspace.id)
+                .map((m) => m.learner_id)
+            : null,
+        ],
       );
       studentTotal += people.rows[0]?.total ?? 0;
       students.push(
@@ -162,8 +173,16 @@ export async function teacherWorkspace(
           ? "r.state<>'cancelled'"
           : "r.state IN ('needs_review','failed','awaiting_funds','queued','marking','validating')";
       const items = await tx.query(
-        `SELECT r.id,r.learner_id,l.name AS learner_name,r.state,r.error_code,EXISTS(SELECT 1 FROM review_decisions d WHERE d.assessment_id=r.id AND d.data->>'action'='query') AS has_query,CASE WHEN r.state='published' THEN r.effective ELSE NULL END AS effective,s.submitted_at,a.mode,a.data->>'subject' AS subject,count(*) OVER()::int AS total FROM assessments r JOIN learners l ON l.id=r.learner_id JOIN submissions s ON s.id=r.submission_id JOIN attempts a ON a.id=s.attempt_id WHERE ${states} AND ${reviewScope} ORDER BY s.submitted_at,r.id LIMIT $4`,
-        [...values, filters.status ?? null],
+        `SELECT r.id,r.learner_id,l.name AS learner_name,r.state,r.error_code,EXISTS(SELECT 1 FROM review_decisions d WHERE d.assessment_id=r.id AND d.data->>'action'='query') AS has_query,CASE WHEN r.state='published' THEN r.effective ELSE NULL END AS effective,s.submitted_at,a.mode,a.data->>'subject' AS subject,count(*) OVER()::int AS total FROM assessments r JOIN learners l ON l.id=r.learner_id JOIN submissions s ON s.id=r.submission_id JOIN attempts a ON a.id=s.attempt_id WHERE ${states} AND ${reviewScope} AND ($6::uuid[] IS NULL OR l.id=ANY($6::uuid[])) ORDER BY s.submitted_at,r.id LIMIT $4`,
+        [
+          ...values,
+          filters.status ?? null,
+          group
+            ? group.members
+                .filter((m) => m.family_id === workspace.id)
+                .map((m) => m.learner_id)
+            : null,
+        ],
       );
       reviewTotal += items.rows[0]?.total ?? 0;
       reviews.push(
@@ -175,8 +194,18 @@ export async function teacherWorkspace(
       );
       const counts = (
         await tx.query(
-          `SELECT count(*) FILTER(WHERE r.state='needs_review')::int AS actionable,count(*) FILTER(WHERE r.state IN ('failed','awaiting_funds'))::int AS blocked FROM assessments r JOIN learners l ON l.id=r.learner_id JOIN submissions s ON s.id=r.submission_id JOIN attempts a ON a.id=s.attempt_id WHERE ${reviewScope.replaceAll("$5", "$4")}`,
-          [values[0], values[1], values[2], filters.status ?? null],
+          `SELECT count(*) FILTER(WHERE r.state='needs_review')::int AS actionable,count(*) FILTER(WHERE r.state IN ('failed','awaiting_funds'))::int AS blocked FROM assessments r JOIN learners l ON l.id=r.learner_id JOIN submissions s ON s.id=r.submission_id JOIN attempts a ON a.id=s.attempt_id WHERE ${reviewScope.replaceAll("$5", "$4")} AND ($5::uuid[] IS NULL OR l.id=ANY($5::uuid[]))`,
+          [
+            values[0],
+            values[1],
+            values[2],
+            filters.status ?? null,
+            group
+              ? group.members
+                  .filter((m) => m.family_id === workspace.id)
+                  .map((m) => m.learner_id)
+              : null,
+          ],
         )
       ).rows[0];
       actionable += counts.actionable;

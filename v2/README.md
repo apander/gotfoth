@@ -1,5 +1,7 @@
 # GotFoth v2
 
+The October 2026 mobile/desktop refactor is documented in [COMPANION.md](COMPANION.md). Phones and tablets use a dedicated companion; computers retain testing, assessment review and full monitoring. Apply `0007_companion` before deploying these screens. Current acceptance uses the main development site and fictional test families; historical preview instructions below describe earlier work.
+
 The v2 application lives here independently of the original root application. No v1 code, database, or records are migrated. The approved product contract is [V2_SPEC.md](../V2_SPEC.md).
 
 ## Hosted application

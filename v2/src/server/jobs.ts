@@ -1,7 +1,7 @@
 import { database, transaction } from "./db";
 import { freeze } from "./learning";
 import { runMarking } from "./marking";
-import { publishCalendar } from "./integrations";
+import { publishCalendar, publishExamCalendar } from "./integrations";
 export async function processJob(id: string) {
   const job = await transaction(async (tx) => {
     const r = (
@@ -48,6 +48,14 @@ export async function processJob(id: string) {
       await runMarking(job.family_id, job.data.assessmentId);
     else if (job.kind === "calendar")
       await publishCalendar(job.data.userId, job.family_id, job.data.sessionId);
+    else if (job.kind === "calendar_exams")
+      await publishExamCalendar(
+        job.data.userId,
+        job.family_id,
+        job.data.enrolmentId,
+        job.data.learnerId,
+        job.data.previousUnits ?? [],
+      );
     else throw new Error("UNKNOWN_JOB");
     await database().query(
       "UPDATE outbox SET state='done',locked_at=NULL WHERE id=$1",

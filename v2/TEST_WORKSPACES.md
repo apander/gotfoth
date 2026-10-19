@@ -41,3 +41,10 @@ The standard browser suite remains fixture-based. To opt into live workflow test
 ## Exam examples with supporting data
 
 Choose **Open exam example as Alex** in the account picker. This opens a new Psychology paper with a fictional study, a results table and four questions tied to that evidence. Signed-in students can also use **Open exam example** from the test tools banner. Sam’s Business subject also includes a separate fictional business extract with financial data. The examples are explicitly synthetic and use simulated marking. Previously saved attempts retain their original question content; they are not replaced or reset.
+
+
+## Mobile companion and teacher groups
+
+Open the main site on a phone or tablet to test the dedicated companion. Students can organise their diary, update planning preferences and read progress/feedback; parents can fund and monitor; teachers can read students, attention and saved groups. Testing, full reviews, course setup and administrative changes use a computer. Changing only a computer window width keeps the desktop experience.
+
+The additive companion fixture setup creates missing example groups for Morgan (Revision overview), Lee (Study support) and Avery (Hill check-in), with only their existing authorised students. Existing edited groups and workflow data are preserved. Morgan's initial matching results may be insufficient for a three-student median, deliberately demonstrating the missing-evidence state.

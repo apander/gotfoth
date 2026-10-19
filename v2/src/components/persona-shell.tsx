@@ -120,6 +120,13 @@ export function PersonaShell({
           <div className="topbar-actions">
             <button
               className="link-button"
+              disabled={focus}
+              onClick={() => onPage("Reminders")}
+            >
+              Reminders
+            </button>
+            <button
+              className="link-button"
               aria-label="Toggle larger text"
               onClick={() => {
                 const enlarged =

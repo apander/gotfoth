@@ -2,20 +2,55 @@
 import { useEffect, useRef, useState } from "react";
 import { createAuthClient } from "better-auth/react";
 import { api, date } from "./api";
-import { Player } from "./player";
-import { Progress, FamilySettings, Plan, Assessment } from "./views";
-import { Admin } from "./admin";
+import dynamic from "next/dynamic";
+import { WorkspaceShell, useExperience } from "./workspace-shell";
+import {
+  CompanionScreens,
+  FundingScreen,
+  ProgressOverview,
+  TeacherStudentEvidence,
+} from "./companion-screens";
+import { DesktopHandoff } from "./desktop-handoff";
+import { Reminders } from "./reminders";
+import { Groups } from "./groups";
+import { Diary, CoursePlanning } from "./diary";
+import { canUse } from "../lib/experience";
+import { FamilySettings, Assessment } from "./views";
 import { Brand, Button, Dialog, Empty, PageHeading } from "./ui";
 import { Subjects, PracticePicker, PaperList } from "./revision";
-import { PaperDesk } from "./paper-desk";
 import { AccountPage } from "./account";
-import { PersonaShell, StudyCompanion } from "./persona-shell";
-import { StudentToday } from "./student-today";
-import { FamilyDataSettings, Funding, ParentSpace } from "./parent-space";
-import { TeacherWorkspace, type TeacherFilters } from "./teacher-workspace";
+import { StudyCompanion } from "./persona-shell";
+import { FamilyDataSettings, ParentSpace } from "./parent-space";
 import { OperatorOverview } from "./operator-overview";
-import { capabilities, pageForRole, type Persona } from "../lib/personas";
+import { capabilities, type Persona } from "../lib/personas";
 import { TestLoginLink } from "./testing-lab";
+
+import {
+  contextsFor,
+  resolveRoute,
+  routeURL,
+  emptyRoute,
+  type Route,
+} from "../lib/navigation";
+
+const Player = dynamic(() => import("./player").then((m) => m.Player), {
+  ssr: false,
+});
+const Admin = dynamic(() => import("./admin").then((m) => m.Admin), {
+  ssr: false,
+});
+const PaperDesk = dynamic(
+  () => import("./paper-desk").then((m) => m.PaperDesk),
+  { ssr: false },
+);
+const StudentToday = dynamic(
+  () => import("./student-today").then((m) => m.StudentToday),
+  { ssr: false },
+);
+const TeacherWorkspace = dynamic(
+  () => import("./teacher-workspace").then((m) => m.TeacherWorkspace),
+  { ssr: false },
+);
 
 function authBaseURL() {
   if (typeof window !== "undefined") return window.location.origin;
@@ -27,81 +62,9 @@ function authBaseURL() {
   }
 }
 const authClient = createAuthClient({ baseURL: authBaseURL() });
-type Route = TeacherFilters & {
-  context: string;
-  page: string;
-  family: string;
-  learner: string;
-  course: string;
-  attempt: string;
-  assessment: string;
-  topic: string;
-  tab: string;
-};
-const emptyRoute: Route = {
-  context: "",
-  page: "",
-  family: "",
-  learner: "",
-  course: "",
-  attempt: "",
-  assessment: "",
-  topic: "",
-  tab: "",
-};
-function contextsFor(identity: any) {
-  return [
-    ...(identity.superuser
-      ? [{ id: "admin", name: "Administration", role: "superuser" }]
-      : []),
-    ...(identity.workspaces.some((w: any) => w.role === "teacher")
-      ? [{ id: "teacher", name: "All my teaching families", role: "teacher" }]
-      : []),
-    ...identity.workspaces
-      .filter((w: any) => ["student", "parent"].includes(w.role))
-      .map((w: any) => ({ ...w, name: `${w.name} · ${w.role}` })),
-  ];
-}
-function resolveRoute(input: Partial<Route>, identity: any): Route {
-  const contexts = contextsFor(identity);
-  let context = contexts.find((c) => c.id === input.context);
-  if (!context && input.family) {
-    const workspace = identity.workspaces.find(
-      (w: any) => w.id === input.family,
-    );
-    context = contexts.find(
-      (c) =>
-        c.id === (workspace?.role === "teacher" ? "teacher" : workspace?.id),
-    );
-  }
-  context ??= contexts[0];
-  const role: Persona = context?.role ?? "student";
-  const route = {
-    ...emptyRoute,
-    ...input,
-    context: context?.id ?? "",
-    page: pageForRole(input.page ?? "", role),
-  };
-  if (!["admin", "teacher"].includes(route.context))
-    route.family = route.context;
-  if (role !== "student") route.attempt = "";
-  if (role === "superuser") {
-    route.family = "";
-    route.assessment = "";
-  }
-  if (input.page === "Catalogue" && role === "superuser")
-    route.tab = "catalogue";
-  return route;
-}
-function routeURL(route: Route) {
-  const params = new URLSearchParams();
-  Object.entries(route).forEach(([key, value]) => {
-    if (value) params.set(key, value);
-  });
-  return `/?${params}`;
-}
 
 export function Vault() {
+  const experience = useExperience();
   const [identity, setIdentity] = useState<any>(null),
     [route, setRoute] = useState<Route>(emptyRoute),
     [data, setData] = useState<any>(null),
@@ -230,8 +193,17 @@ export function Vault() {
       dataFamily.current = currentFamily;
     }
     setError("");
-    if (currentFamily && identity)
-      api(`family/snapshot?family=${currentFamily}`)
+    if (currentFamily && identity && experience === "desktop")
+      (role === "parent"
+        ? Promise.all([
+            api(`family/summary?family=${currentFamily}`),
+            api(`family/funding?family=${currentFamily}&limit=1`),
+          ]).then(([summary, funding]) => ({
+            ...summary,
+            wallet: funding.wallet,
+          }))
+        : api(`family/snapshot?family=${currentFamily}`)
+      )
         .then((value) => {
           if (alive) setData(value);
         })
@@ -241,7 +213,7 @@ export function Vault() {
     return () => {
       alive = false;
     };
-  }, [currentFamily, identity?.user.id, refreshKey]);
+  }, [currentFamily, identity?.user.id, refreshKey, experience, role]);
   useEffect(() => {
     document.title = `${route.attempt ? "Practice" : route.assessment ? "Feedback" : route.page || "Welcome"} · GotFoth`;
     if (!route.attempt)
@@ -271,7 +243,7 @@ export function Vault() {
     });
     navigate({ attempt: result.id, assessment: "", family: currentFamily });
   }
-  if (loading)
+  if (loading || !experience)
     return (
       <main className="loading" role="status">
         Opening your workspace…
@@ -332,15 +304,23 @@ export function Vault() {
         </section>
       </main>
     );
-  const page = route.page;
+  const page =
+    role === "superuser" && route.page === "Queues" && experience === "desktop"
+      ? route.tab === "invitations"
+        ? "Invitations"
+        : route.tab === "content"
+          ? "Content"
+          : "Operations"
+      : route.page;
   return (
-    <PersonaShell
+    <WorkspaceShell
+      experience={experience}
       role={role}
       page={page}
       identity={identity}
       contexts={contexts}
       context={route.context}
-      focus={!!route.attempt}
+      focus={!!route.attempt && experience === "desktop"}
       onContext={(context) => {
         setCelebrate(false);
         commit(resolveRoute({ ...emptyRoute, context }, identity));
@@ -364,7 +344,7 @@ export function Vault() {
       )}
       {page === "Account" ? (
         <>
-          {role === "parent" && (
+          {role === "parent" && experience === "desktop" && (
             <div className="account-context-actions">
               <Button
                 variant="secondary"
@@ -392,6 +372,24 @@ export function Vault() {
             }}
           />
         </>
+      ) : page === "Reminders" ? (
+        <Reminders
+          key={`${identity.user.id}:${route.context}`}
+          context={route.context}
+          role={role}
+          route={route}
+          onRoute={navigate}
+          run={run}
+          busy={busy}
+        />
+      ) : route.attempt &&
+        role === "student" &&
+        !canUse(role, experience, "test") ? (
+        <DesktopHandoff
+          href={routeURL(route)}
+          familyId={currentFamily}
+          attempt={route.attempt}
+        />
       ) : route.attempt && role === "student" ? (
         <Player
           key={route.attempt}
@@ -413,11 +411,18 @@ export function Vault() {
             {identity.workspaces.find((w: any) => w.id === route.family)
               ?.name ?? "Student work"}
           </p>
+          {role === "teacher" && experience === "companion" && (
+            <DesktopHandoff
+              title="Review on a computer"
+              href={routeURL(route)}
+            />
+          )}
           <Assessment
             key={`${route.family}:${route.assessment}`}
             familyId={route.family}
             id={route.assessment}
-            reviewer={capabilities[role].review}
+            reviewer={canUse(role, experience, "review")}
+            audience={role}
             canQuery={capabilities[role].query}
             run={run}
             onBack={() => {
@@ -425,13 +430,24 @@ export function Vault() {
               void refresh();
             }}
             onRetry={
-              role === "student"
+              canUse(role, experience, "test")
                 ? (id, topic, subject) =>
                     run(() => create("guided", undefined, topic, id, subject))
                 : undefined
             }
           />
         </>
+      ) : experience === "companion" ? (
+        <CompanionScreens
+          key={`${identity.user.id}:${route.context}`}
+          role={role}
+          identity={identity}
+          route={route}
+          onRoute={navigate}
+          run={run}
+          busy={busy}
+          revision={refreshKey}
+        />
       ) : role === "superuser" ? (
         page === "Overview" ? (
           <OperatorOverview onPage={onPage} />
@@ -467,31 +483,51 @@ export function Vault() {
         ) : (
           <Admin key={page} page={page} run={run} busy={busy} />
         )
-      ) : role === "teacher" ? (
-        <TeacherWorkspace
-          page={page}
-          filters={{
-            filterFamily: route.filterFamily,
-            student: route.student,
-            subject: route.subject,
-            status: route.status,
-            search: route.search,
-            offset: route.offset,
-          }}
-          onFilter={(filters) =>
-            navigate({
-              filterFamily: "",
-              student: "",
-              subject: "",
-              status: "",
-              search: "",
-              offset: "0",
-              ...filters,
-            })
-          }
-          onPage={onPage}
+      ) : role === "teacher" && page === "Groups" ? (
+        <Groups
+          key={identity.user.id}
+          companion={false}
+          route={route}
+          onRoute={navigate}
           onAssessment={openAssessment}
+          run={run}
+          busy={busy}
         />
+      ) : role === "teacher" ? (
+        <>
+          <TeacherWorkspace
+            page={page}
+            filters={{
+              group: route.group,
+              filterFamily: route.filterFamily,
+              student: route.student,
+              subject: route.subject,
+              status: route.status,
+              search: route.search,
+              offset: route.offset,
+            }}
+            onFilter={(filters) =>
+              navigate({
+                filterFamily: "",
+                student: "",
+                subject: "",
+                status: "",
+                search: "",
+                offset: "0",
+                ...filters,
+              })
+            }
+            onPage={onPage}
+            onAssessment={openAssessment}
+          />
+          {page === "Students" && (
+            <TeacherStudentEvidence
+              route={route}
+              onRoute={navigate}
+              run={run}
+            />
+          )}
+        </>
       ) : !data ? (
         <Empty
           title={
@@ -511,15 +547,41 @@ export function Vault() {
         />
       ) : role === "parent" ? (
         page === "Credit" ? (
-          <Funding
+          <FundingScreen
             familyId={currentFamily}
-            data={data}
-            refresh={refresh}
+            route={route}
+            onRoute={navigate}
             run={run}
             busy={busy}
+            revision={refreshKey}
           />
         ) : page === "FamilySettings" ? (
           <FamilyDataSettings familyId={currentFamily} run={run} busy={busy} />
+        ) : page === "Progress" ? (
+          <ProgressOverview
+            familyId={currentFamily}
+            people={data.learners}
+            courses={data.enrolments}
+            route={route}
+            onRoute={navigate}
+            run={run}
+          />
+        ) : page === "Plan" ? (
+          <Diary
+            familyId={currentFamily}
+            learnerId={learner}
+            courses={data.enrolments.filter(
+              (c: any) => c.learner_id === learner,
+            )}
+            calendar={data.calendar}
+            route={route}
+            onRoute={navigate}
+            onAttempt={() => {}}
+            run={run}
+            busy={busy}
+            refresh={refresh}
+            readOnly
+          />
         ) : (
           <ParentSpace
             page={page}
@@ -630,6 +692,22 @@ export function Vault() {
                 run={run}
                 refresh={refresh}
               />
+              {data.enrolments
+                .filter((c: any) => c.learner_id === learner)
+                .map((c: any) => (
+                  <CoursePlanning
+                    key={c.id}
+                    course={c}
+                    familyId={currentFamily}
+                    learnerId={learner}
+                    topics={data.papers
+                      .filter((p: any) => p.subject === c.data.subject)
+                      .flatMap((p: any) => p.topics)}
+                    run={run}
+                    busy={busy}
+                    refresh={refresh}
+                  />
+                ))}
             </>
           )}
           {page === "Practice" && (
@@ -675,29 +753,33 @@ export function Vault() {
             </>
           )}
           {page === "Progress" && (
-            <Progress
-              key={`${selected?.id}:${route.topic}`}
-              initialTopic={route.topic}
+            <ProgressOverview
               familyId={currentFamily}
-              learnerId={learner}
-              course={selected}
+              people={data.learners}
+              courses={data.enrolments}
+              route={route}
+              onRoute={navigate}
               run={run}
-              onAssessment={openAssessment}
               onPractice={(topic) =>
                 run(() => create("independent", undefined, topic))
               }
+              onAttempt={(id) => navigate({ attempt: id })}
             />
           )}
           {page === "Plan" && (
-            <Plan
+            <Diary
               familyId={currentFamily}
               learnerId={learner}
-              course={selected}
-              sessions={data.sessions}
+              courses={data.enrolments.filter(
+                (c: any) => c.learner_id === learner,
+              )}
               calendar={data.calendar}
-              run={run}
-              refresh={refresh}
+              route={route}
+              onRoute={navigate}
               onAttempt={(id) => navigate({ attempt: id })}
+              run={run}
+              busy={busy}
+              refresh={refresh}
             />
           )}
         </>
@@ -726,6 +808,6 @@ export function Vault() {
           </Button>
         </Dialog>
       )}
-    </PersonaShell>
+    </WorkspaceShell>
   );
 }

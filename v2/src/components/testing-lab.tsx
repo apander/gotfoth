@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createAuthClient } from "better-auth/react";
 import { testAccounts, isTestAccount } from "../lib/test-accounts";
 import { Brand, Button } from "./ui";
+import { useExperience } from "./use-experience";
 async function testingRequest(body?: object) {
   const response = await fetch("/api/testing", {
     method: body ? "POST" : "GET",
@@ -15,6 +16,7 @@ async function testingRequest(body?: object) {
   return data;
 }
 export function TestingLab() {
+  const experience = useExperience();
   const [busy, setBusy] = useState(""),
     [error, setError] = useState("");
   async function enter(email: string, exam = false) {
@@ -81,15 +83,17 @@ export function TestingLab() {
                 ? "Signing in…"
                 : `Sign in as ${account.name.split(" ")[0]}`}
             </Button>
-            {account.role === "student" && account.key !== "casey" && (
-              <Button
-                variant="secondary"
-                disabled={!!busy}
-                onClick={() => enter(account.email, true)}
-              >
-                Open exam example as {account.name.split(" ")[0]}
-              </Button>
-            )}
+            {experience === "desktop" &&
+              account.role === "student" &&
+              account.key !== "casey" && (
+                <Button
+                  variant="secondary"
+                  disabled={!!busy}
+                  onClick={() => enter(account.email, true)}
+                >
+                  Open exam example as {account.name.split(" ")[0]}
+                </Button>
+              )}
           </article>
         ))}
       </div>
@@ -118,10 +122,12 @@ export function TestingTools({
   email,
   role,
   familyId,
+  companion = false,
 }: {
   email: string;
   role: string;
   familyId: string;
+  companion?: boolean;
 }) {
   const [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
@@ -151,18 +157,20 @@ export function TestingTools({
     <aside className="testing-tools" aria-label="Test workspace tools">
       <strong>UX test account · simulated data</strong>
       <a href="/testing">Switch test account</a>
-      {role === "student" && (
+      {!companion && role === "student" && (
         <Button variant="secondary" disabled={busy} onClick={() => run("exam")}>
           Open exam example
         </Button>
       )}
-      <Button
-        variant="secondary"
-        disabled={busy}
-        onClick={() => run("process")}
-      >
-        Run test processing
-      </Button>
+      {!companion && (
+        <Button
+          variant="secondary"
+          disabled={busy}
+          onClick={() => run("process")}
+        >
+          Run test processing
+        </Button>
+      )}
       {role === "parent" && (
         <Button
           variant="secondary"

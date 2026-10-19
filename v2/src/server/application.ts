@@ -9,6 +9,7 @@ import {
   superuser,
   transaction,
   audit,
+  enqueue,
   type Actor,
 } from "./db";
 import { requireThat, missing } from "../lib/errors";
@@ -69,7 +70,7 @@ export async function snapshot(actor: Actor, familyId: string) {
     ).rows;
     const attempts = (
       await tx.query(
-        "SELECT id,learner_id,mode,state,started_at,deadline,created_at,data->>'subject' AS subject,data->>'durationMinutes' AS duration_minutes FROM attempts WHERE learner_id=ANY($1::uuid[]) ORDER BY created_at DESC LIMIT 50",
+        "SELECT id,learner_id,mode,state,started_at,deadline,created_at,data->>'subject' AS subject,data->>'durationMinutes' AS duration_minutes FROM attempts WHERE learner_id=ANY($1::uuid[]) ORDER BY (state IN ('draft','in_progress')) DESC,created_at DESC LIMIT 50",
         [ids],
       )
     ).rows;
@@ -181,10 +182,28 @@ export async function saveEnrolment(
       "Students arrange their own courses.",
       403,
     );
-    const id = randomUUID();
-    await tx.query(
-      "INSERT INTO enrolments(id,family_id,learner_id,data) VALUES($1,$2,$3,$4) ON CONFLICT(learner_id,(data->>'subject')) DO UPDATE SET data=EXCLUDED.data",
+    const previous = (
+      await tx.query(
+        "SELECT id,data FROM enrolments WHERE learner_id=$1 AND data->>'subject'=$2 FOR UPDATE",
+        [data.learnerId, data.course.subject],
+      )
+    ).rows[0];
+    const id = previous?.id ?? randomUUID();
+    const saved = await tx.query(
+      "INSERT INTO enrolments(id,family_id,learner_id,data) VALUES($1,$2,$3,$4) ON CONFLICT(learner_id,(data->>'subject')) DO UPDATE SET data=EXCLUDED.data RETURNING id",
       [id, familyId, data.learnerId, JSON.stringify(data.course)],
+    );
+    await enqueue(
+      tx,
+      "calendar_exams",
+      `exams:course:${saved.rows[0].id}:${randomUUID()}`,
+      {
+        enrolmentId: saved.rows[0].id,
+        learnerId: data.learnerId,
+        previousUnits: (previous?.data.examDates ?? []).map((e: any) => e.unit),
+        userId: actor.id,
+      },
+      familyId,
     );
     return { saved: true };
   });
@@ -210,10 +229,25 @@ export async function removeEnrolment(
     );
     const removed = await tx.query(
       `DELETE FROM enrolments
-       WHERE family_id=$1 AND learner_id=$2 AND data->>'subject'=$3`,
+       WHERE family_id=$1 AND learner_id=$2 AND data->>'subject'=$3 RETURNING id,data`,
       [familyId, data.learnerId, data.subject],
     );
     if (!removed.rowCount) throw missing();
+    const removedCourse = removed.rows[0];
+    await enqueue(
+      tx,
+      "calendar_exams",
+      `exams:removed:${removedCourse.id}:${randomUUID()}`,
+      {
+        enrolmentId: removedCourse.id,
+        learnerId: data.learnerId,
+        previousUnits: (removedCourse.data.examDates ?? []).map(
+          (e: any) => e.unit,
+        ),
+        userId: actor.id,
+      },
+      familyId,
+    );
     return { removed: true };
   });
 }

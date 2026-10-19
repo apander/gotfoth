@@ -29,7 +29,26 @@ import {
 } from "@/server/learning";
 import { review } from "@/server/marking";
 import { checkout, calendarConnect } from "@/server/integrations";
-import { proposePlan, planAction } from "@/server/planning";
+import {
+  proposePlan,
+  planAction,
+  createSession,
+  updatePlanning,
+} from "@/server/planning";
+import {
+  companionSummary,
+  diaryRead,
+  activityRead,
+  attemptSummary,
+  fundingRead,
+  operatorRead,
+} from "@/server/companion";
+import { teacherGroups, saveGroup, groupComparison } from "@/server/groups";
+import {
+  reminderInbox,
+  reminderAction,
+  saveReminderPreferences,
+} from "@/server/reminders";
 import { database } from "@/server/db";
 import { accountView, deleteAccount, updateAccount } from "@/server/account";
 import {
@@ -76,6 +95,27 @@ async function handle(
     let result: unknown;
     if (request.method === "GET") {
       if (path === "identity") result = await identity(user);
+      else if (path === "family/summary")
+        result = await companionSummary(user, familyId);
+      else if (path === "family/diary")
+        result = await diaryRead(user, familyId, url.searchParams);
+      else if (path === "family/activity")
+        result = await activityRead(user, familyId, url.searchParams);
+      else if (path === "family/attempt-summary")
+        result = await attemptSummary(
+          user,
+          familyId,
+          z.string().uuid().parse(url.searchParams.get("id")),
+        );
+      else if (path === "family/funding")
+        result = await fundingRead(user, familyId, url.searchParams);
+      else if (path === "admin/companion")
+        result = await operatorRead(user, url.searchParams);
+      else if (path === "teacher/groups") result = await teacherGroups(user);
+      else if (path === "teacher/comparison")
+        result = await groupComparison(user, url.searchParams);
+      else if (path === "reminders")
+        result = await reminderInbox(user, url.searchParams);
       else if (path === "teacher/workspace")
         result = await teacherWorkspace(user, url.searchParams);
       else if (path === "family/motivation")
@@ -116,6 +156,15 @@ async function handle(
         throw new AppError("NOT_FOUND", "This endpoint is unavailable.", 404);
     } else {
       if (path === "account") result = await updateAccount(user, body);
+      else if (path === "teacher/groups") result = await saveGroup(user, body);
+      else if (path === "reminders/action")
+        result = await reminderAction(user, body);
+      else if (path === "reminders/preferences")
+        result = await saveReminderPreferences(user, body);
+      else if (path === "family/plan/create")
+        result = await createSession(user, familyId, body);
+      else if (path === "family/planning")
+        result = await updatePlanning(user, familyId, body);
       else if (path === "family/motivation")
         result = await saveMotivation(user, familyId, body);
       else if (path === "account/delete")
@@ -195,7 +244,7 @@ async function handle(
           z.string().uuid().parse(body.paperId),
         );
       else if (path === "calendar/connect")
-        result = await calendarConnect(user);
+        result = await calendarConnect(user, body);
       else if (path === "calendar/disconnect") {
         await database().query(
           "UPDATE calendar_connections SET state='disconnected',encrypted_token='' WHERE user_id=$1",

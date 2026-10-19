@@ -10,7 +10,7 @@ export const personas = {
     label: "Teaching workspace",
     description: "Your students. Your expertise.",
     home: "Overview",
-    pages: ["Overview", "Students", "Reviews"],
+    pages: ["Overview", "Students", "Groups", "Reviews"],
   },
   parent: {
     label: "Family space",
@@ -47,13 +47,17 @@ export function pageForRole(page: string, role: Persona) {
     Funding: "Credit",
     "My subjects": "Subjects",
     "My week": "Plan",
+    Diary: "Plan",
+    Status: "Overview",
     Guidance: "Overview",
     Family: role === "student" ? "Study" : "FamilySettings",
   };
   const value = aliases[page] ?? page;
-  if (value === "Account") return value;
+  if (["Account", "Reminders"].includes(value)) return value;
+  if (role === "superuser" && value === "Queues") return value;
   if (role === "student" && ["Study", "Papers"].includes(value)) return value;
   if (role === "parent" && value === "FamilySettings") return value;
+  if (role === "parent" && value === "Plan") return value;
   if (role === "superuser" && ["Papers", "Catalogue"].includes(value))
     return "Content";
   return (personas[role].pages as readonly string[]).includes(value)

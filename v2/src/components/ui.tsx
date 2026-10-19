@@ -15,6 +15,11 @@ const paths: Record<string, string> = {
   Progress: "M4 4v16h17 M7 15l4-5 4 3 5-7",
   Plan: "M4 6h16v15H4z M8 3v6 M16 3v6 M4 11h16",
   Reviews: "m5 12 4 4L19 6",
+  Reminders: "M5 17h14l-2-3V9a5 5 0 0 0-10 0v5z M10 21h4 M12 2v2",
+  Groups:
+    "M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M3 21v-3a6 6 0 0 1 12 0v3 M17 6h4 M19 4v4 M17 13h4 M17 17h4",
+  Desktop: "M3 4h18v12H3z M12 16v5 M7 21h10",
+  Queues: "M4 5h16 M4 12h16 M4 19h16 M7 3v4 M17 10v4 M10 17v4",
   Family:
     "M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M3 21v-3a6 6 0 0 1 12 0v3 M16 4a3 3 0 0 1 0 6 M17 13a5 5 0 0 1 4 5v3",
   Credit: "M20 6H4v15h16V6 M4 6V3h13 M14 11h6v5h-6z",

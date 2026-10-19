@@ -89,7 +89,9 @@ async function fixture(
           },
         ],
       };
-    else if (path.endsWith("/snapshot"))
+    else if (
+      ["/snapshot", "/summary", "/funding"].some((p) => path.endsWith(p))
+    )
       json = {
         role: persona,
         learners: [{ id: learner, name: "Alex", monthly_cap: 10000000 }],
@@ -187,7 +189,25 @@ async function fixture(
         latestAttemptId: "completed",
         milestones: [1, 5],
       };
-    } else if (path.endsWith("/teacher/workspace")) {
+    } else if (path.endsWith("/teacher/groups")) json = { groups: [] };
+    else if (path.endsWith("/activity"))
+      json = {
+        items: [
+          {
+            id: "assessment",
+            learner_id: learner,
+            subject: "psychology",
+            mode: "independent",
+            state: "published",
+            effective: results,
+            submitted_at: "2026-10-04T17:00:00Z",
+          },
+        ],
+        total: 1,
+        offset: 0,
+        limit: 25,
+      };
+    else if (path.endsWith("/teacher/workspace")) {
       const params = new URL(route.request().url()).searchParams;
       const students = [
         {
@@ -452,9 +472,7 @@ for (const width of [375, 768, 1024, 1440]) {
         );
         await capture(page, "parent-funding", width);
         await page.goto(`/?family=${family}&page=Progress`);
-        await page
-          .getByRole("button", { name: /Independent practice/ })
-          .click();
+        await page.getByRole("button", { name: "Answer & feedback" }).click();
         await expect(
           page.getByRole("heading", { name: "Your next improvement" }),
         ).toBeVisible();
@@ -1776,10 +1794,20 @@ test("fit page uses available width and height and fit width restores readable l
   await source.getByRole("tab", { name: "Extract A", exact: true }).click();
   await expect(zoom).toHaveValue("page");
   await page.setViewportSize({ width: 1366, height: 900 });
-  await expect.poll(async () => Number(await reader.locator(".source-canvas").getAttribute("data-scale"))).toBeGreaterThan(0.99);
-  const largerScale = Number(await reader.locator(".source-canvas").getAttribute("data-scale"));
+  await expect
+    .poll(async () =>
+      Number(await reader.locator(".source-canvas").getAttribute("data-scale")),
+    )
+    .toBeGreaterThan(0.99);
+  const largerScale = Number(
+    await reader.locator(".source-canvas").getAttribute("data-scale"),
+  );
   await page.setViewportSize({ width: 1366, height: 650 });
-  await expect.poll(async () => Number(await reader.locator(".source-canvas").getAttribute("data-scale"))).toBeLessThan(largerScale - 0.01);
+  await expect
+    .poll(async () =>
+      Number(await reader.locator(".source-canvas").getAttribute("data-scale")),
+    )
+    .toBeLessThan(largerScale - 0.01);
   await expect
     .poll(() =>
       reader.evaluate((element) => {
