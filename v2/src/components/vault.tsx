@@ -396,6 +396,7 @@ export function Vault() {
         <Player
           key={route.attempt}
           familyId={currentFamily}
+          userId={identity.user.id}
           id={route.attempt}
           onNavigationReady={(fn) => {
             saveBeforeLeave.current = fn;
@@ -573,7 +574,7 @@ export function Vault() {
                         <h3>Recovered {date(r.created_at)}</h3>
                         <p className="muted">
                           Separate from the original timed result. This writing
-                          has not been charged or marked.
+                          is saved separately from your submitted work.
                         </p>
                         {Object.entries(r.text).map(([id, text]) => (
                           <p className="question-text" key={id}>

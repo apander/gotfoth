@@ -173,6 +173,24 @@ test.describe("real preview test workspaces", () => {
     test.setTimeout(90000);
     const familyId = testFamilyIds.Brook,
       learnerId = testLearnerId(4);
+    await login(page, "pat");
+    const before = await (
+      await page.request.get(`/api/v2/family/snapshot?family=${familyId}`)
+    ).json();
+    const previousCap = Number(
+      before.learners.find((item: any) => item.id === learnerId).monthly_cap,
+    );
+    const originalBalance = Number(before.wallet.balance);
+    expect(
+      (
+        await post(page, "/api/v2/family/action", {
+          familyId,
+          action: "cap",
+          learnerId,
+          micros: 0,
+        })
+      ).status(),
+    ).toBe(200);
     await login(page, "taylor");
     const created = await post(page, "/api/v2/family/attempt/create", {
       familyId,
@@ -182,51 +200,10 @@ test.describe("real preview test workspaces", () => {
     });
     expect(created.status()).toBe(200);
     const { id } = await created.json();
-    const quote = await (
-      await post(page, "/api/v2/family/attempt/action", {
-        familyId,
-        id,
-        action: "quote",
-      })
-    ).json();
-    const refused = await post(page, "/api/v2/family/attempt/action", {
-      familyId,
-      id,
-      action: "start",
-      quoteId: quote.id,
-    });
-    expect(refused.status()).not.toBe(200);
-    expect((await refused.json()).error.code).toBe("AWAITING_FUNDS");
-    await login(page, "pat");
-    const requestId = crypto.randomUUID();
-    expect(
-      (
-        await post(page, "/api/testing", {
-          action: "credit",
-          familyId,
-          requestId,
-        })
-      ).status(),
-    ).toBe(200);
-    expect(
-      (
-        await post(page, "/api/testing", {
-          action: "credit",
-          familyId,
-          requestId,
-        })
-      ).status(),
-    ).toBe(200);
-    const wallet = await (
-      await page.request.get(`/api/v2/family/snapshot?family=${familyId}`)
-    ).json();
-    expect(Number(wallet.wallet.balance)).toBe(10000000);
-    await login(page, "taylor");
     const start = await post(page, "/api/v2/family/attempt/action", {
       familyId,
       id,
       action: "start",
-      quoteId: quote.id,
     });
     expect(start.status()).toBe(200);
     const { editorToken } = await start.json();
@@ -256,6 +233,52 @@ test.describe("real preview test workspaces", () => {
     });
     expect(submitted.status()).toBe(200);
     const { submission } = await submitted.json();
+    const pending = await (
+      await page.request.get(
+        `/api/v2/family/assessment?family=${familyId}&id=${submission}`,
+      )
+    ).json();
+    expect(pending.state).toBe("awaiting_funds");
+    await login(page, "pat");
+    const requestId = crypto.randomUUID();
+    expect(
+      (
+        await post(page, "/api/testing", {
+          action: "credit",
+          familyId,
+          requestId,
+        })
+      ).status(),
+    ).toBe(200);
+    expect(
+      (
+        await post(page, "/api/testing", {
+          action: "credit",
+          familyId,
+          requestId,
+        })
+      ).status(),
+    ).toBe(200);
+    const wallet = await (
+      await page.request.get(`/api/v2/family/snapshot?family=${familyId}`)
+    ).json();
+    expect(Number(wallet.wallet.balance)).toBe(originalBalance + 10000000);
+    expect(
+      (
+        await post(page, "/api/v2/family/action", {
+          familyId,
+          action: "cap",
+          learnerId,
+          micros: Math.max(previousCap, 10000000),
+        })
+      ).status(),
+    ).toBe(200);
+    const resumed = await (
+      await page.request.get(
+        `/api/v2/family/assessment?family=${familyId}&id=${submission}`,
+      )
+    ).json();
+    expect(resumed.state).toBe("queued");
     await login(page, "lee");
     const processing = await post(page, "/api/testing", {
       action: "process",
@@ -294,5 +317,126 @@ test.describe("real preview test workspaces", () => {
         })
       ).status(),
     ).toBe(403);
+  });
+  test("exam example opens real source tabs and preserves writing in the exam desk", async ({
+    page,
+  }) => {
+    test.setTimeout(90000);
+    await page.setViewportSize({ width: 1366, height: 650 });
+    await page.goto("/testing");
+    await page.getByLabel("Shared test password").fill(password!);
+    await page
+      .getByRole("button", { name: "Open exam example as Alex", exact: true })
+      .click();
+    await page.waitForURL(/attempt=/, { timeout: 45000 });
+    const source = page.getByRole("region", {
+      name: "Source desk",
+      exact: true,
+    });
+    await expect(
+      page
+        .getByText(
+          "Using Study A, explain one limitation of the sampling method used by the researcher.",
+        )
+        .filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      source.getByText("Twelve volunteers", { exact: false }),
+    ).toBeVisible();
+    await source
+      .getByRole("tab", {
+        name: "Table 1 · Reported stress (synthetic data)",
+        exact: true,
+      })
+      .click();
+    await expect(
+      source.getByRole("cell", { name: "12", exact: true }),
+    ).toBeVisible();
+    await source
+      .getByRole("button", { name: "Pin table", exact: true })
+      .click();
+    await source
+      .getByRole("tab", {
+        name: "Study A · fictional psychology study",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("button", { name: "Start practice →", exact: true })
+      .click();
+    const editor = page.getByRole("textbox", {
+      name: "Your answer",
+      exact: true,
+    });
+    await expect(editor).toBeEditable();
+    await expect(editor).toHaveAttribute("spellcheck", "false");
+    const writing =
+      "The twelve volunteers came from one psychology class. They may differ from other sixth-form students, so the findings may not generalise to the wider school.";
+    await editor.fill(writing);
+    await expect(page.locator(".exam-save-row [role=status]")).toHaveText(
+      "Saved to account",
+    );
+    await page
+      .getByRole("button", { name: "Next question →", exact: true })
+      .click();
+    await expect(
+      page
+        .getByText(
+          "Using Study A, explain how the researcher could improve the reliability of the interviews.",
+        )
+        .filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      source.getByRole("tab", {
+        name: "Pinned · Table 1 · Reported stress (synthetic data)",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Previous", exact: true }).click();
+    await expect(editor).toHaveValue(writing);
+    await page.reload();
+    await expect(editor).toHaveValue(writing);
+    await expect(
+      source.getByRole("tab", {
+        name: "Pinned · Table 1 · Reported stress (synthetic data)",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await source
+      .getByRole("tab", {
+        name: "Pinned · Table 1 · Reported stress (synthetic data)",
+        exact: true,
+      })
+      .click();
+    await expect(
+      source.getByRole("cell", { name: "12", exact: true }),
+    ).toBeInViewport();
+    await page.screenshot({
+      path: "test-results/live-exam-desk-desktop.png",
+      fullPage: true,
+    });
+    console.log("Verified exam desk: " + page.url());
+    await page.setViewportSize({ width: 375, height: 850 });
+    await expect(source).toBeVisible();
+    await page.getByRole("tab", { name: "Answer", exact: true }).click();
+    await expect(editor).toHaveValue(writing);
+    await expect(
+      page.getByRole("button", { name: "Review before submitting" }),
+    ).toBeInViewport();
+    await page.screenshot({
+      path: "test-results/live-exam-desk-mobile.png",
+      fullPage: true,
+    });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await login(page, "jordan");
+    const forbidden = await post(page, "/api/testing", {
+      action: "exam",
+      requestId: crypto.randomUUID(),
+    });
+    expect(forbidden.status()).toBe(403);
   });
 });

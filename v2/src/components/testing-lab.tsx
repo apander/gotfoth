@@ -18,7 +18,7 @@ export function TestingLab() {
   const [password, setPassword] = useState(""),
     [busy, setBusy] = useState(""),
     [error, setError] = useState("");
-  async function enter(email: string) {
+  async function enter(email: string, exam = false) {
     setBusy(email);
     setError("");
     try {
@@ -27,7 +27,14 @@ export function TestingLab() {
       const result = await client.signIn.email({ email, password });
       if (result.error)
         throw new Error(result.error.message ?? "Check the test password.");
-      location.assign("/");
+      if (exam) {
+        const example = await testingRequest({
+          action: "exam",
+          subject: "psychology",
+          requestId: crypto.randomUUID(),
+        });
+        location.assign(example.url);
+      } else location.assign("/");
     } catch (e: any) {
       setError(e.message);
       setBusy("");
@@ -80,6 +87,15 @@ export function TestingLab() {
                 ? "Signing in…"
                 : `Sign in as ${account.name.split(" ")[0]}`}
             </Button>
+            {account.role === "student" && account.key !== "casey" && (
+              <Button
+                variant="secondary"
+                disabled={!password || !!busy}
+                onClick={() => enter(account.email, true)}
+              >
+                Open exam example as {account.name.split(" ")[0]}
+              </Button>
+            )}
           </article>
         ))}
       </div>
@@ -125,6 +141,10 @@ export function TestingTools({
         familyId,
         requestId: crypto.randomUUID(),
       });
+      if (result.url) {
+        location.assign(result.url);
+        return;
+      }
       setNotice(result.message);
       if (action === "credit") location.reload();
     } catch (e: any) {
@@ -137,6 +157,11 @@ export function TestingTools({
     <aside className="testing-tools" aria-label="Test workspace tools">
       <strong>UX test account · simulated data</strong>
       <a href="/testing">Switch test account</a>
+      {role === "student" && (
+        <Button variant="secondary" disabled={busy} onClick={() => run("exam")}>
+          Open exam example
+        </Button>
+      )}
       <Button
         variant="secondary"
         disabled={busy}

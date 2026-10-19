@@ -1,15 +1,28 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { api, euro } from "./api";
-import { QuestionExtracts } from "./extracts";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { api } from "./api";
+import { SourceDesk, hasQuestionSources } from "./exam-sources";
+import {
+  newExamWorkspace,
+  readExamWorkspace,
+  type ExamWorkspaceState,
+} from "./exam-workspace-state";
 import { Dialog, Meter } from "./ui";
 export function Player({
   familyId,
+  userId,
   id,
   onDone,
   onNavigationReady,
 }: {
   familyId: string;
+  userId: string;
   id: string;
   onDone: (completed?: boolean) => void;
   onNavigationReady?: (save: (() => Promise<void>) | null) => void;
@@ -21,7 +34,6 @@ export function Player({
     [token, setToken] = useState(""),
     [status, setStatus] = useState("Loading…"),
     [error, setError] = useState(""),
-    [quote, setQuote] = useState<any>(null),
     [remaining, setRemaining] = useState<number | null>(null),
     [hints, setHints] = useState<string[]>([]),
     [review, setReview] = useState(false),
@@ -34,7 +46,179 @@ export function Player({
     tokenRef = useRef(""),
     deadline = useRef<number | null>(null),
     expired = useRef(false);
+  const sessionRef = useRef<HTMLDivElement>(null);
+  const deskRef = useRef<HTMLDivElement>(null);
+  const answerRef = useRef<HTMLElement>(null);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const [workspace, setWorkspace] = useState(newExamWorkspace);
+  const workspaceRef = useRef(workspace);
+  const workspaceKey = `gotfoth:exam-workspace:${userId}:${familyId}:${id}`;
+  const [expandedQuestion, setExpandedQuestion] = useState(false);
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const update = () =>
+      setCompact(
+        window.innerWidth <
+          Math.max(
+            1024,
+            parseFloat(getComputedStyle(document.documentElement).fontSize) *
+              64,
+          ),
+      );
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+  function changeWorkspace(
+    update: (previous: ExamWorkspaceState) => ExamWorkspaceState,
+  ) {
+    workspaceRef.current = update(workspaceRef.current);
+    setWorkspace(workspaceRef.current);
+  }
+  function rememberAnswer() {
+    const editor = editorRef.current,
+      qid = attempt?.data.questions[index]?.id;
+    if (!qid) return;
+    const table =
+      answerRef.current?.querySelector<HTMLElement>(".exam-table-answer");
+    if (!editor && table?.clientHeight) {
+      const active = document.activeElement;
+      const input =
+        active instanceof HTMLInputElement && table.contains(active)
+          ? active
+          : null;
+      changeWorkspace((previous) => ({
+        ...previous,
+        answers: {
+          ...previous.answers,
+          [qid]: {
+            top: table.scrollTop,
+            start: input?.selectionStart ?? previous.answers[qid]?.start ?? 0,
+            end: input?.selectionEnd ?? previous.answers[qid]?.end ?? 0,
+            direction:
+              input?.selectionDirection ??
+              previous.answers[qid]?.direction ??
+              "none",
+            field:
+              input?.getAttribute("aria-label") ?? previous.answers[qid]?.field,
+          },
+        },
+      }));
+      return;
+    }
+    if (!editor?.clientHeight) return;
+    const position = {
+      top: editor.scrollTop,
+      start: editor.selectionStart,
+      end: editor.selectionEnd,
+      direction: editor.selectionDirection,
+    };
+    changeWorkspace((previous) => ({
+      ...previous,
+      answers: { ...previous.answers, [qid]: position },
+    }));
+  }
   const lastFlush = useRef(0);
+  function showQuestion(next: number) {
+    rememberAnswer();
+    changeWorkspace((previous) => ({
+      ...previous,
+      question: attempt.data.questions[next].id,
+    }));
+    setIndex(next);
+    setHints([]);
+    setExpandedQuestion(false);
+    requestAnimationFrame(() => {
+      sessionRef.current
+        ?.querySelector<HTMLElement>(
+          `.${workspaceRef.current.view === "source" && compact && hasQuestionSources(attempt.data.questions[next], attempt.data.resources ?? []) ? "exam-mobile-question" : "exam-writing-pane"} h2`,
+        )
+        ?.focus({ preventScroll: true });
+    });
+  }
+  useEffect(() => {
+    try {
+      changeWorkspace(() =>
+        readExamWorkspace(localStorage.getItem(workspaceKey)),
+      );
+    } catch {}
+    function persist() {
+      try {
+        localStorage.setItem(
+          workspaceKey,
+          JSON.stringify(workspaceRef.current),
+        );
+      } catch {}
+    }
+    window.addEventListener("pagehide", persist);
+    return () => {
+      persist();
+      window.removeEventListener("pagehide", persist);
+    };
+  }, [workspaceKey]);
+  useEffect(() => {
+    const persist = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          workspaceKey,
+          JSON.stringify(workspaceRef.current),
+        );
+      } catch {}
+    }, 250);
+    return () => clearTimeout(persist);
+  }, [workspace, workspaceKey]);
+  useLayoutEffect(() => {
+    const editor = editorRef.current;
+    const position =
+      workspaceRef.current.answers[attempt?.data.questions[index]?.id];
+    const table =
+      answerRef.current?.querySelector<HTMLElement>(".exam-table-answer");
+    if (!editor && table?.clientHeight) {
+      table.scrollTop = position?.top ?? 0;
+      const input = Array.from(
+        table.querySelectorAll<HTMLInputElement>("input"),
+      ).find((el) => el.getAttribute("aria-label") === position?.field);
+      input?.setSelectionRange(
+        position?.start ?? 0,
+        position?.end ?? 0,
+        position?.direction ?? "none",
+      );
+      return;
+    }
+    if (!editor || !editor.clientHeight) return;
+    editor.setSelectionRange(
+      position?.start ?? 0,
+      position?.end ?? 0,
+      position?.direction ?? "none",
+    );
+    editor.scrollTop = position?.top ?? 0;
+  }, [index, attempt?.id, workspace.view, compact]);
+  useEffect(() => {
+    function resize() {
+      const element = sessionRef.current;
+      if (!element) return;
+      const height = window.visualViewport?.height ?? window.innerHeight;
+      element.style.setProperty(
+        "--exam-height",
+        `${Math.max(280, height - Math.max(0, element.getBoundingClientRect().top) - 12)}px`,
+      );
+    }
+    resize();
+    window.addEventListener("resize", resize);
+    window.visualViewport?.addEventListener("resize", resize);
+    return () => {
+      window.removeEventListener("resize", resize);
+      window.visualViewport?.removeEventListener("resize", resize);
+    };
+  }, [attempt?.id]);
   const draftKey = `sv-draft:${familyId}:${id}`,
     tokenKey = `sv-editor:${id}`;
   function action(data: unknown) {
@@ -55,7 +239,17 @@ export function Player({
     const first = a.data.questions.findIndex(
       (q: any) => !a.submittedQuestionIds?.includes(q.id),
     );
-    if (first >= 0) setIndex(first);
+    const remembered = a.data.questions.findIndex(
+      (q: any) => q.id === workspaceRef.current.question,
+    );
+    if (
+      remembered >= 0 &&
+      (a.state !== "in_progress" ||
+        first < 0 ||
+        !a.submittedQuestionIds?.includes(a.data.questions[remembered].id))
+    )
+      setIndex(remembered);
+    else if (first >= 0) setIndex(first);
     setStatus("Saved to account");
     const saved = sessionStorage.getItem(tokenKey) ?? "";
     tokenRef.current = saved;
@@ -204,7 +398,11 @@ export function Player({
     try {
       await fn();
     } catch (e: any) {
-      setError(e.message);
+      setError(
+        ["AWAITING_FUNDS", "STUDENT_CAP", "RATE_REQUIRED"].includes(e.code)
+          ? "Practice is being prepared. Your saved work is safe. Please try again shortly."
+          : e.message,
+      );
     } finally {
       setBusy(false);
     }
@@ -248,8 +446,19 @@ export function Player({
     !!token &&
     !expired.current &&
     !answer.submitted;
+  const hasSources = hasQuestionSources(question, attempt.data.resources ?? []);
+  const questionPrompt = (
+    <QuestionPrompt
+      question={question}
+      expanded={expandedQuestion}
+      onExpand={() => setExpandedQuestion((v) => !v)}
+    />
+  );
   return (
-    <>
+    <div
+      className={`exam-session ${compact ? "is-compact" : ""}`}
+      ref={sessionRef}
+    >
       <div className="row player-toolbar">
         <button
           className="link-button"
@@ -277,22 +486,30 @@ export function Player({
           </span>
         )}
       </div>
-      <h1 className="player-heading">
-        {attempt.data.subject ? `${attempt.data.subject} / ` : ""}
-        {attempt.mode === "mock" ? "Full paper" : "Practice session"}
-      </h1>
-      <div className="question-context">
-        <span>
-          Question {index + 1} of {attempt.data.questions.length}
-        </span>
-        <span>
-          {
-            attempt.data.questions.filter((q: any) =>
-              answers[q.id]?.text?.trim(),
-            ).length
-          }{" "}
-          answered
-        </span>
+      <div className="exam-session-heading">
+        <h1 className="player-heading">
+          {attempt.data.subject
+            ? `${attempt.data.subject.charAt(0).toUpperCase() + attempt.data.subject.slice(1)} / `
+            : ""}
+          {attempt.mode === "mock"
+            ? "Full paper"
+            : attempt.mode === "timed"
+              ? "Timed section"
+              : "Practice session"}
+        </h1>
+        <div className="question-context">
+          <span>
+            Question {index + 1} of {attempt.data.questions.length}
+          </span>
+          <span>
+            {
+              attempt.data.questions.filter((q: any) =>
+                answers[q.id]?.text?.trim(),
+              ).length
+            }{" "}
+            answered
+          </span>
+        </div>
       </div>
       <Meter
         value={
@@ -379,41 +596,19 @@ export function Player({
               before the deadline count toward this result.
             </p>
           )}
-          {quote ? (
-            <>
-              <p>
-                Maximum marking charge:{" "}
-                <strong>{euro(quote.maxChargeMicros)}</strong>. The unused
-                amount will be released.
-              </p>
-              <button
-                className="button"
-                disabled={busy}
-                onClick={() =>
-                  run(async () => {
-                    const result = await action({
-                      action: "start",
-                      quoteId: quote.id,
-                    });
-                    sessionStorage.setItem(tokenKey, result.editorToken);
-                    await load();
-                  })
-                }
-              >
-                Accept maximum charge and start →
-              </button>
-            </>
-          ) : (
-            <button
-              className="button"
-              disabled={busy}
-              onClick={() =>
-                run(async () => setQuote(await action({ action: "quote" })))
-              }
-            >
-              Get marking quote
-            </button>
-          )}
+          <button
+            className="button"
+            disabled={busy}
+            onClick={() =>
+              run(async () => {
+                const result = await action({ action: "start" });
+                sessionStorage.setItem(tokenKey, result.editorToken);
+                await load();
+              })
+            }
+          >
+            {busy ? "Opening your practice…" : "Start practice →"}
+          </button>
         </section>
       )}
       {attempt.state === "in_progress" && !token && (
@@ -440,27 +635,75 @@ export function Player({
           Your submission is preserved. Marking status is available from Today.
         </div>
       )}
-      <nav className="question-nav" aria-label="Questions">
-        {attempt.data.questions.map((q: any, i: number) => (
-          <button
-            key={q.id}
-            aria-current={i === index ? "step" : undefined}
-            className={i === index ? "active" : ""}
-            onClick={() =>
-              run(async () => {
-                await flush();
-                setIndex(i);
-                setHints([]);
-              })
-            }
-            aria-label={`Question ${q.number}, ${answers[q.id]?.text ? "answered" : "blank"}${answers[q.id]?.flagged ? ", flagged" : ""}`}
+      <div className="exam-navigation">
+        <nav className="question-nav" aria-label="Questions">
+          {attempt.data.questions.map((q: any, i: number) => (
+            <button
+              key={q.id}
+              aria-current={i === index ? "step" : undefined}
+              className={i === index ? "active" : ""}
+              onClick={() =>
+                run(async () => {
+                  await flush();
+                  showQuestion(i);
+                })
+              }
+              aria-label={`Question ${q.number}, ${answers[q.id]?.text ? "answered" : "blank"}${answers[q.id]?.flagged ? ", flagged" : ""}`}
+            >
+              {q.number}
+              {answers[q.id]?.text ? " ✓" : ""}
+              {answers[q.id]?.flagged ? " ⚑" : ""}
+            </button>
+          ))}
+        </nav>
+        {hasSources && (
+          <div
+            className="exam-mobile-tabs"
+            role="tablist"
+            aria-label="Workspace view"
           >
-            {q.number}
-            {answers[q.id]?.text ? " ✓" : ""}
-            {answers[q.id]?.flagged ? " ⚑" : ""}
-          </button>
-        ))}
-      </nav>
+            {(["source", "answer"] as const).map((view) => (
+              <button
+                type="button"
+                role="tab"
+                key={view}
+                id={`workspace-tab-${view}`}
+                aria-selected={workspace.view === view}
+                tabIndex={workspace.view === view ? 0 : -1}
+                aria-controls={
+                  view === "source" ? "exam-sources" : "exam-writing"
+                }
+                onClick={() => {
+                  rememberAnswer();
+                  changeWorkspace((previous) => ({ ...previous, view }));
+                }}
+                onKeyDown={(event) => {
+                  if (
+                    !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                      event.key,
+                    )
+                  )
+                    return;
+                  event.preventDefault();
+                  const next =
+                    event.key === "Home"
+                      ? "source"
+                      : event.key === "End"
+                        ? "answer"
+                        : view === "source"
+                          ? "answer"
+                          : "source";
+                  rememberAnswer();
+                  changeWorkspace((previous) => ({ ...previous, view: next }));
+                  document.getElementById(`workspace-tab-${next}`)?.focus();
+                }}
+              >
+                {view === "source" ? "Source" : "Answer"}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       {attempt.data.choices.length > 0 && (
         <section className="card" style={{ marginBottom: 20 }}>
           {attempt.data.choices.map((group: any) => (
@@ -503,88 +746,176 @@ export function Player({
           ))}
         </section>
       )}
-      <div className="player">
-        <section className="question-panel">
-          <div className="row">
-            <span className="eyebrow">QUESTION {question.number}</span>
-            <span className="badge">{question.marks} marks</span>
-          </div>
-          <p className="question-text" style={{ marginTop: 24 }}>
-            {question.text}
-          </p>
-          <QuestionExtracts
-            key={question.id}
-            extracts={(question.extracts ?? []).filter(
-              (extract: any) => extract.cited !== false,
-            )}
-            reveal
-          />
-          {attempt.data.resources
-            .filter((r: any) => question.resourceIds.includes(r.id))
-            .map((r: any) => (
-              <section className="source" key={r.id}>
-                <h3>{r.title}</h3>
-                {r.text}
-                {r.fileId && (
-                  <p>
-                    <a
-                      className="link-button"
-                      target="_blank"
-                      rel="noreferrer"
-                      href={`/api/resource/${r.fileId}?family=${familyId}&attempt=${id}#page=${r.pages?.[0] ?? 1}`}
-                    >
-                      Open original source pages (reveals the paper)
-                    </a>
-                  </p>
-                )}
-              </section>
-            ))}
-          {attempt.mode === "guided" && editable && (
-            <button
-              className="link-button"
-              onClick={() =>
-                run(async () => {
-                  const r = await action({
-                    action: "hint",
-                    questionId: question.id,
-                  });
-                  setHints(r.hints);
-                })
-              }
+      <div
+        ref={deskRef}
+        className={`exam-desk ${hasSources ? "" : "no-sources"}`}
+        data-view={hasSources ? workspace.view : "answer"}
+        style={{ "--source-width": `${workspace.width}%` } as CSSProperties}
+      >
+        {hasSources && (
+          <>
+            <div
+              className="exam-source-pane"
+              id="exam-sources"
+              hidden={compact && workspace.view !== "source"}
             >
-              Show an approved hint
-            </button>
-          )}
-          {hints.map((h, i) => (
-            <p className="notice" key={i}>
-              {h}
-            </p>
-          ))}
-        </section>
-        <section className="answer-panel">
-          <label htmlFor="answer" className="eyebrow">
-            YOUR ANSWER
-          </label>
-          {question.format === "table" ? (
-            <TableAnswer
-              value={answer.text}
-              columns={question.tableColumns ?? ["Item", "Answer"]}
-              disabled={!editable}
-              onChange={(text) => edit(question.id, text)}
-            />
-          ) : (
-            <textarea
-              id="answer"
-              className="editor"
-              aria-label="Your answer"
-              spellCheck
-              value={answer.text}
-              disabled={!editable}
-              onChange={(e) => edit(question.id, e.target.value)}
-              placeholder="Write your answer…"
-            />
-          )}
-          <div className="row" style={{ marginTop: 12 }}>
+              <div
+                className={`exam-mobile-question ${expandedQuestion ? "is-expanded" : ""}`}
+              >
+                {questionPrompt}
+              </div>
+              <SourceDesk
+                question={question}
+                resources={attempt.data.resources ?? []}
+                state={workspace.sources}
+                onChange={(update) =>
+                  changeWorkspace((previous) => ({
+                    ...previous,
+                    sources: update(previous.sources),
+                  }))
+                }
+                familyId={familyId}
+                attemptId={id}
+                visible={!compact || workspace.view === "source"}
+              />
+            </div>
+            <div
+              className="exam-divider"
+              title="Drag or use arrow keys to resize. Press Enter or double-click to reset."
+              role="separator"
+              aria-label="Resize source and answer panes"
+              aria-orientation="vertical"
+              tabIndex={0}
+              aria-valuemin={35}
+              aria-valuemax={65}
+              aria-valuenow={Math.round(workspace.width)}
+              aria-valuetext={`${Math.round(workspace.width)}% source, ${Math.round(100 - workspace.width)}% answer`}
+              onDoubleClick={() =>
+                changeWorkspace((previous) => ({ ...previous, width: 50 }))
+              }
+              onKeyDown={(event) => {
+                if (
+                  !["ArrowLeft", "ArrowRight", "Home", "End", "Enter"].includes(
+                    event.key,
+                  )
+                )
+                  return;
+                event.preventDefault();
+                const width =
+                  event.key === "Home"
+                    ? 35
+                    : event.key === "End"
+                      ? 65
+                      : event.key === "Enter"
+                        ? 50
+                        : Math.max(
+                            35,
+                            Math.min(
+                              65,
+                              workspace.width +
+                                (event.key === "ArrowLeft" ? -2 : 2),
+                            ),
+                          );
+                changeWorkspace((previous) => ({ ...previous, width }));
+              }}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerMove={(event) => {
+                if (
+                  !event.currentTarget.hasPointerCapture(event.pointerId) ||
+                  !deskRef.current
+                )
+                  return;
+                const box = deskRef.current.getBoundingClientRect();
+                const width = Math.max(
+                  35,
+                  Math.min(65, ((event.clientX - box.x) / box.width) * 100),
+                );
+                changeWorkspace((previous) => ({ ...previous, width }));
+              }}
+              onPointerUp={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId))
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+              }}
+            >
+              <span aria-hidden="true">⋮</span>
+            </div>
+          </>
+        )}
+        <section
+          className="exam-writing-pane"
+          id="exam-writing"
+          hidden={compact && hasSources && workspace.view !== "answer"}
+          aria-label="Answer booklet"
+          ref={answerRef}
+        >
+          <div
+            className={`exam-question ${expandedQuestion ? "is-expanded" : ""}`}
+          >
+            {questionPrompt}
+            {attempt.mode === "guided" && editable && (
+              <div className="exam-hints">
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() =>
+                    run(async () => {
+                      const r = await action({
+                        action: "hint",
+                        questionId: question.id,
+                      });
+                      setHints(r.hints);
+                    })
+                  }
+                >
+                  Show an approved hint
+                </button>
+                {hints.map((hint, i) => (
+                  <p className="notice" key={i}>
+                    {hint}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+          <div
+            className="exam-answer-body"
+            onScrollCapture={rememberAnswer}
+            onSelect={rememberAnswer}
+            onBlurCapture={rememberAnswer}
+          >
+            <label htmlFor="answer" className="eyebrow">
+              YOUR ANSWER
+            </label>
+            {question.format === "table" ? (
+              <TableAnswer
+                key={question.id}
+                value={answer.text}
+                columns={question.tableColumns ?? ["Item", "Answer"]}
+                disabled={!editable}
+                onChange={(text) => edit(question.id, text)}
+              />
+            ) : (
+              <textarea
+                key={question.id}
+                ref={editorRef}
+                id="answer"
+                className="editor"
+                onSelect={rememberAnswer}
+                onScroll={rememberAnswer}
+                onBlur={rememberAnswer}
+                aria-label="Your answer"
+                spellCheck={!["timed", "mock"].includes(attempt.mode)}
+                value={answer.text}
+                disabled={!editable}
+                onChange={(e) => edit(question.id, e.target.value)}
+                placeholder="Write your answer…"
+              />
+            )}
+          </div>
+          <div className="row exam-save-row">
             <span role="status" aria-live="polite" className="muted">
               {status}
             </span>
@@ -600,7 +931,7 @@ export function Player({
               Flag for review
             </label>
           </div>
-          <div className="row answer-actions" style={{ marginTop: 24 }}>
+          <div className="row answer-actions exam-answer-actions">
             {index > 0 && (
               <button
                 className="button secondary"
@@ -608,8 +939,7 @@ export function Player({
                 onClick={() =>
                   run(async () => {
                     await flush();
-                    setIndex(index - 1);
-                    setHints([]);
+                    showQuestion(index - 1);
                   })
                 }
               >
@@ -635,8 +965,7 @@ export function Player({
                 onClick={() =>
                   run(async () => {
                     await flush();
-                    setIndex(index + 1);
-                    setHints([]);
+                    showQuestion(index + 1);
                   })
                 }
               >
@@ -681,6 +1010,59 @@ export function Player({
           </div>
         </Dialog>
       )}
+    </div>
+  );
+}
+function QuestionPrompt({
+  question,
+  expanded,
+  onExpand,
+}: {
+  question: any;
+  expanded: boolean;
+  onExpand: () => void;
+}) {
+  const textRef = useRef<HTMLDivElement>(null);
+  const [overflows, setOverflows] = useState(false);
+  useLayoutEffect(() => {
+    const element = textRef.current;
+    if (!element) return;
+    const measure = () => {
+      if (!expanded)
+        setOverflows(element.scrollHeight > element.clientHeight + 1);
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    measure();
+    return () => observer.disconnect();
+  }, [question.text, expanded]);
+  return (
+    <>
+      <div className="exam-question-heading">
+        <h2 tabIndex={-1}>Question {question.number}</h2>
+        <span className="exam-marks">
+          [{question.marks} {question.marks === 1 ? "mark" : "marks"}]
+        </span>
+      </div>
+      <div
+        ref={textRef}
+        className={`exam-question-text ${expanded ? "expanded" : ""}`}
+        role="region"
+        aria-label="Question text"
+        tabIndex={overflows || expanded ? 0 : undefined}
+      >
+        <p className="question-text">{question.text}</p>
+      </div>
+      {(overflows || expanded) && (
+        <button
+          type="button"
+          className="link-button"
+          aria-expanded={expanded}
+          onClick={onExpand}
+        >
+          {expanded ? "Reduce question area" : "Expand question area"}
+        </button>
+      )}
     </>
   );
 }
@@ -703,7 +1085,7 @@ function TableAnswer({
   }
   if (!Array.isArray(rows) || !rows.length) rows = [columns.map(() => "")];
   return (
-    <div className="card overflow">
+    <div className="card overflow exam-table-answer">
       <table>
         <thead>
           <tr>

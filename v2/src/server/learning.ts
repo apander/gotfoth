@@ -301,6 +301,54 @@ export async function getAttempt(actor: Actor, familyId: string, id: string) {
     };
   });
 }
+export async function startPractice(tx: Tx, a: any, providedQuoteId?: string) {
+  const id = a.id;
+
+  requireThat(
+    a.state === "draft",
+    "STATE",
+    "This attempt has already started.",
+  );
+  // Freeze pricing internally; starting learning is not a payment decision.
+  const quoteId = providedQuoteId ?? (await createQuote(tx, a)).id;
+  const quote = (
+    await tx.query("SELECT * FROM quotes WHERE id=$1 AND attempt_id=$2", [
+      quoteId,
+      a.id,
+    ])
+  ).rows[0];
+  requireThat(quote, "QUOTE", "The quote does not belong to this attempt.");
+  try {
+    await reserve(tx, quoteId);
+  } catch (error) {
+    if (
+      error instanceof AppError &&
+      ["AWAITING_FUNDS", "STUDENT_CAP"].includes(error.code)
+    ) {
+      await tx.query("UPDATE quotes SET accepted_at=now() WHERE id=$1", [
+        quoteId,
+      ]);
+    } else throw error;
+  }
+  const editorToken = randomBytes(32).toString("base64url");
+  const duration = Math.ceil(
+    a.data.durationMinutes * 60 * (1 + a.data.extraTimePercent / 100),
+  );
+  const timed = a.mode === "timed" || a.mode === "mock";
+  await tx.query(
+    "UPDATE attempts SET state='in_progress',started_at=clock_timestamp(),deadline=CASE WHEN $2 THEN clock_timestamp()+($3*interval '1 second') ELSE NULL END,editor_token=$4,editor_epoch=editor_epoch+1,data=jsonb_set(data,'{quoteId}',to_jsonb($5::text)) WHERE id=$1",
+    [id, timed, duration, editorToken, quoteId],
+  );
+  if (timed)
+    await enqueue(
+      tx,
+      "deadline",
+      `deadline:${id}`,
+      { attemptId: id, delaySeconds: duration },
+      a.family_id,
+    );
+  return { editorToken };
+}
 export async function attemptAction(
   actor: Actor,
   familyId: string,
@@ -310,7 +358,10 @@ export async function attemptAction(
   const data = z
     .discriminatedUnion("action", [
       z.object({ action: z.literal("quote") }),
-      z.object({ action: z.literal("start"), quoteId: z.string().uuid() }),
+      z.object({
+        action: z.literal("start"),
+        quoteId: z.string().uuid().optional(),
+      }),
       z.object({ action: z.literal("takeover") }),
       z.object({ action: z.literal("abandon") }),
       z.object({
@@ -378,51 +429,7 @@ export async function attemptAction(
       );
       return createQuote(tx, a);
     }
-    if (data.action === "start") {
-      requireThat(
-        a.state === "draft",
-        "STATE",
-        "This attempt has already started.",
-      );
-      const quote = (
-        await tx.query("SELECT * FROM quotes WHERE id=$1 AND attempt_id=$2", [
-          data.quoteId,
-          a.id,
-        ])
-      ).rows[0];
-      requireThat(quote, "QUOTE", "The quote does not belong to this attempt.");
-      try {
-        await reserve(tx, data.quoteId);
-      } catch (error) {
-        if (
-          (a.mode === "guided" || a.mode === "independent") &&
-          error instanceof AppError &&
-          ["AWAITING_FUNDS", "STUDENT_CAP"].includes(error.code)
-        ) {
-          await tx.query("UPDATE quotes SET accepted_at=now() WHERE id=$1", [
-            data.quoteId,
-          ]);
-        } else throw error;
-      }
-      const editorToken = randomBytes(32).toString("base64url");
-      const duration = Math.ceil(
-        a.data.durationMinutes * 60 * (1 + a.data.extraTimePercent / 100),
-      );
-      const timed = a.mode === "timed" || a.mode === "mock";
-      await tx.query(
-        "UPDATE attempts SET state='in_progress',started_at=clock_timestamp(),deadline=CASE WHEN $2 THEN clock_timestamp()+($3*interval '1 second') ELSE NULL END,editor_token=$4,editor_epoch=editor_epoch+1,data=jsonb_set(data,'{quoteId}',to_jsonb($5::text)) WHERE id=$1",
-        [id, timed, duration, editorToken, data.quoteId],
-      );
-      if (timed)
-        await enqueue(
-          tx,
-          "deadline",
-          `deadline:${id}`,
-          { attemptId: id, delaySeconds: duration },
-          familyId,
-        );
-      return { editorToken };
-    }
+    if (data.action === "start") return startPractice(tx, a, data.quoteId);
     if (data.action === "takeover") {
       requireThat(
         a.state === "in_progress",
@@ -589,6 +596,17 @@ export async function freeze(
     ],
   );
   const assessmentId = randomUUID();
+  let funded = true;
+  try {
+    await reserve(tx, a.data.quoteId, true);
+  } catch (error) {
+    if (
+      error instanceof AppError &&
+      ["AWAITING_FUNDS", "STUDENT_CAP"].includes(error.code)
+    )
+      funded = false;
+    else throw error;
+  }
   await tx.query(
     "INSERT INTO assessments(id,family_id,learner_id,submission_id,state,error_code) VALUES($1,$2,$3,$4,$5,$6)",
     [
@@ -596,7 +614,7 @@ export async function freeze(
       a.family_id,
       a.learner_id,
       id,
-      choicesValid ? "queued" : "needs_review",
+      choicesValid ? (funded ? "queued" : "awaiting_funds") : "needs_review",
       choicesValid ? null : "INVALID_CHOICES",
     ],
   );
@@ -617,7 +635,7 @@ export async function freeze(
         [a.id],
       );
   }
-  if (choicesValid)
+  if (choicesValid && funded)
     await enqueue(
       tx,
       "mark",

@@ -12,7 +12,9 @@ test("manual submission and expiry converge; late writes cannot replace the froz
   );
   const family = randomUUID(),
     learner = randomUUID(),
-    id = randomUUID();
+    id = randomUUID(),
+    quoteId = randomUUID(),
+    rateId = randomUUID();
   await db.query("INSERT INTO families(id,name) VALUES($1,$2)", [
     family,
     "Family",
@@ -22,7 +24,12 @@ test("manual submission and expiry converge; late writes cannot replace the froz
     family,
     "Learner",
   ]);
-  const data = { questions: [{ id: "q1" }], choices: [], selected: [] };
+  const data = {
+    quoteId,
+    questions: [{ id: "q1" }],
+    choices: [],
+    selected: [],
+  };
   await db.query(
     "INSERT INTO attempts(id,family_id,learner_id,mode,state,data,deadline) VALUES($1,$2,$3,'mock','in_progress',$4,now())",
     [id, family, learner, JSON.stringify(data)],
@@ -30,6 +37,15 @@ test("manual submission and expiry converge; late writes cannot replace the froz
   await db.query(
     "INSERT INTO answers(attempt_id,family_id,question_id,text,revision) VALUES($1,$2,'q1','On-time text',2)",
     [id, family],
+  );
+  await db.query(
+    "INSERT INTO funding_accounts(family_id,balance) VALUES($1,100)",
+    [family],
+  );
+  await db.query("INSERT INTO rate_cards(id,data) VALUES($1,'{}')", [rateId]);
+  await db.query(
+    "INSERT INTO quotes(id,family_id,learner_id,attempt_id,max_charge,rate_card_id,configuration,expires_at,accepted_at) VALUES($1,$2,$3,$4,10,$5,'{}',now()+interval '1 hour',now())",
+    [quoteId, family, learner, id, rateId],
   );
   const a = (await db.query("SELECT * FROM attempts WHERE id=$1", [id]))
     .rows[0];

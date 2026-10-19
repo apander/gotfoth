@@ -61,6 +61,7 @@ async function fixture(
   empty = false,
   extraCourse = false,
   courseOverride?: any,
+  fundingScenario?: "waiting" | "low",
 ) {
   let revision = 0;
   let goal = 3;
@@ -124,7 +125,10 @@ async function fixture(
               {
                 id: "assessment",
                 learner_id: learner,
-                state: "published",
+                state:
+                  fundingScenario === "waiting"
+                    ? "awaiting_funds"
+                    : "published",
                 mode: "independent",
                 subject: "psychology",
                 submitted_at: "2026-10-04T17:00:00Z",
@@ -149,7 +153,23 @@ async function fixture(
         ],
         sessions: [],
         calendar: "disconnected",
-        wallet: { balance: 10000000, reserved: 0, ledger: [] },
+        wallet: {
+          balance: fundingScenario ? 500000 : 10000000,
+          reserved: 0,
+          ledger: [],
+          awaiting:
+            fundingScenario === "waiting"
+              ? [
+                  {
+                    id: "waiting",
+                    name: "Alex",
+                    subject: "psychology",
+                    max_charge: 1000000,
+                    remaining_cap: 0,
+                  },
+                ]
+              : [],
+        },
       };
     else if (path.endsWith("/enrolment")) {
       configured = true;
@@ -833,7 +853,7 @@ test("feedback practice uses its subject even when another course was selected",
   expect(created.retryOf).toBe("assessment");
 });
 
-test("insufficient credit explains why a practice cannot start without opening editing", async ({
+test("legacy funding errors do not ask students to manage money", async ({
   page,
 }) => {
   await fixture(page);
@@ -877,13 +897,18 @@ test("insufficient credit explains why a practice cannot start without opening e
       });
   });
   await page.goto(`/?family=${family}&attempt=${attempt}`);
-  await page.getByRole("button", { name: "Get marking quote" }).click();
+  await expect(
+    page.getByRole("button", { name: "Get marking quote" }),
+  ).toHaveCount(0);
   await page
-    .getByRole("button", { name: /Accept maximum charge and start/ })
+    .getByRole("button", { name: "Start practice →", exact: true })
     .click();
   await expect(
-    page.getByRole("alert").filter({ hasText: "Ask your parent" }),
+    page.getByRole("alert").filter({ hasText: "Your saved work is safe" }),
   ).toBeVisible();
+  await expect(page.getByText("Ask your parent", { exact: false })).toHaveCount(
+    0,
+  );
   await expect(
     page.getByRole("textbox", { name: "Your answer", exact: true }),
   ).not.toBeEditable();
@@ -1008,4 +1033,762 @@ test("course edits preserve existing settings and recover from a failed save", a
   await dialog.getByRole("button", { name: "Save Psychology" }).click();
   await expect(dialog).toHaveCount(0);
   expect(sent).toEqual(existing);
+});
+
+test("students see feedback pending without funding tasks", async ({
+  page,
+}) => {
+  await fixture(page, "student", false, false, undefined, "waiting");
+  await page.goto("/");
+  await expect(
+    page.getByText("Feedback pending", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      /Waiting for funding|Maximum marking|Add credit|Review funding/,
+    ),
+  ).toHaveCount(0);
+});
+
+test("parents receive funding actions and marking cost details", async ({
+  page,
+}) => {
+  await fixture(page, "parent", false, false, undefined, "waiting");
+  await page.goto("/");
+  await page.getByRole("button", { name: "Review funding" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Work waiting for marking" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Maximum marking cost:", { exact: false }),
+  ).toContainText("€1");
+  await expect(
+    page.getByText("Increase this child’s monthly limit below.", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save limit" })).toBeVisible();
+  await page.screenshot({
+    path: "test-results/parent-funding-action.png",
+    fullPage: true,
+  });
+});
+
+test("low balance appears in the parent overview", async ({ page }) => {
+  await fixture(page, "parent", false, false, undefined, "low");
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Family credit is running low." }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Review funding" }),
+  ).toBeVisible();
+});
+
+async function examReferenceFixture(
+  page: Page,
+  broken = false,
+  long = false,
+  shared = false,
+  options: { longQuestion?: boolean; tableAnswer?: boolean } = {},
+) {
+  await fixture(page);
+  const prompt = options.longQuestion
+    ? "Using Extract A, assess the proposed expansion. " +
+      "Consider how the evidence, costs and uncertainty affect the decision. ".repeat(
+        18,
+      )
+    : "Using Extract A, assess one reason why the business might expand into a new market.";
+  const extracts = [
+    {
+      label: "A",
+      heading: "A",
+      text: "Aster Cycles sales revenue increased from £12.0m to £13.5m.",
+      figures: [{ id: "exam-test-figure", width: 800, height: 420, page: 2 }],
+    },
+    {
+      label: "B",
+      cited: false,
+      text: "Unrelated supporting material must not appear.",
+    },
+  ];
+  const caseText = long
+    ? Array.from(
+        { length: 48 },
+        (_, i) =>
+          `Paragraph ${i + 1}. Aster Cycles sells bicycles to schools and local retailers. Its directors are considering a new market, but transport costs, currency changes and differences in demand could affect profit. The business must compare the benefits of expansion with the risks to its existing customers.`,
+      ).join("\n\n")
+    : "The business plans to invest £2m. Its directors are considering exchange-rate risk.";
+  const examQuestions = [
+    {
+      ...questions[0],
+      ...(options.tableAnswer
+        ? { format: "table", tableColumns: ["Stage", "Evidence"] }
+        : {}),
+      number: "1(a)",
+      section: "A",
+      text: prompt,
+      resourceIds: ["case-note"],
+      extracts,
+    },
+    {
+      ...questions[1],
+      ...(shared ? { resourceIds: ["case-note"], extracts } : {}),
+    },
+  ];
+  const saved: Record<
+    string,
+    { text: string; revision: number; flagged: boolean }
+  > = {};
+  await page.route("**/api/figures/exam-test-figure*", (route) =>
+    broken
+      ? route.fulfill({ status: 503, body: "Source unavailable" })
+      : route.fulfill({
+          contentType: "image/svg+xml",
+          body: `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="420" viewBox="0 0 800 420"><rect width="800" height="420" fill="white"/><g fill="#18202c" font-family="Arial" font-size="25"><text x="30" y="48">Extract A: Aster Cycles (synthetic example)</text><text x="30" y="100">Aster Cycles is considering a new overseas market.</text><text x="30" y="160">Measure</text><text x="470" y="160">2024</text><text x="650" y="160">2025</text><text x="30" y="225">Sales revenue (£m)</text><text x="470" y="225">12.0</text><text x="650" y="225">13.5</text><text x="30" y="290">Market share (%)</text><text x="470" y="290">8.0</text><text x="650" y="290">9.2</text><text x="30" y="380">Source: fictional figures for interface testing.</text></g><g stroke="#18202c"><path d="M30 175H760M30 240H760M30 305H760"/></g></svg>`,
+        }),
+  );
+  await page.route("**/api/v2/family/attempt?**", (route) =>
+    route.fulfill({
+      json: {
+        id: attempt,
+        mode: "timed",
+        state: "in_progress",
+        deadline: new Date(Date.now() + 1200000).toISOString(),
+        serverNow: new Date().toISOString(),
+        data: {
+          subject: "business",
+          questions: examQuestions,
+          resources: [
+            {
+              id: "case-note",
+              title: "Additional case information",
+              text: caseText,
+              ...(long
+                ? {
+                    table: {
+                      caption: "Table 1: financial results",
+                      columns: ["Measure", "2024", "2025"],
+                      rows: [
+                        ["Revenue (£m)", "12.0", "13.5"],
+                        ["Profit (£m)", "1.2", "1.1"],
+                        ["Market share (%)", "8.0", "9.2"],
+                      ],
+                    },
+                  }
+                : {}),
+            },
+          ],
+          choices: [],
+          selected: [],
+          durationMinutes: 20,
+        },
+        answers: questions.map((q) => ({
+          question_id: q.id,
+          ...(saved[q.id] ?? { text: "", revision: 0, flagged: false }),
+        })),
+      },
+    }),
+  );
+  await page.route("**/api/v2/family/attempt/action", (route) => {
+    const body = route.request().postDataJSON();
+    if (body.action !== "save") return route.fallback();
+    const revision = (saved[body.questionId]?.revision ?? 0) + 1;
+    saved[body.questionId] = {
+      text: body.text,
+      flagged: body.flagged,
+      revision,
+    };
+    return route.fulfill({ json: { revision } });
+  });
+  await page.goto(`/?family=${family}&attempt=${attempt}`);
+  return prompt;
+}
+for (const width of [375, 768, 1024, 1440]) {
+  test(`exam desk keeps sources and writing available at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 960 });
+    const prompt = await examReferenceFixture(page);
+    const source = page.getByRole("region", {
+      name: "Source desk",
+      exact: true,
+    });
+    const answer = page.getByRole("region", {
+      name: "Answer booklet",
+      exact: true,
+    });
+    await expect(
+      page.getByText(prompt, { exact: true }).filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      source.getByRole("img", { name: /Extract A as printed/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("tab", {
+        name: "Additional case information",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Unrelated supporting material must not appear."),
+    ).toHaveCount(0);
+    await source
+      .getByRole("combobox", { name: "Source zoom" })
+      .selectOption("2");
+    expect(
+      await page
+        .locator(".source-reader")
+        .evaluate((el) => el.scrollWidth > el.clientWidth),
+    ).toBe(true);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    if (width >= 1024) {
+      const left = await source.boundingBox(),
+        right = await answer.boundingBox();
+      expect(right!.x).toBeGreaterThan(left!.x + left!.width);
+      await expect(
+        page.getByRole("separator", { name: "Resize source and answer panes" }),
+      ).toBeVisible();
+    } else await page.getByRole("tab", { name: "Answer", exact: true }).click();
+    const editor = answer.getByRole("textbox", {
+      name: "Your answer",
+      exact: true,
+    });
+    await expect(editor).toHaveAttribute("spellcheck", "false");
+    await editor.fill("Sales increased by £1.5m, which may support expansion.");
+    await expect(answer.getByRole("status")).toHaveText("Saved to account");
+    await expect(
+      page.getByRole("button", { name: "Review before submitting" }),
+    ).toBeInViewport();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: `test-results/exam-desk-${width}.png`,
+      fullPage: true,
+    });
+    await page
+      .getByRole("button", { name: "Question 1(b), blank", exact: true })
+      .click();
+    await expect(
+      page.getByText(questions[1].text, { exact: true }),
+    ).toBeVisible();
+    await expect(source).toHaveCount(0);
+    await expect(editor).toBeVisible();
+  });
+}
+
+test("an unavailable source image exposes its transcript and offers retry", async ({
+  page,
+}) => {
+  await examReferenceFixture(page, true);
+  await expect(
+    page.getByText("The printed image could not load.", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Aster Cycles sales revenue increased from £12.0m to £13.5m.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry source image" }),
+  ).toBeVisible();
+});
+
+test("long evidence, a pinned table and a long essay retain independent places across questions and reload", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await examReferenceFixture(page, false, true, true);
+  const reader = page.locator(".source-reader"),
+    editor = page.getByRole("textbox", { name: "Your answer", exact: true });
+  await page
+    .getByRole("tab", { name: "Table 1: financial results", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Pin table", exact: true }).click();
+  const pinned = page.getByRole("complementary", { name: "Pinned reference" });
+  const pinnedTab = page.getByRole("tab", {
+    name: "Pinned · Table 1: financial results",
+    exact: true,
+  });
+  await expect(pinned.getByText("Revenue (£m)", { exact: true })).toBeVisible();
+  await page
+    .getByRole("tab", { name: "Additional case information", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Source zoom" })
+    .selectOption("1.25");
+  const paragraph = reader.locator("[data-source-text]").nth(2);
+  await paragraph.evaluate((element) => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const selected = window.getSelection()!;
+    selected.removeAllRanges();
+    selected.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+  });
+  await page
+    .getByRole("button", { name: "Highlight selection", exact: true })
+    .click();
+  await expect(paragraph.locator("mark")).toHaveCount(1);
+  const essay = Array.from(
+    { length: 70 },
+    (_, i) =>
+      `Point ${i + 1}: Expansion may increase sales, but costs and demand must be considered carefully.`,
+  ).join("\n\n");
+  await editor.fill(essay);
+  await expect(page.locator(".exam-save-row [role=status]")).toHaveText(
+    "Saved to account",
+  );
+  await editor.evaluate((el: HTMLTextAreaElement) => {
+    el.setSelectionRange(180, 180);
+    el.scrollTop = 650;
+    el.dispatchEvent(new Event("scroll"));
+    el.dispatchEvent(new Event("select", { bubbles: true }));
+  });
+  const answerPlace = await editor.evaluate((el: HTMLTextAreaElement) => ({
+    top: el.scrollTop,
+    start: el.selectionStart,
+  }));
+  const questionBox = await page
+      .locator(".exam-writing-pane .exam-question")
+      .boundingBox(),
+    answerBox = await editor.boundingBox();
+  await reader.evaluate((el) => {
+    el.scrollTop = 1400;
+    el.dispatchEvent(new Event("scroll"));
+  });
+  const sourcePlace = await reader.evaluate((el) => el.scrollTop);
+  expect(sourcePlace).toBeGreaterThan(1000);
+  expect(await editor.evaluate((el) => el.scrollTop)).toBe(answerPlace.top);
+  expect(
+    await page.locator(".exam-writing-pane .exam-question").boundingBox(),
+  ).toEqual(questionBox);
+  expect(await editor.boundingBox()).toEqual(answerBox);
+  await expect(pinnedTab).toBeVisible();
+  await page
+    .getByRole("button", { name: "Question 1(b), blank", exact: true })
+    .click();
+  expect(await reader.evaluate((el) => el.scrollTop)).toBe(sourcePlace);
+  await page.getByRole("button", { name: /Question 1\(a\), answered/ }).click();
+  expect(
+    await editor.evaluate((el: HTMLTextAreaElement) => ({
+      top: el.scrollTop,
+      start: el.selectionStart,
+    })),
+  ).toEqual(answerPlace);
+  const divider = page.getByRole("separator", {
+    name: "Resize source and answer panes",
+  });
+  await divider.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(divider).toHaveAttribute("aria-valuenow", "52");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(
+            localStorage.getItem(
+              Object.keys(localStorage).find((key) =>
+                key.startsWith("gotfoth:exam-workspace:"),
+              )!,
+            )!,
+          ).width,
+      ),
+    )
+    .toBe(52);
+  await page.reload();
+  await expect(editor).toHaveValue(essay);
+  await expect(divider).toHaveAttribute("aria-valuenow", "52");
+  await expect(page.getByRole("combobox", { name: "Source zoom" })).toHaveValue(
+    "1.25",
+  );
+  await expect(pinnedTab).toBeVisible();
+  await expect(paragraph.locator("mark")).toHaveCount(1);
+  await expect
+    .poll(() => reader.evaluate((el) => el.scrollTop))
+    .toBe(sourcePlace);
+  expect(
+    await editor.evaluate((el: HTMLTextAreaElement) => ({
+      top: el.scrollTop,
+      start: el.selectionStart,
+    })),
+  ).toEqual(answerPlace);
+  await pinnedTab.click();
+  await expect(pinned).toBeVisible();
+  await page
+    .getByRole("button", { name: "Show in context", exact: true })
+    .click();
+  await expect(
+    page.getByRole("tab", { name: "Table 1: financial results", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollHeight <= innerHeight + 1,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "test-results/exam-desk-long-evidence.png",
+    fullPage: true,
+  });
+});
+
+for (const width of [375, 768]) {
+  test(`source and answer tabs retain reading and writing positions at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await examReferenceFixture(page, false, true, true);
+    const reader = page.locator(".source-reader"),
+      editor = page.getByRole("textbox", { name: "Your answer", exact: true });
+    await page
+      .getByRole("tab", { name: "Additional case information", exact: true })
+      .click();
+    await reader.evaluate((el) => {
+      el.scrollTop = 700;
+      el.dispatchEvent(new Event("scroll"));
+    });
+    await page.getByRole("tab", { name: "Answer", exact: true }).click();
+    await editor.fill("A long answer.\n".repeat(100));
+    await editor.evaluate((el: HTMLTextAreaElement) => {
+      el.setSelectionRange(90, 90);
+      el.scrollTop = 450;
+      el.dispatchEvent(new Event("scroll"));
+    });
+    const place = await editor.evaluate((el: HTMLTextAreaElement) => ({
+      top: el.scrollTop,
+      start: el.selectionStart,
+    }));
+    await page.getByRole("tab", { name: "Source", exact: true }).click();
+    await expect.poll(() => reader.evaluate((el) => el.scrollTop)).toBe(700);
+    await expect(page.locator(".exam-mobile-question h2")).toBeVisible();
+    await page.getByRole("tab", { name: "Answer", exact: true }).click();
+    expect(
+      await editor.evaluate((el: HTMLTextAreaElement) => ({
+        top: el.scrollTop,
+        start: el.selectionStart,
+      })),
+    ).toEqual(place);
+    await expect(
+      page.getByRole("button", { name: "Review before submitting" }),
+    ).toBeInViewport();
+  });
+}
+
+test("an enlarged long question remains keyboard-readable without hiding submission controls", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await examReferenceFixture(page, false, true, false, { longQuestion: true });
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "32px";
+  });
+  await page.getByRole("tab", { name: "Answer", exact: true }).click();
+  const question = page
+    .locator(".exam-writing-pane")
+    .getByRole("region", { name: "Question text" });
+  await expect(question).toHaveAttribute("tabindex", "0");
+  await question.focus();
+  await page.keyboard.press("End");
+  await expect(
+    page
+      .getByRole("button", { name: "Expand question area", exact: true })
+      .filter({ visible: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Expand question area", exact: true })
+    .filter({ visible: true })
+    .click();
+  await expect(
+    page
+      .getByRole("button", { name: "Reduce question area", exact: true })
+      .filter({ visible: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Review before submitting" })
+    .scrollIntoViewIfNeeded();
+  await expect(
+    page.getByRole("button", { name: "Review before submitting" }),
+  ).toBeInViewport();
+  await expect(page.locator(".exam-writing-pane h2")).toBeInViewport();
+  expect(
+    await page
+      .getByRole("textbox", { name: "Your answer", exact: true })
+      .evaluate((el) => el.clientHeight),
+  ).toBeGreaterThan(120);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "test-results/exam-desk-enlarged-text.png",
+    fullPage: true,
+  });
+});
+
+test("table answers keep their cell selection and scroll position between questions", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await examReferenceFixture(page, false, false, true, { tableAnswer: true });
+  for (let i = 0; i < 12; i++)
+    await page.getByRole("button", { name: "Add row", exact: true }).click();
+  const input = page.getByRole("textbox", {
+    name: "Evidence, row 10",
+    exact: true,
+  });
+  await input.fill("Evidence from the case study");
+  await input.focus();
+  await input.evaluate((el: HTMLInputElement) => {
+    el.setSelectionRange(3, 8);
+    el.dispatchEvent(new Event("select", { bubbles: true }));
+  });
+  await page.locator(".exam-table-answer").evaluate((el) => {
+    el.scrollTop = 300;
+    el.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+  const top = await page
+    .locator(".exam-table-answer")
+    .evaluate((el) => el.scrollTop);
+  await page
+    .getByRole("button", { name: "Next question →", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Previous", exact: true }).click();
+  await expect(input).toHaveValue("Evidence from the case study");
+  expect(
+    await page.locator(".exam-table-answer").evaluate((el) => el.scrollTop),
+  ).toBe(top);
+  expect(
+    await input.evaluate((el: HTMLInputElement) => [
+      el.selectionStart,
+      el.selectionEnd,
+    ]),
+  ).toEqual([3, 8]);
+});
+
+test("each question remembers its selected source while shared source positions stay intact", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await examReferenceFixture(page, false, true, true);
+  const table = page.getByRole("tab", {
+    name: "Table 1: financial results",
+    exact: true,
+  });
+  const caseStudy = page.getByRole("tab", {
+    name: "Additional case information",
+    exact: true,
+  });
+  await table.click();
+  await page
+    .getByRole("button", { name: "Next question →", exact: true })
+    .click();
+  await caseStudy.click();
+  await page.locator(".source-reader").evaluate((el) => {
+    el.scrollTop = 900;
+    el.dispatchEvent(new Event("scroll"));
+  });
+  await page.getByRole("button", { name: "Previous", exact: true }).click();
+  await expect(table).toHaveAttribute("aria-selected", "true");
+  await page
+    .getByRole("button", { name: "Next question →", exact: true })
+    .click();
+  await expect(caseStudy).toHaveAttribute("aria-selected", "true");
+  await expect
+    .poll(() => page.locator(".source-reader").evaluate((el) => el.scrollTop))
+    .toBe(900);
+});
+
+test("resuming guided practice advances past a remembered submitted question", async ({
+  page,
+}) => {
+  await fixture(page);
+  await page.addInitScript(
+    ({ family, attempt }) => {
+      localStorage.setItem(
+        `gotfoth:exam-workspace:test:${family}:${attempt}`,
+        JSON.stringify({
+          version: 1,
+          question: "q1",
+          width: 50,
+          view: "answer",
+          sources: { readers: {} },
+          answers: {},
+        }),
+      );
+    },
+    { family, attempt },
+  );
+  await page.route("**/api/v2/family/attempt?**", (route) =>
+    route.fulfill({
+      json: {
+        id: attempt,
+        mode: "guided",
+        state: "in_progress",
+        submittedQuestionIds: ["q1"],
+        deadline: null,
+        serverNow: new Date().toISOString(),
+        data: {
+          subject: "psychology",
+          questions,
+          resources: [],
+          choices: [],
+          selected: [],
+          durationMinutes: 20,
+        },
+        answers: questions.map((q) => ({
+          question_id: q.id,
+          text: q.id === "q1" ? "Previously submitted answer" : "",
+          flagged: false,
+          revision: 1,
+        })),
+      },
+    }),
+  );
+  await page.goto(`/?family=${family}&attempt=${attempt}`);
+  await expect(
+    page.getByRole("heading", { name: "Question 1(b)", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Your answer", exact: true }),
+  ).toBeEditable();
+});
+
+for (const viewport of [
+  { width: 1366, height: 650 },
+  { width: 1024, height: 768 },
+  { width: 768, height: 740 },
+  { width: 375, height: 740 },
+]) {
+  test(`pinned reference uses one full reader and fits every table row at ${viewport.width}x${viewport.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await examReferenceFixture(page, false, true, true);
+    const reader = page.locator(".source-reader"),
+      source = page.getByRole("region", { name: "Source desk", exact: true });
+    await source
+      .getByRole("tab", { name: "Table 1: financial results", exact: true })
+      .click();
+    await source
+      .getByRole("button", { name: "Pin table", exact: true })
+      .click();
+    await expect(
+      source.getByRole("combobox", { name: "Source zoom" }),
+    ).toHaveValue("page");
+    await expect(
+      source.getByRole("complementary", { name: "Pinned reference" }),
+    ).toBeVisible();
+    const pinnedTab = source.getByRole("tab", {
+      name: "Pinned · Table 1: financial results",
+      exact: true,
+    });
+    expect((await pinnedTab.boundingBox())!.x).toBeGreaterThanOrEqual(
+      (await source.getByRole("tablist", { name: "Sources" }).boundingBox())!.x,
+    );
+    await expect(reader.getByRole("table")).toHaveCount(1);
+    await expect
+      .poll(async () =>
+        reader.evaluate((element) => {
+          const table = element.querySelector("table")!,
+            last = table.querySelector("tbody tr:last-child")!;
+          const frame = element.getBoundingClientRect(),
+            bounds = last.getBoundingClientRect();
+          return (
+            bounds.bottom <= frame.bottom + 1 &&
+            bounds.right <= frame.right + 1 &&
+            element.scrollHeight <= element.clientHeight + 1 &&
+            element.scrollWidth <= element.clientWidth + 1
+          );
+        }),
+      )
+      .toBe(true);
+    expect(await source.locator(".source-pin-content").count()).toBe(0);
+    await page.screenshot({
+      path: `test-results/source-fit-pinned-${viewport.width}.png`,
+      fullPage: true,
+    });
+    await source
+      .getByRole("tab", { name: "Additional case information", exact: true })
+      .click();
+    await expect(
+      source.getByRole("complementary", { name: "Pinned reference" }),
+    ).toHaveCount(0);
+    await expect(reader.locator("[data-source-text]")).toHaveCount(48);
+    await source
+      .getByRole("tab", {
+        name: "Pinned · Table 1: financial results",
+        exact: true,
+      })
+      .click();
+    await page.reload();
+    await expect(
+      source.getByRole("tab", {
+        name: "Pinned · Table 1: financial results",
+        exact: true,
+      }),
+    ).toHaveAttribute("aria-selected", "true");
+    await expect(reader.getByRole("table")).toHaveCount(1);
+  });
+}
+
+test("fit page uses available width and height and fit width restores readable long text", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1366, height: 650 });
+  await examReferenceFixture(page, false, true, true);
+  const source = page.getByRole("region", { name: "Source desk", exact: true }),
+    reader = page.locator(".source-reader");
+  await source
+    .getByRole("tab", { name: "Additional case information", exact: true })
+    .click();
+  const zoom = source.getByRole("combobox", { name: "Source zoom" });
+  await expect(zoom).toHaveValue("width");
+  await reader.evaluate((el) => {
+    el.scrollTop = 700;
+    el.dispatchEvent(new Event("scroll"));
+  });
+  await zoom.selectOption("page");
+  await expect
+    .poll(() =>
+      reader.evaluate((element) => {
+        const frame = element.getBoundingClientRect(),
+          text = element
+            .querySelector(".source-block:last-child")!
+            .getBoundingClientRect();
+        return (
+          text.bottom <= frame.bottom + 1 &&
+          element.scrollHeight <= element.clientHeight + 1 &&
+          element.scrollWidth <= element.clientWidth + 1
+        );
+      }),
+    )
+    .toBe(true);
+  await zoom.selectOption("width");
+  await expect.poll(() => reader.evaluate((el) => el.scrollTop)).toBe(700);
+  expect(await reader.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(
+    true,
+  );
+  await source.getByRole("tab", { name: "Extract A", exact: true }).click();
+  await expect(zoom).toHaveValue("page");
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await expect.poll(async () => Number(await reader.locator(".source-canvas").getAttribute("data-scale"))).toBeGreaterThan(0.99);
+  const largerScale = Number(await reader.locator(".source-canvas").getAttribute("data-scale"));
+  await page.setViewportSize({ width: 1366, height: 650 });
+  await expect.poll(async () => Number(await reader.locator(".source-canvas").getAttribute("data-scale"))).toBeLessThan(largerScale - 0.01);
+  await expect
+    .poll(() =>
+      reader.evaluate((element) => {
+        const frame = element.getBoundingClientRect(),
+          image = element.querySelector("img")!.getBoundingClientRect();
+        return (
+          image.bottom <= frame.bottom + 1 && image.right <= frame.right + 1
+        );
+      }),
+    )
+    .toBe(true);
 });

@@ -151,7 +151,7 @@ Student motivation defaults to three sessions per Monday–Sunday week, configur
 
 Page, workspace, selected student/course, review filters and assessment links are URL-backed. Preserve old invitation, calendar and attempt links. Users with multiple memberships have a context switcher. Browser navigation out of an answer player flushes writing first and stays on the attempt if saving fails.
 
-At widths below 640px, students use five-item bottom navigation; adults use a modal navigation drawer. Long answers use two columns on desktop and stacked panels on smaller screens. Preserve keyboard navigation, focus restoration, save announcements, adjustable text, reduced motion, sufficient contrast and 44px primary controls.
+At widths below 640px, students use five-item bottom navigation; adults use a modal navigation drawer. The focused answer player uses independently scrolling source and answer panes from 1024px, and Source / Answer views below that width. Preserve keyboard navigation, focus restoration, save announcements, adjustable text, reduced motion, sufficient contrast and 44px primary controls.
 
 ## 5. Practice progression
 
@@ -230,7 +230,11 @@ Record exposure across the application. Opening a complete paper or mark scheme 
 
 ### Answer interface
 
-Place source material and the question beside the answer editor on larger screens.
+Present a viewport-height exam desk from 1024px: an independently scrolling source reader on the left and the original question, number and marks above the answer editor on the right. The default 50:50 split adjusts between 35:65 and 65:35 with a pointer or keyboard; Enter or double-click resets it. The editor scrolls internally while save status and submission controls remain available. Long questions have a scrollable, expandable question area.
+
+Cited extracts, figures, tables and supporting text are available through labelled source tabs. Preserve their original content; use printed figures where supplied, with inline magnification up to 300%, accessible text alternatives and image-load retry/fallback. Fit page scales the complete displayed source to both available dimensions and recalculates after resizing; Fit width reflows at readable text size and permits vertical scrolling. Tables and printed figures default to Fit page, prose to Fit width. Students can highlight selectable text and pin one passage, table or figure as a quick-return tab in the same full reader, with a link back to its context. Pinning never duplicates content in a capped panel or adds a second vertical scrollbar. An image-only source supports figure pinning and transcript highlighting where a transcript exists. No automatic evidence selection, summaries, drawing or margin notes.
+
+Below 1024px, or when enlarged text leaves less than 64em of usable width, use keyboard-accessible Source / Answer tabs, keeping the question accessible in either view. Preserve reading and writing positions when switching views or related subquestions, and remember the selected source per question. Persist the selected question/source, pane width, source scroll/zoom, highlights, pin and answer caret/scroll locally per signed-in user, family and attempt. Resume guided work at an unsubmitted question when the remembered answer has already been submitted. These optional preferences must not block practice if storage is unavailable or invalid. Pins appear only when their source belongs to the current question. Annotations are separate from submitted answers and marking inputs; they do not change frozen content or timed-mode assistance rules. Do not fabricate evidence for standalone questions. Disable browser spellcheck in timed sections and mocks.
 
 Include:
 
@@ -558,11 +562,11 @@ The €10 target excludes hosting, payment fees and catalogue preparation. Actua
 Before paid processing:
 
 - Obtain a server-issued cost quote.
-- Show the maximum charge.
+- Show maximum marking costs and funding actions to parents, never to students.
 - Reserve funds against both available family credit and the student’s remaining cap.
 - Pin the rate card and marking configuration.
 
-For timed work, accept a bounded quote before starting so deadline submission does not require a last-minute payment interaction.
+For every practice mode, freeze a bounded quote internally when the student selects Start practice. Reserve funds when available within the parent-controlled balance and cap. Lack of credit or remaining cap must not prevent writing, start a payment conversation with the student, or block deadline submission. Unfunded submissions wait safely for marking, with neutral Feedback pending wording for students. Parents see low-balance and awaiting-funding actions; adding credit or adjusting a cap resumes eligible marking automatically. No paid provider call is allowed without a valid reservation.
 
 Insufficient funds must preserve the submitted work and place marking in an awaiting-funds state. Never discard an answer or reduce marking quality silently.
 
