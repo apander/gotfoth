@@ -459,7 +459,12 @@ test("companion reads, diary, groups and reminders enforce live memberships and 
       family,
       new URLSearchParams({ learner: alex, from: tomorrow, to: tomorrow }),
     );
-    assert.equal(diary.items.length, 1);
+    // Seeded sessions may also fall on this date. Assert the specific session and
+    // learner isolation rather than making the test depend on the weekday.
+    const diarySession = diary.items.find((item) => item.id === sessionId);
+    assert.equal(diarySession?.learner_id, alex);
+    assert.equal(diarySession?.data.attemptId, draft.id);
+    assert.ok(diary.items.every((item) => item.learner_id === alex));
     const first = await reminderInbox(
       actor("morgan"),
       new URLSearchParams({ context: "teacher" }),
