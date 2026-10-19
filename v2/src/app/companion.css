@@ -619,6 +619,75 @@
 }
 
 /* Calendar and visual progress surfaces. */
+.progress-child-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.progress-child-switch button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--white);
+  color: var(--ink);
+  font-size: 0.85rem;
+}
+.progress-child-switch button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.progress-child-avatar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--white);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+.parent-progress-controls {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 14px;
+  margin: 12px 0;
+}
+.parent-progress-controls > summary {
+  cursor: pointer;
+  min-height: 48px;
+  align-content: center;
+  font-weight: 650;
+  color: var(--accent-ink);
+  font-size: 0.85rem;
+}
+.parent-progress-controls > summary span {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.75rem;
+  margin-left: 8px;
+}
+.parent-progress-controls[open] > summary {
+  margin-bottom: 12px;
+}
+.parent-progress .performance-overview {
+  margin-top: 0;
+}
+.parent-progress .heading h1 {
+  font-size: 1.5rem;
+}
+.parent-progress .performance-chart-heading .eyebrow {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.8rem;
+}
 .diary-calendar {
   background: var(--white);
   border: 1px solid var(--line);

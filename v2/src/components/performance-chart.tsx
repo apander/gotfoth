@@ -8,10 +8,12 @@ export function PerformanceChart({
   items,
   total,
   onOpen,
+  learnerName,
 }: {
   items: any[];
   total: number;
   onOpen: (id: string) => void;
+  learnerName?: string;
 }) {
   const results = items
     .filter((r) => r.state === "published" && score(r.effective))
@@ -21,7 +23,11 @@ export function PerformanceChart({
     <section className="performance-overview" aria-label="Performance overview">
       <div className="performance-chart-heading">
         <div>
-          <p className="eyebrow">YOUR RESULTS</p>
+          <p className="eyebrow">
+            {learnerName
+              ? `${learnerName} · published results`
+              : "YOUR RESULTS"}
+          </p>
           <h2>Results over time</h2>
         </div>
         <span className="status-pill">
@@ -31,7 +37,11 @@ export function PerformanceChart({
       {!results.length ? (
         <div className="performance-no-evidence">
           <span aria-hidden="true">▥</span>
-          <h3>Your story starts with practice.</h3>
+          <h3>
+            {learnerName
+              ? "No published results yet"
+              : "Your story starts with practice."}
+          </h3>
           <p>
             Published results will appear here. No evidence yet doesn’t mean a
             low score.

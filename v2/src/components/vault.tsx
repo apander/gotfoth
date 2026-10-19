@@ -559,6 +559,7 @@ export function Vault() {
           <FamilyDataSettings familyId={currentFamily} run={run} busy={busy} />
         ) : page === "Progress" ? (
           <ProgressOverview
+            audience="parent"
             familyId={currentFamily}
             people={data.learners}
             courses={data.enrolments}

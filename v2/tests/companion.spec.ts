@@ -660,6 +660,125 @@ test.describe("phone companion", () => {
     });
     await noOverflow(page);
   });
+  test("parent progress opens with the selected child's chart and keeps filters behind Change view", async ({
+    context,
+    page,
+  }) => {
+    await fixture(context, "parent");
+    const second = "7e570000-0000-4000-8000-000000000011";
+    await context.route(/\/api\/v2\/family\/summary\?/, (route) =>
+      route.fulfill({
+        json: {
+          role: "parent",
+          learners: [
+            { id: learner, name: "Alex" },
+            { id: second, name: "Jamie" },
+          ],
+          enrolments: [
+            course,
+            {
+              ...course,
+              id: "business-course",
+              learner_id: second,
+              data: { ...course.data, subject: "business" },
+            },
+          ],
+          attempts: [],
+          assessments: [],
+          sessions: [],
+          calendar: "disconnected",
+          topics: {},
+        },
+      }),
+    );
+    const reads: string[] = [];
+    await context.route(/\/api\/v2\/family\/activity\?/, (route) => {
+      const selected = new URL(route.request().url()).searchParams.get(
+        "learner",
+      )!;
+      reads.push(selected);
+      return route.fulfill({
+        json: {
+          items: [
+            {
+              id: "published",
+              state: "published",
+              subject: selected === second ? "business" : "psychology",
+              mode: "independent",
+              effective: [{ ...result, awarded: selected === second ? 1 : 3 }],
+              submitted_at: "2026-10-18T12:00:00Z",
+            },
+          ],
+          offset: 0,
+          limit: 25,
+          total: 1,
+        },
+      });
+    });
+    await page.goto(`/?context=${family}&page=Progress`);
+    await expect(
+      page.getByRole("heading", { name: "Learning progress", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Performance overview", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("group", { name: "Choose a child" })
+        .getByRole("button", { name: "Alex", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.getByRole("combobox", { name: "Subject", exact: true }),
+    ).not.toBeVisible();
+    await expect(page.getByLabel("History from")).not.toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /psychology,.*75%/ }),
+    ).toBeVisible();
+    expect(
+      await page
+        .locator(".performance-overview")
+        .evaluate(
+          (el) =>
+            !!(
+              el.compareDocumentPosition(
+                document.querySelector(".parent-progress-controls")!,
+              ) & Node.DOCUMENT_POSITION_FOLLOWING
+            ),
+        ),
+    ).toBe(true);
+    await page.screenshot({
+      path: "test-results/parent-progress-chart-first.png",
+      fullPage: true,
+    });
+    await page.locator(".parent-progress-controls > summary").click();
+    await page
+      .getByRole("combobox", { name: "Subject", exact: true })
+      .selectOption(courseId);
+    await expect(page).toHaveURL(new RegExp(`course=${courseId}`));
+    await page
+      .getByRole("group", { name: "Choose a child" })
+      .getByRole("button", { name: "Jamie", exact: true })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`learner=${second}`));
+    await expect(
+      page.getByRole("button", { name: /business,.*25%/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Subject", exact: true }),
+    ).toHaveValue("");
+    await expect(
+      page.getByText("Jamie · published results", { exact: true }),
+    ).toBeVisible();
+    expect(reads).toContain(learner);
+    expect(reads).toContain(second);
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "22px";
+    });
+    await noOverflow(page);
+    await expect(
+      page.getByRole("button", { name: "Start practice", exact: true }),
+    ).toHaveCount(0);
+  });
   test("parent can save funding limits but cannot review or alter courses", async ({
     context,
     page,

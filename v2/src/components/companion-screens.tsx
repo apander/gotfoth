@@ -91,6 +91,7 @@ export function CompanionScreens({
     if (route.page === "Progress")
       return (
         <ProgressOverview
+          audience="parent"
           familyId={familyId}
           people={data.learners}
           courses={data.enrolments}
@@ -480,7 +481,14 @@ function ParentCompanion({
             <button
               className="link-button"
               onClick={() =>
-                onRoute({ page: "Progress", learner: l.id, offset: "0" })
+                onRoute({
+                  page: "Progress",
+                  learner: l.id,
+                  offset: "0",
+                  tab: "overview",
+                  course: "",
+                  topic: "",
+                })
               }
             >
               See {l.name.split(" ")[0]}’s progress →
@@ -583,6 +591,7 @@ export function ProgressOverview({
   run,
   onPractice,
   onAttempt,
+  audience = "student",
 }: {
   familyId: string;
   people: any[];
@@ -592,6 +601,7 @@ export function ProgressOverview({
   run: Run;
   onPractice?: (topic: string) => void;
   onAttempt?: (id: string) => void;
+  audience?: "student" | "parent";
 }) {
   const tab = route.tab || (route.topic ? "topics" : "overview");
   const learner = people.find((l) => l.id === route.learner) ?? people[0],
@@ -610,115 +620,173 @@ export function ProgressOverview({
       ? `family/activity?${new URLSearchParams({ family: familyId, learner: learner.id, kind: tab === "activity" ? "attempts" : "assessments", offset: route.offset ?? "0", ...(course ? { subject: course.data.subject } : {}), ...(route.from ? { from: route.from } : {}), ...(route.to ? { to: route.to } : {}) })}`
       : null,
   );
-  return (
-    <>
-      <PageHeading
-        label="PROGRESS"
-        title="See how you’re doing."
-        text={`${learner?.name ?? "Student"}’s progress, one practice at a time.`}
-      />
-      <div className="progress-scope">
-        {people.length > 1 && (
-          <label className="field">
-            Student
-            <select
-              value={learner?.id ?? ""}
-              onChange={(e) =>
-                onRoute({
-                  learner: e.target.value,
-                  course: "",
-                  topic: "",
-                  offset: "0",
-                })
-              }
-            >
-              {people.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+  const scopeControls = (
+    <div className="progress-scope">
+      {audience !== "parent" && people.length > 1 && (
         <label className="field">
-          Subject
+          Student
           <select
-            value={course?.id ?? ""}
+            value={learner?.id ?? ""}
             onChange={(e) =>
-              onRoute({ course: e.target.value, topic: "", offset: "0" })
+              onRoute({
+                learner: e.target.value,
+                course: "",
+                topic: "",
+                offset: "0",
+              })
             }
           >
-            {tab !== "topics" && <option value="">All subjects</option>}
-            {mine.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.data.subject}
+            {people.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
               </option>
             ))}
           </select>
         </label>
-        <label className="field">
-          Period
-          <select
-            aria-label="Progress period"
-            value={
-              !route.from && !route.to
-                ? "all"
-                : route.to === rangeEnd && route.from === rangeStart(28)
-                  ? "28"
-                  : route.to === rangeEnd && route.from === rangeStart(90)
-                    ? "90"
-                    : "custom"
-            }
-            onChange={(e) => {
-              if (e.target.value !== "custom")
-                onRoute({
-                  from:
-                    e.target.value === "all"
-                      ? ""
-                      : rangeStart(Number(e.target.value)),
-                  to: e.target.value === "all" ? "" : rangeEnd,
-                  offset: "0",
-                });
-            }}
-          >
-            <option value="all">All time</option>
-            <option value="28">Last 4 weeks</option>
-            <option value="90">Last 3 months</option>
-            <option value="custom" disabled>
-              Custom dates
-            </option>
-          </select>
-        </label>
-        <details className="progress-date-settings">
-          <summary>Custom dates</summary>
-          <div className="form-grid">
-            {" "}
-            <label className="field">
-              History from
-              <input
-                type="date"
-                value={route.from ?? ""}
-                onChange={(e) => onRoute({ from: e.target.value, offset: "0" })}
-              />
-            </label>
-            <label className="field">
-              History to
-              <input
-                type="date"
-                value={route.to ?? ""}
-                onChange={(e) => onRoute({ to: e.target.value, offset: "0" })}
-              />
-            </label>
-          </div>
-        </details>
-      </div>
-      {tab === "overview" && read.data && (
-        <PerformanceChart
-          items={read.data.items}
-          total={read.data.total}
-          onOpen={(id) => onRoute({ assessment: id })}
-        />
       )}
+      <label className="field">
+        Subject
+        <select
+          value={course?.id ?? ""}
+          onChange={(e) =>
+            onRoute({ course: e.target.value, topic: "", offset: "0" })
+          }
+        >
+          {tab !== "topics" && <option value="">All subjects</option>}
+          {mine.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.data.subject}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        Period
+        <select
+          aria-label="Progress period"
+          value={
+            !route.from && !route.to
+              ? "all"
+              : route.to === rangeEnd && route.from === rangeStart(28)
+                ? "28"
+                : route.to === rangeEnd && route.from === rangeStart(90)
+                  ? "90"
+                  : "custom"
+          }
+          onChange={(e) => {
+            if (e.target.value !== "custom")
+              onRoute({
+                from:
+                  e.target.value === "all"
+                    ? ""
+                    : rangeStart(Number(e.target.value)),
+                to: e.target.value === "all" ? "" : rangeEnd,
+                offset: "0",
+              });
+          }}
+        >
+          <option value="all">All time</option>
+          <option value="28">Last 4 weeks</option>
+          <option value="90">Last 3 months</option>
+          <option value="custom" disabled>
+            Custom dates
+          </option>
+        </select>
+      </label>
+      <details className="progress-date-settings">
+        <summary>Custom dates</summary>
+        <div className="form-grid">
+          {" "}
+          <label className="field">
+            History from
+            <input
+              type="date"
+              value={route.from ?? ""}
+              onChange={(e) => onRoute({ from: e.target.value, offset: "0" })}
+            />
+          </label>
+          <label className="field">
+            History to
+            <input
+              type="date"
+              value={route.to ?? ""}
+              onChange={(e) => onRoute({ to: e.target.value, offset: "0" })}
+            />
+          </label>
+        </div>
+      </details>
+    </div>
+  );
+  const chart =
+    tab === "overview" && read.data ? (
+      <PerformanceChart
+        learnerName={audience === "parent" ? learner?.name : undefined}
+        items={read.data.items}
+        total={read.data.total}
+        onOpen={(id) => onRoute({ assessment: id })}
+      />
+    ) : null;
+  return (
+    <section
+      className={audience === "parent" ? "parent-progress" : "student-progress"}
+    >
+      <PageHeading
+        label={audience === "parent" ? "FAMILY PROGRESS" : "PROGRESS"}
+        title={
+          audience === "parent" ? "Learning progress" : "See how you’re doing."
+        }
+        text={
+          audience === "parent"
+            ? undefined
+            : `${learner?.name ?? "Student"}’s progress, one practice at a time.`
+        }
+      />
+      {audience === "parent" && (
+        <div
+          className="progress-child-switch"
+          role="group"
+          aria-label="Choose a child"
+        >
+          {people.map((person) => (
+            <button
+              key={person.id}
+              aria-pressed={person.id === learner?.id}
+              onClick={() =>
+                onRoute({
+                  learner: person.id,
+                  course: "",
+                  topic: "",
+                  tab: "overview",
+                  assessment: "",
+                  attempt: "",
+                  offset: "0",
+                })
+              }
+            >
+              <span className="progress-child-avatar" aria-hidden="true">
+                {person.name.slice(0, 1)}
+              </span>
+              {person.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {audience === "parent" && chart}
+      {audience === "parent" ? (
+        <details className="parent-progress-controls">
+          <summary>
+            Change view{" "}
+            <span>
+              {course ? topicName(course.data.subject) : "All subjects"} ·{" "}
+              {route.from || route.to ? "Selected dates" : "All time"}
+            </span>
+          </summary>
+          {scopeControls}
+        </details>
+      ) : (
+        scopeControls
+      )}
+      {audience !== "parent" && chart}
       <div
         className="segmented section"
         role="group"
@@ -817,7 +885,7 @@ export function ProgressOverview({
           />
         </>
       )}
-    </>
+    </section>
   );
 }
 function TeacherCompanion({
