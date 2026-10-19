@@ -3,7 +3,7 @@ import { useState } from "react";
 import { api } from "./api";
 import { useRead } from "./workspace-data";
 import { Pagination, ReadState } from "./desktop-handoff";
-import { Button, Dialog, Empty, PageHeading } from "./ui";
+import { Button, Dialog, Empty, Icon } from "./ui";
 import type { Destination } from "../lib/experience";
 import type { Persona } from "../lib/personas";
 export function Reminders({
@@ -25,64 +25,109 @@ export function Reminders({
     `reminders?${new URLSearchParams({ context, offset: route.offset ?? "0" })}`,
   );
   const [settings, setSettings] = useState<any>(null),
-    [notice, setNotice] = useState("");
+    [notice, setNotice] = useState(""),
+    [refreshing, setRefreshing] = useState(false);
   return (
-    <>
-      <PageHeading
-        label="YOUR REMINDERS"
-        title="Keep the next step in sight."
-        text="Updates and actions for this workspace. Calendar reminders work through Google Calendar; this inbox updates when you open it."
-      />
-      <div className="row">
-        <Button
-          variant="secondary"
-          disabled={!read.data}
-          onClick={() => read.data && setSettings({ ...read.data.settings })}
-        >
-          Reminder settings
-        </Button>
-        <button className="link-button" onClick={read.refresh}>
-          Refresh
-        </button>
-        {read.data && <span className="meta">{read.data.unread} unread</span>}
-      </div>
-      <p role="status">{notice}</p>
+    <section className="reminder-inbox" aria-label="Reminder inbox">
+      <header className="reminder-inbox-header">
+        <div className="reminder-inbox-title">
+          <h1 tabIndex={-1}>Reminders</h1>
+          {read.data && (
+            <span className="reminder-unread-count">
+              {read.data.unread} unread
+            </span>
+          )}
+        </div>
+        <div className="reminder-header-actions">
+          <button
+            className="reminder-icon-button"
+            aria-label="Refresh reminders"
+            title="Refresh reminders"
+            disabled={refreshing}
+            onClick={async () => {
+              setRefreshing(true);
+              await read.refresh();
+              setRefreshing(false);
+            }}
+          >
+            <Icon name="Refresh" />
+          </button>
+          <button
+            className="reminder-icon-button"
+            aria-label="Reminder settings"
+            title="Reminder settings"
+            disabled={!read.data}
+            onClick={() => read.data && setSettings({ ...read.data.settings })}
+          >
+            <Icon name="Operations" />
+          </button>
+        </div>
+      </header>
+      <p role="status" className={notice ? "reminder-notice" : "sr-only"}>
+        {refreshing ? "Refreshing reminders…" : notice}
+      </p>
       {!read.data ? (
         <ReadState error={read.error} refresh={read.refresh} />
       ) : (
         <>
-          <div className="reminder-list">
+          <div
+            className="reminder-list"
+            aria-label="Current reminders"
+            aria-busy={refreshing}
+          >
             {read.data.items.map((item: any) => (
               <article
                 key={item.key}
                 className={`reminder-item ${item.read ? "" : "unread"}`}
               >
-                <p className="eyebrow">
-                  {item.actionable ? "Needs attention" : "Update"}
-                  {item.read ? "" : " · Unread"}
-                </p>
-                <h2>{item.title}</h2>
-                <p>{item.detail}</p>
-                <div className="row">
-                  <button
-                    className="button secondary"
-                    onClick={() => {
-                      run(async () => {
-                        await api("reminders/action", {
-                          context,
-                          key: item.key,
-                          action: "read",
+                <div className="reminder-item-content">
+                  <span className="reminder-kind">
+                    {item.actionable ? "Needs attention" : "Update"}
+                    {!item.read && <span className="sr-only"> · Unread</span>}
+                  </span>
+                  <h2>
+                    <button
+                      className="reminder-open"
+                      disabled={busy}
+                      aria-label={`Open reminder: ${item.title}`}
+                      onClick={() => {
+                        run(async () => {
+                          await api("reminders/action", {
+                            context,
+                            key: item.key,
+                            action: "read",
+                          });
+                          const params = Object.fromEntries(
+                            new URL(item.href, location.origin).searchParams,
+                          );
+                          onRoute({ attempt: "", assessment: "", ...params });
                         });
-                        const params = Object.fromEntries(
-                          new URL(item.href, location.origin).searchParams,
-                        );
-                        onRoute({ attempt: "", assessment: "", ...params });
-                      });
-                    }}
-                  >
-                    Open
-                  </button>
-                  {!item.read && (
+                      }}
+                    >
+                      <span>{item.title}</span>
+                      <Icon name="Arrow" />
+                    </button>
+                  </h2>
+                  <p className="reminder-detail">{item.detail}</p>
+                  <div className="reminder-quick-actions">
+                    {!item.read && (
+                      <button
+                        className="link-button"
+                        disabled={busy}
+                        onClick={() =>
+                          run(async () => {
+                            await api("reminders/action", {
+                              context,
+                              key: item.key,
+                              action: "read",
+                            });
+                            read.refresh();
+                          })
+                        }
+                      >
+                        Mark read
+                      </button>
+                    )}
                     <button
                       className="link-button"
                       disabled={busy}
@@ -91,34 +136,18 @@ export function Reminders({
                           await api("reminders/action", {
                             context,
                             key: item.key,
-                            action: "read",
+                            action: "snooze",
                           });
                           read.refresh();
+                          setNotice(
+                            "Snoozed until tomorrow. The underlying task is unchanged.",
+                          );
                         })
                       }
                     >
-                      Mark read
+                      Until tomorrow
                     </button>
-                  )}
-                  <button
-                    className="link-button"
-                    disabled={busy}
-                    onClick={() =>
-                      run(async () => {
-                        await api("reminders/action", {
-                          context,
-                          key: item.key,
-                          action: "snooze",
-                        });
-                        read.refresh();
-                        setNotice(
-                          "Snoozed until tomorrow. The underlying task is unchanged.",
-                        );
-                      })
-                    }
-                  >
-                    Until tomorrow
-                  </button>
+                  </div>
                 </div>
               </article>
             ))}
@@ -149,6 +178,10 @@ export function Reminders({
               });
             }}
           >
+            <p className="meta">
+              This inbox updates when you open or refresh it. Calendar reminders
+              work through Google Calendar.
+            </p>
             <label className="field">
               Your timezone
               <input
@@ -203,6 +236,6 @@ export function Reminders({
           </form>
         </Dialog>
       )}
-    </>
+    </section>
   );
 }

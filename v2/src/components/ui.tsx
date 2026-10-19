@@ -29,6 +29,8 @@ const paths: Record<string, string> = {
   Edit: "M4 20h4L18 10l-4-4L4 16z M13 7l4 4",
   Delete: "M4 7h16 M9 7V5h6v2 M7 7l1 13h8l1-13",
   Copy: "M8 8h12v12H8z M4 4h12v12",
+  Refresh:
+    "M20 7v5h-5 M4 17v-5h5 M6 7a7 7 0 0 1 12-2l2 3 M4 16l2 3a7 7 0 0 0 12-2",
   Check: "m5 12 4 4L19 6",
   Student:
     "M12 11.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4 M6.2 20.2v-1.1a5.8 5.8 0 0 1 11.6 0v1.1",

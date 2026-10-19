@@ -473,6 +473,103 @@ test.describe("phone companion", () => {
     await expect(page.getByLabel("History from")).toBeVisible();
     await noOverflow(page);
   });
+  test("reminder inbox puts two complete reminders above phone navigation", async ({
+    context,
+    page,
+  }) => {
+    const { calls } = await fixture(context);
+    await context.route("**/api/v2/identity", (route) =>
+      route.fulfill({
+        json: {
+          user: {
+            id: "ux-fixture-alex",
+            email: "alex@ux.gotfoth.test",
+            name: "Alex",
+          },
+          superuser: false,
+          workspaces: [{ id: family, name: "River family", role: "student" }],
+        },
+      }),
+    );
+    await context.route(/\/api\/v2\/reminders\?/, (route) =>
+      route.fulfill({
+        json: {
+          items: [
+            {
+              key: "session:one",
+              title: "Alex River · Psychology · Research methods",
+              detail: "Wed 21 Oct, 19:56 · Europe/Amsterdam",
+              href: `/?context=${family}&page=Plan&date=2026-10-21`,
+              actionable: true,
+              read: false,
+            },
+            {
+              key: "feedback:one",
+              title: "Alex River · feedback ready",
+              detail: "River family · Psychology",
+              href: `/?context=${family}&page=Progress&assessment=published`,
+              actionable: false,
+              read: false,
+            },
+          ],
+          settings: {
+            timezone: "Europe/Amsterdam",
+            calendarTiming: "default",
+            lowCreditMicros: 5000000,
+          },
+          unread: 2,
+          total: 2,
+          offset: 0,
+          limit: 25,
+        },
+      }),
+    );
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto(`/?context=${family}&page=Reminders`);
+    await expect(
+      page.getByRole("heading", { name: "Reminders", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("2 unread", { exact: true })).toBeVisible();
+    const rows = page.locator(".reminder-item");
+    await expect(rows).toHaveCount(2);
+    const last = await rows.last().boundingBox(),
+      nav = await page
+        .getByRole("navigation", { name: "Main navigation" })
+        .boundingBox();
+    expect(last!.y + last!.height).toBeLessThanOrEqual(nav!.y);
+    for (const button of await rows.getByRole("button").all()) {
+      expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
+    await page.screenshot({
+      path: "test-results/reminders-compact-phone.png",
+      fullPage: true,
+    });
+    await page
+      .getByRole("button", { name: "Reminder settings", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByLabel("Google Calendar reminder")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Refresh reminders" }).click();
+    await expect(page.locator(".reminder-list")).toHaveAttribute(
+      "aria-busy",
+      "false",
+    );
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "22px";
+    });
+    await noOverflow(page);
+    await rows
+      .last()
+      .getByRole("button", { name: /Open reminder/ })
+      .click();
+    await expect(page).toHaveURL(/assessment=published/);
+    expect(
+      calls.some(
+        (c) => c.path === "reminders/action" && c.body.action === "read",
+      ),
+    ).toBe(true);
+  });
   test("published history paginates and reminder state survives reload", async ({
     context,
     page,

@@ -118,7 +118,7 @@ export async function reminderInbox(actor: Actor, params: URLSearchParams) {
             `${name(s.learner_id)} · ${s.data.title}`,
             new Date(s.data.start) < new Date()
               ? "Planned study is unfinished. Move it or continue on a computer."
-              : `${new Date(s.data.start).toLocaleString("en-GB", { timeZone: s.data.timezone })} · ${s.data.timezone}`,
+              : `${new Date(s.data.start).toLocaleString("en-GB", { timeZone: s.data.timezone, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · ${s.data.timezone}`,
             link("Plan", {
               learner: s.learner_id,
               date: s.data.start.slice(0, 10),
