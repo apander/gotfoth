@@ -410,8 +410,67 @@ test.describe("phone companion", () => {
     expect(calls.some((c) => c.path === "family/attempt/action")).toBe(false);
     await page.goBack();
     await expect(
-      page.getByRole("heading", { name: "Make room for your week." }),
+      page.getByRole("heading", { name: "Your diary." }),
     ).toBeVisible();
+    await noOverflow(page);
+  });
+  test("diary opens as a calendar and progress opens as a chart", async ({
+    context,
+    page,
+  }) => {
+    await fixture(context);
+    await page.goto(`/?context=${family}&page=Plan&date=2026-10-20`);
+    await expect(
+      page.getByRole("heading", { name: "October 2026" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Tuesday 20 October", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByLabel("Jump to date")).not.toBeVisible();
+    await expect(
+      page.locator("#diary-2026-10-20").getByText("17:00", { exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: "test-results/diary-recognisable-phone.png",
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "Next period" }).click();
+    await expect(page).toHaveURL(/date=2026-10-27/);
+    await page.getByRole("button", { name: "Previous period" }).click();
+    await expect(page).toHaveURL(/date=2026-10-20/);
+    await page
+      .getByRole("group", { name: "Diary view" })
+      .getByRole("button", { name: "Day", exact: true })
+      .click();
+    await expect(page.locator(".diary-page")).toHaveCount(1);
+    await page.getByRole("button", { name: "Next period" }).click();
+    await expect(page).toHaveURL(/date=2026-10-21/);
+    await noOverflow(page);
+    await page.goto(`/?context=${family}&page=Progress`);
+    await expect(
+      page.getByRole("region", {
+        name: "Published result chart, oldest to newest",
+      }),
+    ).toBeVisible();
+    await expect(page.getByLabel("History from")).not.toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Subject", exact: true }),
+    ).toHaveValue("");
+    await expect(
+      page.getByRole("button", { name: /psychology,.*75%/ }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: "test-results/progress-visual-phone.png",
+      fullPage: true,
+    });
+    await page.getByLabel("Progress period").selectOption("28");
+    await expect(page).toHaveURL(/from=/);
+    await page
+      .getByRole("combobox", { name: "Subject", exact: true })
+      .selectOption(courseId);
+    await expect(page).toHaveURL(new RegExp(`course=${courseId}`));
+    await page.locator(".progress-date-settings summary").click();
+    await expect(page.getByLabel("History from")).toBeVisible();
     await noOverflow(page);
   });
   test("published history paginates and reminder state survives reload", async ({
@@ -578,6 +637,91 @@ test.describe("phone companion", () => {
       fullPage: true,
     });
   });
+});
+test("diary and visual progress reflow across phone, tablet and desktop", async ({
+  browser,
+}) => {
+  for (const width of [375, 768, 1024, 1440]) {
+    const context = await browser.newContext({
+      viewport: { width, height: 960 },
+      ...(width < 1440
+        ? { userAgent: phone, isMobile: true, hasTouch: true }
+        : {}),
+    });
+    try {
+      await fixture(context);
+      const page = await context.newPage();
+      await page.goto(`/?context=${family}&page=Plan&date=2026-10-20`);
+      await expect(
+        page.getByRole("heading", { name: "Your diary." }),
+      ).toBeVisible();
+      await noOverflow(page);
+      await page.screenshot({
+        path: `test-results/diary-${width}.png`,
+        fullPage: true,
+      });
+      await context.route(/\/api\/v2\/family\/activity\?/, (route) =>
+        route.fulfill({
+          json: {
+            items: [
+              {
+                id: "latest",
+                state: "published",
+                subject: "psychology",
+                mode: "independent",
+                submitted_at: "2026-10-19T12:00:00Z",
+                effective: [result],
+              },
+              {
+                id: "business",
+                state: "published",
+                subject: "business",
+                mode: "guided",
+                assisted: "true",
+                submitted_at: "2026-10-18T12:00:00Z",
+                effective: [{ ...result, awarded: 2 }],
+              },
+              {
+                id: "previous",
+                state: "published",
+                subject: "psychology",
+                mode: "timed",
+                submitted_at: "2026-10-17T12:00:00Z",
+                effective: [{ ...result, awarded: 1 }],
+              },
+            ],
+            total: 3,
+            offset: 0,
+            limit: 25,
+          },
+        }),
+      );
+      await page.goto(`/?context=${family}&page=Progress`);
+      await expect(
+        page.getByRole("heading", { name: "Results over time" }),
+      ).toBeVisible();
+      await expect(page.locator(".performance-bar-item")).toHaveCount(3);
+      await noOverflow(page);
+      await page.screenshot({
+        path: `test-results/performance-${width}.png`,
+        fullPage: true,
+      });
+      await page.evaluate(() => {
+        document.documentElement.style.fontSize = "22px";
+      });
+      await noOverflow(page);
+      await context.route(/\/api\/v2\/family\/activity\?/, (route) =>
+        route.fulfill({ json: { items: [], total: 0, offset: 0, limit: 25 } }),
+      );
+      await page.reload();
+      await expect(
+        page.getByRole("heading", { name: "Your story starts with practice." }),
+      ).toBeVisible();
+      await expect(page.locator(".performance-bar-item")).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }
 });
 test("desktop-sized iPad retains the companion and does not offer test controls", async ({
   browser,

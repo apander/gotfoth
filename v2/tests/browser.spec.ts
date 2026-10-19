@@ -60,6 +60,22 @@ test("student can navigate topic evidence and submit typed practice through the 
         total: 0,
         milestones: [],
       };
+    else if (path.endsWith("/activity"))
+      result = {
+        items: [
+          {
+            id: "published",
+            state: "published",
+            subject: "psychology",
+            mode: "independent",
+            submitted_at: "2026-10-18T12:00:00Z",
+            effective: [{ awarded: 7, available: 10 }],
+          },
+        ],
+        total: 1,
+        offset: 0,
+        limit: 25,
+      };
     else if (path.endsWith("/history"))
       result = [
         {
@@ -127,6 +143,10 @@ test("student can navigate topic evidence and submit typed practice through the 
     fullPage: true,
   });
   await page.getByRole("button", { name: "Progress", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Results over time" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Topic trends", exact: true }).click();
   await expect(page.getByRole("cell", { name: "7/10 (70%)" })).toBeVisible();
   await expect(page.getByText(/mixed-topic evidence/)).toBeVisible();
   await page.getByRole("button", { name: "Practice", exact: true }).click();

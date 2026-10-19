@@ -670,7 +670,7 @@ export function Vault() {
                   run(() => create("independent", undefined, topic))
                 }
                 onHistory={(topic: string) =>
-                  navigate({ topic, page: "Progress" })
+                  navigate({ topic, page: "Progress", tab: "topics" })
                 }
               />
             </>

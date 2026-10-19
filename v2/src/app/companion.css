@@ -485,3 +485,364 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Calendar and visual progress surfaces. */
+.diary-calendar {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 16px 16px 0 0;
+  padding: 20px;
+}
+.diary-month,
+.diary-quick-actions,
+.performance-chart-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.diary-month h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+.diary-month .eyebrow {
+  margin: 0 0 4px;
+}
+.diary-month .row {
+  gap: 4px;
+}
+.diary-month .button {
+  min-width: 44px;
+  padding: 8px 12px;
+}
+.diary-view-switch {
+  margin: 16px 0;
+}
+.diary-week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+  margin-block: 12px 18px;
+}
+.diary-week-strip button {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 0;
+  background: transparent;
+  color: var(--ink);
+  min-height: 76px;
+  min-width: 0;
+}
+.diary-week-strip button > span:first-child {
+  font-size: 0.72rem;
+}
+.diary-week-strip strong {
+  font-size: 1.2rem;
+}
+.diary-week-strip button[aria-pressed="true"] {
+  background: var(--accent);
+  color: white;
+}
+.diary-day-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+.diary-day-dot[data-filled="true"] {
+  background: currentColor;
+}
+.diary-pages {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 16px 16px;
+  margin-bottom: 20px;
+}
+.diary-page {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  border-bottom: 1px solid var(--line);
+  padding: 20px;
+  scroll-margin-top: 90px;
+}
+.diary-page:last-child {
+  border: 0;
+}
+.diary-date-heading {
+  border-right: 1px solid var(--line);
+  padding-right: 12px;
+}
+.diary-date-heading > strong {
+  font-size: 2rem;
+  line-height: 1;
+}
+.diary-date-heading h2 {
+  font-size: 0.82rem;
+  margin: 8px 0 2px;
+}
+.diary-date-heading span {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.diary-page.is-today .diary-date-heading > strong {
+  color: var(--accent);
+}
+.diary-day-entries {
+  min-width: 0;
+  padding-left: 16px;
+}
+.diary-day-entries .diary-entry {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 10px;
+  border: 0;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 10px 10px 0;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: var(--accent-soft);
+}
+.diary-day-entries .exam-entry {
+  border-color: #a66b11;
+  background: #fff8e8;
+}
+.diary-entry h3 {
+  margin: 6px 0;
+}
+.diary-entry .eyebrow {
+  margin: 0;
+  font-size: 0.65rem;
+}
+.diary-time {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding-top: 2px;
+}
+.diary-free-time {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 8px 0 18px;
+}
+.diary-toolbar > summary,
+.progress-date-settings > summary {
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+.diary-toolbar[open] > summary {
+  margin-bottom: 16px;
+}
+.progress-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.progress-scope > .field {
+  flex: 1;
+  min-width: 130px;
+  margin: 0;
+}
+.progress-scope select {
+  text-transform: capitalize;
+}
+.progress-date-settings {
+  flex: 0 1 auto;
+  font-size: 0.85rem;
+}
+.progress-date-settings[open] {
+  flex: 1 1 100%;
+}
+.performance-overview {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--white);
+  padding: 20px;
+  margin-block: 18px;
+}
+.performance-chart-heading h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.performance-chart-heading .eyebrow {
+  margin: 0 0 6px;
+}
+.performance-chart-heading .status-pill {
+  font-size: 0.7rem;
+}
+.performance-chart-scroll {
+  overflow-x: auto;
+  padding-top: 12px;
+}
+.performance-plot {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.performance-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 160px;
+  font-size: 0.65rem;
+  color: var(--muted);
+  flex: 0 0 32px;
+}
+.performance-bars {
+  display: flex;
+  gap: 14px;
+  flex: 1;
+  border-bottom: 1px solid var(--line);
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 79px,
+    var(--line) 79px,
+    var(--line) 80px
+  );
+  padding: 0 8px;
+  min-height: 205px;
+}
+.performance-bar-item {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 62px;
+  max-width: 120px;
+  align-items: center;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--ink);
+  min-width: 62px;
+}
+.performance-bar-track {
+  height: 160px;
+  width: 100%;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  position: relative;
+}
+.performance-bar {
+  display: block;
+  width: 60%;
+  max-width: 45px;
+  background: #214c7a;
+  border-radius: 6px 6px 0 0;
+  min-height: 2px;
+}
+.subject-business .performance-bar {
+  background: #347b69;
+}
+.performance-bar-track strong {
+  position: absolute;
+  top: 3px;
+  background: var(--white);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  padding: 2px 5px;
+}
+.performance-bar-label {
+  font-size: 0.65rem;
+  margin-top: 8px;
+}
+.performance-bar-date {
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+.performance-chart-note {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  margin-bottom: 0;
+}
+.performance-no-evidence {
+  padding: 28px 0;
+  text-align: center;
+}
+.performance-no-evidence > span {
+  font-size: 3rem;
+  color: var(--accent);
+}
+.performance-no-evidence p {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.companion-main .progress-scope .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 600px) {
+  .diary-pages[data-view="week"] .diary-page:not(.is-selected) {
+    display: none;
+  }
+  .diary-page.is-selected {
+    border-bottom: 0;
+  }
+  .diary-calendar {
+    padding: 14px;
+  }
+  .diary-page {
+    grid-template-columns: 62px minmax(0, 1fr);
+    padding: 16px 12px;
+  }
+  .diary-date-heading h2 {
+    font-size: 0.72rem;
+    overflow-wrap: anywhere;
+  }
+  .diary-day-entries {
+    padding-left: 10px;
+  }
+  .diary-day-entries .diary-entry {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 10px;
+  }
+  .diary-entry .row {
+    gap: 10px;
+  }
+  .diary-entry .button {
+    padding: 10px;
+    font-size: 0.8rem;
+  }
+  .diary-month {
+    flex-wrap: wrap;
+  }
+  .diary-month h2 {
+    font-size: 1.15rem;
+  }
+  .diary-month .eyebrow {
+    font-size: 0.65rem;
+  }
+  .performance-overview {
+    padding: 16px;
+  }
+  .performance-chart-heading {
+    gap: 8px;
+  }
+  .companion-context {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    padding-top: 10px;
+  }
+  .companion-main .heading {
+    margin: 10px 0 18px;
+  }
+  .companion-main .heading .eyebrow {
+    margin: 0 0 6px;
+  }
+  .companion-main .heading h1 {
+    margin: 0;
+  }
+  .companion-main .heading .muted {
+    margin: 8px 0 0;
+    font-size: 0.85rem;
+  }
+}

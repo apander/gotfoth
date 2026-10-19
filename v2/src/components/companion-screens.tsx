@@ -9,6 +9,7 @@ import { CoursePlanning, Diary, topicName } from "./diary";
 import { Funding } from "./parent-space";
 import { Progress } from "./views";
 import { score } from "./revision";
+import { PerformanceChart } from "./performance-chart";
 import { Groups } from "./groups";
 import { destinationURL, type Destination } from "../lib/experience";
 import { friendlyStatus, learnerStatus, type Persona } from "../lib/personas";
@@ -592,10 +593,18 @@ export function ProgressOverview({
   onPractice?: (topic: string) => void;
   onAttempt?: (id: string) => void;
 }) {
+  const tab = route.tab || (route.topic ? "topics" : "overview");
   const learner = people.find((l) => l.id === route.learner) ?? people[0],
     mine = courses.filter((c) => c.learner_id === learner?.id),
-    course = mine.find((c) => c.id === route.course) ?? mine[0];
-  const tab = route.tab || (onPractice ? "topics" : "history");
+    course =
+      mine.find((c) => c.id === route.course) ??
+      (tab === "topics" ? mine[0] : undefined);
+  const rangeEnd = new Date().toISOString().slice(0, 10);
+  const rangeStart = (days: number) => {
+    const day = new Date(rangeEnd + "T12:00:00Z");
+    day.setUTCDate(day.getUTCDate() - days + 1);
+    return day.toISOString().slice(0, 10);
+  };
   const read = useRead(
     learner && tab !== "topics"
       ? `family/activity?${new URLSearchParams({ family: familyId, learner: learner.id, kind: tab === "activity" ? "attempts" : "assessments", offset: route.offset ?? "0", ...(course ? { subject: course.data.subject } : {}), ...(route.from ? { from: route.from } : {}), ...(route.to ? { to: route.to } : {}) })}`
@@ -605,10 +614,10 @@ export function ProgressOverview({
     <>
       <PageHeading
         label="PROGRESS"
-        title={`${learner?.name ?? "Student"}’s learning, in context.`}
-        text="Published evidence, practice conditions and the next improvement. Missing evidence is not a low score."
+        title="See how you’re doing."
+        text={`${learner?.name ?? "Student"}’s progress, one practice at a time.`}
       />
-      <div className="card form-grid">
+      <div className="progress-scope">
         {people.length > 1 && (
           <label className="field">
             Student
@@ -639,7 +648,7 @@ export function ProgressOverview({
               onRoute({ course: e.target.value, topic: "", offset: "0" })
             }
           >
-            {!mine.length && <option value="">No courses yet</option>}
+            {tab !== "topics" && <option value="">All subjects</option>}
             {mine.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.data.subject}
@@ -648,28 +657,75 @@ export function ProgressOverview({
           </select>
         </label>
         <label className="field">
-          History from
-          <input
-            type="date"
-            value={route.from ?? ""}
-            onChange={(e) => onRoute({ from: e.target.value, offset: "0" })}
-          />
+          Period
+          <select
+            aria-label="Progress period"
+            value={
+              !route.from && !route.to
+                ? "all"
+                : route.to === rangeEnd && route.from === rangeStart(28)
+                  ? "28"
+                  : route.to === rangeEnd && route.from === rangeStart(90)
+                    ? "90"
+                    : "custom"
+            }
+            onChange={(e) => {
+              if (e.target.value !== "custom")
+                onRoute({
+                  from:
+                    e.target.value === "all"
+                      ? ""
+                      : rangeStart(Number(e.target.value)),
+                  to: e.target.value === "all" ? "" : rangeEnd,
+                  offset: "0",
+                });
+            }}
+          >
+            <option value="all">All time</option>
+            <option value="28">Last 4 weeks</option>
+            <option value="90">Last 3 months</option>
+            <option value="custom" disabled>
+              Custom dates
+            </option>
+          </select>
         </label>
-        <label className="field">
-          History to
-          <input
-            type="date"
-            value={route.to ?? ""}
-            onChange={(e) => onRoute({ to: e.target.value, offset: "0" })}
-          />
-        </label>
+        <details className="progress-date-settings">
+          <summary>Custom dates</summary>
+          <div className="form-grid">
+            {" "}
+            <label className="field">
+              History from
+              <input
+                type="date"
+                value={route.from ?? ""}
+                onChange={(e) => onRoute({ from: e.target.value, offset: "0" })}
+              />
+            </label>
+            <label className="field">
+              History to
+              <input
+                type="date"
+                value={route.to ?? ""}
+                onChange={(e) => onRoute({ to: e.target.value, offset: "0" })}
+              />
+            </label>
+          </div>
+        </details>
       </div>
+      {tab === "overview" && read.data && (
+        <PerformanceChart
+          items={read.data.items}
+          total={read.data.total}
+          onOpen={(id) => onRoute({ assessment: id })}
+        />
+      )}
       <div
         className="segmented section"
         role="group"
         aria-label="Progress view"
       >
         {[
+          ["overview", "Overview"],
           ["history", "Published feedback"],
           ["topics", "Topic trends"],
           ["activity", "Practice activity"],
@@ -688,7 +744,7 @@ export function ProgressOverview({
           initialTopic={route.topic}
           familyId={familyId}
           learnerId={learner?.id ?? ""}
-          course={course}
+          course={course ?? mine[0]}
           run={run}
           onAssessment={(id) => onRoute({ assessment: id })}
           onPractice={onPractice}
@@ -697,6 +753,13 @@ export function ProgressOverview({
         <ReadState error={read.error} refresh={read.refresh} />
       ) : (
         <>
+          <h2 className="progress-results-heading">
+            {tab === "overview"
+              ? "Behind the results"
+              : tab === "activity"
+                ? "Practice activity"
+                : "Published feedback"}
+          </h2>
           <div className="companion-list">
             {read.data.items.map((r: any) => {
               const marks = score(r.effective);
@@ -730,7 +793,7 @@ export function ProgressOverview({
                           : "Continue on a computer"}
                       </button>
                     )}
-                  {tab === "history" && (
+                  {(tab === "history" || tab === "overview") && (
                     <button
                       className="button secondary"
                       onClick={() => onRoute({ assessment: r.id })}

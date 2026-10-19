@@ -3,7 +3,7 @@ import { useState } from "react";
 import { api } from "./api";
 import { useRead } from "./workspace-data";
 import { ReadState, Pagination } from "./desktop-handoff";
-import { Button, Dialog, Empty, PageHeading } from "./ui";
+import { Button, Dialog, PageHeading } from "./ui";
 import { friendlyStatus } from "../lib/personas";
 import type { Destination } from "../lib/experience";
 type Run = (fn: () => Promise<void>) => void;
@@ -54,42 +54,343 @@ export function Diary({
   );
   const path = `family/diary?${new URLSearchParams({ family: familyId, learner: learnerId, from, to: end.toISOString().slice(0, 10), offset: route.offset ?? "0" })}`;
   const { data, error, refresh: reload } = useRead(path);
+  const today = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: course?.data.timezone ?? "UTC",
+  }).format(new Date());
+  const weekStart = new Date(stamp + "T12:00:00Z");
+  weekStart.setUTCDate(
+    weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7),
+  );
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setUTCDate(d.getUTCDate() + i);
+    return d;
+  });
+  const entries: {
+    id: string;
+    day: string;
+    exam?: any;
+    session?: any;
+    sort: string;
+  }[] = [
+    ...(data?.exams ?? []).map((exam: any) => ({
+      id: exam.id,
+      day: exam.date,
+      exam,
+      sort: "",
+    })),
+    ...(data?.items ?? []).map((session: any) => ({
+      id: session.id,
+      day: new Intl.DateTimeFormat("sv-SE", {
+        timeZone: session.data.timezone,
+      }).format(new Date(session.data.start)),
+      session,
+      sort: session.data.start,
+    })),
+  ].sort((a, b) => a.day.localeCompare(b.day) || a.sort.localeCompare(b.sort));
+  const displayDays =
+    view === "day"
+      ? [new Date(stamp + "T12:00:00Z")]
+      : view === "week"
+        ? weekDays
+        : Array.from(new Set([stamp, ...entries.map((e) => e.day)]))
+            .sort()
+            .map((d) => new Date(d + "T12:00:00Z"));
+  function shift(direction: number) {
+    const d = new Date(stamp + "T12:00:00Z");
+    d.setUTCDate(
+      d.getUTCDate() +
+        direction * (view === "day" ? 1 : view === "week" ? 7 : 31),
+    );
+    onRoute({ date: d.toISOString().slice(0, 10), offset: "0" });
+  }
   async function update() {
-    reload();
+    await reload();
     await refresh();
+  }
+  function openAdd() {
+    const eligible = course?.data.taughtTopics.length
+      ? course
+      : courses.find((c) => c.data.taughtTopics.length);
+    if (!eligible) return;
+    if (eligible.id !== course?.id) onRoute({ course: eligible.id });
+    setRequestId(crypto.randomUUID());
+    setAdding(true);
   }
   return (
     <>
-      <PageHeading
-        label="STUDY & EXAMS"
-        title="Make room for your week."
-        text="A manageable plan, with time to adjust."
-      />
-      <section className="diary-toolbar card stack">
-        <div className="form-grid">
-          <label className="field">
-            Date
-            <input
-              type="date"
-              required
-              value={stamp}
-              onChange={(e) => {
-                if (e.target.value)
-                  onRoute({ date: e.target.value, offset: "0" });
-              }}
-            />
-          </label>
-          <label className="field">
-            View
-            <select
-              value={view}
-              onChange={(e) => onRoute({ view: e.target.value, offset: "0" })}
+      <PageHeading label="STUDY & EXAMS" title="Your diary." />
+      <section className="diary-calendar" aria-label="Study diary">
+        <div className="diary-month">
+          <div>
+            <p className="eyebrow">YOUR DIARY</p>
+            <h2>
+              {start.toLocaleDateString("en-GB", {
+                month: "long",
+                year: "numeric",
+                timeZone: "UTC",
+              })}
+            </h2>
+          </div>
+          <div className="row">
+            <button
+              className="button secondary"
+              aria-label="Previous period"
+              onClick={() => shift(-1)}
             >
-              <option value="day">Day</option>
-              <option value="week">Week</option>
-              <option value="agenda">Agenda</option>
-            </select>
-          </label>
+              ‹
+            </button>
+            <button
+              className="button secondary"
+              onClick={() => onRoute({ date: today, offset: "0" })}
+            >
+              Today
+            </button>
+            <button
+              className="button secondary"
+              aria-label="Next period"
+              onClick={() => shift(1)}
+            >
+              ›
+            </button>
+          </div>
+        </div>
+        <div
+          className="diary-view-switch segmented"
+          role="group"
+          aria-label="Diary view"
+        >
+          {["day", "week", "agenda"].map((v) => (
+            <button
+              key={v}
+              aria-pressed={view === v}
+              onClick={() => onRoute({ view: v, offset: "0" })}
+            >
+              {v === "day" ? "Day" : v === "week" ? "Week" : "Agenda"}
+            </button>
+          ))}
+        </div>
+        <div className="diary-week-strip" aria-label="Choose a day">
+          {weekDays.map((day) => {
+            const key = day.toISOString().slice(0, 10);
+            const count = entries.filter((e) => e.day === key).length;
+            return (
+              <button
+                key={key}
+                aria-pressed={key === stamp}
+                aria-label={day.toLocaleDateString("en-GB", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  timeZone: "UTC",
+                })}
+                onClick={() => {
+                  onRoute({ date: key, offset: "0" });
+                }}
+              >
+                <span>
+                  {day.toLocaleDateString("en-GB", {
+                    weekday: "short",
+                    timeZone: "UTC",
+                  })}
+                </span>
+                <strong>{day.getUTCDate()}</strong>
+                <span
+                  className="diary-day-dot"
+                  data-filled={count > 0}
+                  aria-label={`${count} entries`}
+                />
+              </button>
+            );
+          })}
+        </div>
+        <div className="diary-quick-actions">
+          <span className="meta">{course?.data.timezone ?? "UTC"}</span>
+          {!readOnly && (
+            <Button
+              disabled={
+                busy || !courses.some((c) => c.data.taughtTopics.length)
+              }
+              onClick={openAdd}
+            >
+              + Add session
+            </Button>
+          )}
+        </div>
+      </section>
+      {!data ? (
+        <ReadState error={error} refresh={reload} />
+      ) : (
+        <>
+          <div
+            className="diary-pages"
+            data-view={view}
+            aria-label="Diary entries"
+          >
+            {displayDays.map((day) => {
+              const key = day.toISOString().slice(0, 10),
+                dayEntries = entries.filter((e) => e.day === key);
+              return (
+                <section
+                  className={`diary-page ${key === today ? "is-today" : ""} ${key === stamp ? "is-selected" : ""}`}
+                  id={`diary-${key}`}
+                  key={key}
+                >
+                  <header className="diary-date-heading">
+                    <strong>{day.getUTCDate()}</strong>
+                    <div>
+                      <h2>
+                        {day.toLocaleDateString("en-GB", {
+                          weekday: "long",
+                          timeZone: "UTC",
+                        })}
+                      </h2>
+                      <span>
+                        {day.toLocaleDateString("en-GB", {
+                          month: "long",
+                          timeZone: "UTC",
+                        })}
+                        {key === today ? " · Today" : ""}
+                      </span>
+                    </div>
+                  </header>
+                  <div className="diary-day-entries">
+                    {!dayEntries.length && (
+                      <p className="diary-free-time">
+                        Nothing planned · room to recharge
+                      </p>
+                    )}
+                    {dayEntries.map((entry) => {
+                      if (entry.exam) {
+                        const exam = entry.exam;
+                        return (
+                          <article
+                            className="diary-entry exam-entry"
+                            key={entry.id}
+                          >
+                            <span className="diary-time">All day</span>
+                            <div>
+                              <span className="status-pill">
+                                {exam.confirmed
+                                  ? "Confirmed exam"
+                                  : "Date to confirm"}
+                              </span>
+                              <h3 className="capitalize">
+                                {exam.subject} · {exam.unit}
+                              </h3>
+                              <p className="meta">
+                                Date only · {exam.timezone}
+                              </p>
+                            </div>
+                          </article>
+                        );
+                      }
+                      const s = entry.session;
+                      return (
+                        <article
+                          className="diary-entry study-entry"
+                          key={entry.id}
+                        >
+                          <span className="diary-time">
+                            {new Date(s.data.start).toLocaleTimeString(
+                              "en-GB",
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                timeZone: s.data.timezone,
+                              },
+                            )}
+                          </span>
+                          <div>
+                            <p className="eyebrow">
+                              {friendlyStatus(s.state)} · {s.data.minutes} min
+                            </p>
+                            <h3>{s.data.title}</h3>
+                            <p className="meta">{s.data.purpose}</p>
+                            {!readOnly && (
+                              <div className="row">
+                                {s.state === "proposed" ? (
+                                  <Button
+                                    disabled={busy}
+                                    onClick={() =>
+                                      run(async () => {
+                                        await api("family/plan/action", {
+                                          familyId,
+                                          id: s.id,
+                                          action: "approve",
+                                        });
+                                        await update();
+                                      })
+                                    }
+                                  >
+                                    Approve session
+                                  </Button>
+                                ) : s.state === "approved" ? (
+                                  <Button
+                                    variant="secondary"
+                                    onClick={() => onAttempt(s.data.attemptId)}
+                                  >
+                                    Open planned practice
+                                  </Button>
+                                ) : null}
+                                {s.state !== "completed" && (
+                                  <>
+                                    <button
+                                      className="link-button"
+                                      disabled={busy}
+                                      onClick={() => setMoving(s)}
+                                    >
+                                      Move
+                                    </button>
+                                    <button
+                                      className="link-button"
+                                      disabled={busy}
+                                      onClick={() =>
+                                        run(async () => {
+                                          await api("family/plan/action", {
+                                            familyId,
+                                            id: s.id,
+                                            action: "cancel",
+                                          });
+                                          await update();
+                                        })
+                                      }
+                                    >
+                                      Cancel session
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+          <Pagination
+            {...data}
+            onChange={(offset) => onRoute({ offset: String(offset) })}
+          />
+        </>
+      )}
+      <details className="diary-toolbar card stack">
+        <summary>Planning & calendar settings</summary>
+        <label className="field">
+          Jump to date
+          <input
+            type="date"
+            value={stamp}
+            onChange={(e) => {
+              if (e.target.value)
+                onRoute({ date: e.target.value, offset: "0" });
+            }}
+          />
+        </label>
+        <div className="form-grid">
           {!readOnly && (
             <label className="field">
               Subject
@@ -168,113 +469,11 @@ export function Diary({
             </p>
           </>
         )}
-      </section>
-      {!data ? (
-        <ReadState error={error} refresh={reload} />
-      ) : (
-        <>
-          <div
-            className={`diary-list diary-${view}`}
-            aria-label="Diary entries"
-          >
-            {data.exams.map((exam: any) => (
-              <article className="diary-entry exam-entry" key={exam.id}>
-                <span className="status-pill">
-                  {exam.confirmed ? "Confirmed exam" : "Date to confirm"}
-                </span>
-                <h2>
-                  {exam.subject} · {exam.unit}
-                </h2>
-                <p>{exam.date}</p>
-                <p className="meta">Date only · {exam.timezone}</p>
-              </article>
-            ))}
-            {data.items.map((s: any) => (
-              <article className="diary-entry" key={s.id}>
-                <p className="eyebrow">{friendlyStatus(s.state)}</p>
-                <h2>{s.data.title}</h2>
-                <p>
-                  {new Date(s.data.start).toLocaleString(undefined, {
-                    timeZone: s.data.timezone,
-                  })}{" "}
-                  · {s.data.minutes} minutes
-                </p>
-                <p className="meta">
-                  {s.data.timezone} · {s.data.purpose}
-                </p>
-                {!readOnly && (
-                  <div className="row">
-                    {s.state === "proposed" ? (
-                      <Button
-                        disabled={busy}
-                        onClick={() =>
-                          run(async () => {
-                            await api("family/plan/action", {
-                              familyId,
-                              id: s.id,
-                              action: "approve",
-                            });
-                            await update();
-                          })
-                        }
-                      >
-                        Approve session
-                      </Button>
-                    ) : s.state === "approved" ? (
-                      <Button
-                        variant="secondary"
-                        onClick={() => onAttempt(s.data.attemptId)}
-                      >
-                        Open planned practice
-                      </Button>
-                    ) : null}
-                    {s.state !== "completed" && (
-                      <>
-                        <button
-                          className="link-button"
-                          disabled={busy}
-                          onClick={() => setMoving(s)}
-                        >
-                          Move
-                        </button>
-                        <button
-                          className="link-button"
-                          disabled={busy}
-                          onClick={() =>
-                            run(async () => {
-                              await api("family/plan/action", {
-                                familyId,
-                                id: s.id,
-                                action: "cancel",
-                              });
-                              await update();
-                            })
-                          }
-                        >
-                          Cancel session
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </article>
-            ))}
-          </div>
-          {!data.items.length && !data.exams.length && (
-            <Empty
-              title="A little room in your diary"
-              text="Study sessions and exam dates in this period will appear here."
-            />
-          )}
-          <Pagination
-            {...data}
-            onChange={(offset) => onRoute({ offset: String(offset) })}
-          />
-        </>
-      )}
+      </details>
       {adding && course && (
         <Dialog title="Plan a study session" onClose={() => setAdding(false)}>
           <form
+            key={course.id}
             className="stack"
             onSubmit={(e) => {
               e.preventDefault();
@@ -296,6 +495,21 @@ export function Diary({
               });
             }}
           >
+            <label className="field">
+              Subject
+              <select
+                value={course.id}
+                onChange={(e) => onRoute({ course: e.target.value })}
+              >
+                {courses
+                  .filter((c) => c.data.taughtTopics.length)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.data.subject}
+                    </option>
+                  ))}
+              </select>
+            </label>
             <label className="field">
               Topic
               <select name="topic" required>
