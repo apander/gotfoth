@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { api, date } from "./api";
 import { Button, Dialog, Empty, Icon, PageHeading } from "./ui";
 import { StudyCompanion } from "./persona-shell";
-import { friendlyStatus } from "../lib/personas";
+import { friendlyStatus, learnerStatus } from "../lib/personas";
 
 export function StudentToday({
   data,
@@ -254,7 +254,7 @@ export function StudentToday({
           )}
           {pending.slice(0, 2).map((a: any) => (
             <p className="pending-note" key={a.id}>
-              {friendlyStatus(a.state)} · {date(a.submitted_at)}
+              {learnerStatus(a.state)} · {date(a.submitted_at)}
             </p>
           ))}
         </section>

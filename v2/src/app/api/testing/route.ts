@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { testRequestAllowed } from "@/server/testing-config";
 import { actor } from "@/server/auth";
-import { database, family, enqueue } from "@/server/db";
-import { credit, reserve } from "@/server/finance";
+import { database, family } from "@/server/db";
+import { credit } from "@/server/finance";
 import { processJob } from "@/server/jobs";
 import { isTestAccount, testFamilyIds } from "@/lib/test-accounts";
 import { AppError } from "@/lib/errors";
+import { createAttemptInTransaction } from "@/server/learning";
+import { fixtureId } from "@/server/test-fixtures";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   return testRequestAllowed(request)
@@ -31,7 +33,8 @@ export async function POST(request: Request) {
       );
     const body = z
       .object({
-        action: z.enum(["credit", "process"]),
+        action: z.enum(["credit", "process", "exam"]),
+        subject: z.enum(["psychology", "business"]).default("psychology"),
         familyId: z.string().optional(),
         requestId: z.string().uuid(),
       })
@@ -39,10 +42,67 @@ export async function POST(request: Request) {
     const allowedIds = Object.values(testFamilyIds);
     const memberships = (
       await database().query(
-        "SELECT family_id,role FROM memberships WHERE user_id=$1 AND active AND family_id=ANY($2::uuid[])",
+        "SELECT family_id,role,learner_id FROM memberships WHERE user_id=$1 AND active AND family_id=ANY($2::uuid[])",
         [user.id, allowedIds],
       )
     ).rows;
+    if (body.action === "exam") {
+      const member = memberships.find(
+        (m) =>
+          m.role === "student" &&
+          (!body.familyId || m.family_id === body.familyId),
+      );
+      if (!member)
+        throw new AppError(
+          "FORBIDDEN",
+          "A test student membership is required.",
+          403,
+        );
+      const result = await family(user, member.family_id, async (tx, role) => {
+        if (role !== "student")
+          throw new AppError("FORBIDDEN", "Student membership required.", 403);
+        const enrolment = (
+          await tx.query(
+            "SELECT id FROM enrolments WHERE learner_id=$1 AND data->>'subject'=$2",
+            [member.learner_id, body.subject],
+          )
+        ).rows[0];
+        if (!enrolment)
+          throw new AppError(
+            "COURSE_REQUIRED",
+            "Set up this subject first, or choose Alex for the psychology example.",
+          );
+        await tx.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
+          `ux-exam:${user.id}:${body.requestId}`,
+        ]);
+        const existing = (
+          await tx.query(
+            "SELECT id FROM attempts WHERE learner_id=$1 AND data->>'exampleRequest'=$2",
+            [member.learner_id, body.requestId],
+          )
+        ).rows[0];
+        if (existing) return existing;
+        const created = await createAttemptInTransaction(
+          tx,
+          user,
+          member.family_id,
+          {
+            learnerId: member.learner_id,
+            enrolmentId: enrolment.id,
+            mode: "mock",
+            paperId: fixtureId(`exam-paper-${body.subject}`),
+          },
+        );
+        await tx.query(
+          "UPDATE attempts SET data=jsonb_set(data,'{exampleRequest}',to_jsonb($2::text)) WHERE id=$1",
+          [created.id, body.requestId],
+        );
+        return created;
+      });
+      return Response.json({
+        url: `/?family=${member.family_id}&attempt=${result.id}`,
+      });
+    }
     if (body.action === "credit") {
       const member = memberships.find(
         (m) => m.family_id === body.familyId && m.role === "parent",
@@ -62,25 +122,6 @@ export async function POST(request: Request) {
           "UX fixture credit",
           "test_credit",
         );
-        const waiting = (
-          await tx.query(
-            "SELECT r.id,a.data->>'quoteId' AS quote FROM assessments r JOIN submissions s ON s.id=r.submission_id JOIN attempts a ON a.id=s.attempt_id WHERE r.state='awaiting_funds' AND r.family_id=$1",
-            [member.family_id],
-          )
-        ).rows;
-        for (const assessment of waiting) {
-          await reserve(tx, assessment.quote, true);
-          await tx.query("UPDATE assessments SET state='queued' WHERE id=$1", [
-            assessment.id,
-          ]);
-          await enqueue(
-            tx,
-            "mark",
-            `ux-funded:${assessment.id}:${body.requestId}`,
-            { assessmentId: assessment.id },
-            member.family_id,
-          );
-        }
       });
       return Response.json({
         message: "€10 test credit added. No payment was taken.",

@@ -13,7 +13,7 @@ import {
 } from "./db";
 import { requireThat, missing } from "../lib/errors";
 import { catalogue } from "./learning";
-import { RateCard, credit } from "./finance";
+import { RateCard, credit, resumeFundedAssessments } from "./finance";
 export async function identity(actor: Actor) {
   const operator = await accountIsSuperuser(actor);
   const person = await database().query('SELECT name FROM "user" WHERE id=$1', [
@@ -128,10 +128,21 @@ export async function snapshot(actor: Actor, familyId: string) {
             ).rows,
             reserved: (
               await tx.query(
-                "SELECT COALESCE(sum(amount),0) AS amount FROM reservations WHERE family_id=$1 AND released_at IS NULL",
+                "SELECT COALESCE(sum(amount),0) AS amount FROM reservations WHERE family_id=$1 AND released_at IS NULL AND settled IS NULL",
                 [familyId],
               )
             ).rows[0].amount,
+            awaiting: (
+              await tx.query(
+                `SELECT r.id,l.name,a.data->>'subject' AS subject,q.max_charge,
+               l.monthly_cap-COALESCE((SELECT sum(CASE WHEN settled IS NULL AND released_at IS NULL THEN amount ELSE COALESCE(settled,0) END) FROM reservations WHERE learner_id=l.id AND month=to_char(now() AT TIME ZONE 'UTC','YYYY-MM')),0) AS remaining_cap
+               FROM assessments r JOIN learners l ON l.id=r.learner_id
+               JOIN submissions s ON s.id=r.submission_id JOIN attempts a ON a.id=s.attempt_id
+               JOIN quotes q ON q.id=(a.data->>'quoteId')::uuid
+               WHERE r.family_id=$1 AND r.state='awaiting_funds' ORDER BY s.submitted_at,r.id`,
+                [familyId],
+              )
+            ).rows,
           }
         : undefined;
     const calendar = (
@@ -303,10 +314,15 @@ export async function familyAction(
     requireThat(role === "parent", "FORBIDDEN", "Parent access required.", 403);
     if (data.action === "cap") {
       await learnerAccess(tx, actor, familyId, data.learnerId, true);
+      await tx.query(
+        "SELECT family_id FROM funding_accounts WHERE family_id=$1 FOR UPDATE",
+        [familyId],
+      );
       await tx.query("UPDATE learners SET monthly_cap=$2 WHERE id=$1", [
         data.learnerId,
         data.micros,
       ]);
+      await resumeFundedAssessments(tx, familyId, data.learnerId);
     }
     if (data.action === "export") {
       const ids = (

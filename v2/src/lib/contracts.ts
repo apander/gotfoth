@@ -5,6 +5,17 @@ export const Resource = z.object({
   id: z.string(),
   title: z.string(),
   text: z.string(),
+  table: z
+    .object({
+      caption: z.string(),
+      columns: z.array(z.string()).min(1),
+      rows: z.array(z.array(z.string())),
+    })
+    .refine(
+      (table) => table.rows.every((row) => row.length === table.columns.length),
+      "Every source table row must match its columns.",
+    )
+    .optional(),
   fileId: z.string().optional(),
   pages: z.array(z.number().int().positive()).default([]),
 });

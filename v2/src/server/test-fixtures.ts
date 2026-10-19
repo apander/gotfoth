@@ -97,6 +97,89 @@ export function fixturePaper(subject: "psychology" | "business") {
   if (issues.length) throw new Error(issues.join(" "));
   return paper;
 }
+export function fixtureExamPaper(subject: "psychology" | "business") {
+  const base = fixturePaper(subject);
+  const sourceId = `ux-${subject}-exam-source`;
+  const questions = base.questions.map((q, i) => ({
+    ...q,
+    id: `ux-${subject}-exam-q${i + 1}`,
+    number: `1(${String.fromCharCode(97 + i)})`,
+    resourceIds: [sourceId],
+    text: (subject === "psychology"
+      ? [
+          "Using Study A, explain one limitation of the sampling method used by the researcher.",
+          "Using Study A, explain how the researcher could improve the reliability of the interviews.",
+          "Explain one ethical issue the researcher should consider when carrying out Study A.",
+          "Evaluate the use of interviews to investigate stress. Refer to Study A in your answer.",
+        ]
+      : [
+          "Using Extract A, explain one reason why Aster Cycles might expand into a new market.",
+          "Using the data in Extract A, explain how a cash-flow forecast could help Aster Cycles decide whether to expand.",
+          "Using Extract A, explain one limitation of the market research conducted by Aster Cycles.",
+          "Evaluate whether Aster Cycles should expand overseas. Use the information in Extract A in your answer.",
+        ])[i],
+    rubric: { ...q.rubric, id: `ux-${subject}-exam-rubric${i + 1}` },
+  }));
+  const resource =
+    subject === "psychology"
+      ? {
+          id: sourceId,
+          title: "Study A · fictional psychology study",
+          text: "A researcher investigated stress among students at one sixth-form school. Twelve volunteers, all aged 17, took part after a teacher asked one psychology class for volunteers.\nEach student completed a stress questionnaire and a 15-minute interview. The researcher asked open-ended questions about schoolwork, sleep and coping strategies. Some follow-up questions differed between interviews.\nInterviews were recorded and students’ names were written on the transcripts. The researcher intended to discuss the findings with the students’ teachers.\nThe table summarises the questionnaire responses. Higher scores indicate greater reported stress. These are fictional data for UX testing, not findings from a real study.",
+          table: {
+            caption: "Table 1 · Reported stress (synthetic data)",
+            columns: ["Stress score", "Number of students"],
+            rows: [
+              ["0–3", "2"],
+              ["4–6", "7"],
+              ["7–10", "3"],
+              ["Total", "12"],
+            ],
+          },
+        }
+      : {
+          id: sourceId,
+          title: "Extract A · Aster Cycles (fictional business)",
+          text: "Aster Cycles designs and sells bicycles in the UK. Its directors are considering investing £2 million to enter an overseas market.\nSales revenue and UK market share have increased, but operating costs have also risen. The directors expect overseas demand to grow; exchange-rate changes could increase costs.\nThe marketing manager surveyed 20 existing UK customers about buying bicycles abroad. Most said they liked the company’s products. The business has not yet surveyed customers in the proposed overseas market.\nThese are fictional figures for UX testing, not an official examination extract.",
+          table: {
+            caption: "Table 1 · Business performance (synthetic data)",
+            columns: ["Measure", "2024", "2025"],
+            rows: [
+              ["Sales revenue (£m)", "12.0", "13.5"],
+              ["Operating costs (£m)", "9.0", "10.8"],
+              ["UK market share (%)", "8.0", "9.2"],
+              ["Closing cash balance (£m)", "2.0", "1.3"],
+            ],
+          },
+        };
+  return Paper.parse({
+    ...base,
+    id: fixtureId(`exam-paper-${subject}`),
+    title: `Exam workspace example · ${subject} (synthetic)`,
+    variant: "UX-EXAM",
+    instructions:
+      "Fictional exam-style practice for UX testing. Read the supporting study or extract and answer all four parts. This is not an official examination paper. Marking is simulated.",
+    questions,
+    resources: [resource],
+    fullMockEligible: true,
+  });
+}
+export async function seedExamExamples(tx: Tx) {
+  for (const subject of ["psychology", "business"] as const) {
+    const paper = fixtureExamPaper(subject);
+    const issues = validatePaper(paper);
+    if (issues.length) throw new Error(issues.join(" "));
+    await tx.query(
+      "INSERT INTO catalogue(id,identity,version,status,data,approved_by,published_at) VALUES($1,$2,1,'published',$3,'ux-fixture-system',now()) ON CONFLICT(id) DO NOTHING",
+      [paper.id, `ux-exam-example-${subject}`, JSON.stringify(paper)],
+    );
+    for (const familyId of Object.values(testFamilyIds))
+      await tx.query(
+        "INSERT INTO catalogue_releases(family_id,paper_id,released_by) VALUES($1,$2,'ux-fixture-system') ON CONFLICT DO NOTHING",
+        [familyId, paper.id],
+      );
+  }
+}
 export async function seedTestFixtures(
   tx: Tx,
   passwordHash: string,
@@ -470,10 +553,11 @@ export async function seedTestFixtures(
       }),
     ],
   );
+  await seedExamExamples(tx);
   return {
     families: 4,
     students: students.length,
     accounts: testAccounts.length,
-    papers: 2,
+    papers: 4,
   };
 }

@@ -20,6 +20,9 @@ export function ParentSpace({
   const funding = data.assessments.some(
     (a: any) => a.state === "awaiting_funds",
   );
+  const available =
+    Number(data.wallet?.balance ?? 0) - Number(data.wallet?.reserved ?? 0);
+  const lowBalance = !!data.wallet && available < 1000000;
   return (
     <>
       <PageHeading
@@ -32,21 +35,27 @@ export function ParentSpace({
         text="See what they’ve been working on, celebrate their effort, and help when it’s needed."
       />
       {page === "Overview" && (
-        <section className={`parent-banner ${funding ? "attention" : ""}`}>
+        <section
+          className={`parent-banner ${funding || lowBalance ? "attention" : ""}`}
+        >
           <div>
             <h2>
               {funding
                 ? "A little help is needed."
-                : "Room to learn. Support when it matters."}
+                : lowBalance
+                  ? "Family credit is running low."
+                  : "Room to learn. Support when it matters."}
             </h2>
             <p>
               {funding
-                ? "Some submitted work is waiting for funding. Adding credit lets marking continue."
-                : "Your child chooses their subjects and practice. You can follow their progress here."}
+                ? "Your child’s work is saved. Review the balance and monthly limits to let marking continue. They can keep practising."
+                : lowBalance
+                  ? `${euro(available)} is available for marking. You can add credit here; your child can keep practising.`
+                  : "Your child chooses their subjects and practice. You can follow their progress here."}
             </p>
           </div>
           <button className="button secondary" onClick={() => onPage("Credit")}>
-            {funding ? "Review funding" : "Manage funding"}
+            {funding || lowBalance ? "Review funding" : "Manage funding"}
           </button>
         </section>
       )}
@@ -202,6 +211,29 @@ export function Funding({ familyId, data, refresh, run, busy }: any) {
         title="A clear view of your credit."
         text="You decide the budget. No automatic top-ups."
       />
+      {data.wallet?.awaiting?.length > 0 && (
+        <section className="card stack" style={{ marginBottom: 24 }}>
+          <h2>Work waiting for marking</h2>
+          <p>
+            Your child’s answers are saved. Adding credit or increasing a
+            monthly limit resumes eligible marking automatically. They do not
+            need to resubmit.
+          </p>
+          {data.wallet.awaiting.map((item: any) => (
+            <div className="list-item" key={item.id}>
+              <strong>
+                {item.name} · {item.subject}
+              </strong>
+              <p>
+                Maximum marking cost: {euro(item.max_charge)}.{" "}
+                {Number(item.remaining_cap) < Number(item.max_charge)
+                  ? "Increase this child’s monthly limit below."
+                  : "Check that the available balance covers this work."}
+              </p>
+            </div>
+          ))}
+        </section>
+      )}
       <div className="funding-grid">
         <section className="balance-panel">
           <p className="eyebrow">AVAILABLE TO SPEND</p>

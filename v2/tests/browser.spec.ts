@@ -131,9 +131,8 @@ test("student can navigate topic evidence and submit typed practice through the 
   await expect(page.getByText(/mixed-topic evidence/)).toBeVisible();
   await page.getByRole("button", { name: "Practice", exact: true }).click();
   await page.getByRole("button", { name: "Start practice" }).first().click();
-  await page.getByRole("button", { name: "Get marking quote" }).click();
   await page
-    .getByRole("button", { name: /Accept maximum charge and start/ })
+    .getByRole("button", { name: "Start practice →", exact: true })
     .click();
   await page
     .getByRole("textbox", { name: "Your answer", exact: true })

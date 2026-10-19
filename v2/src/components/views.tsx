@@ -6,7 +6,7 @@ import { Button, Meter } from "./ui";
 import { score } from "./revision";
 import { CourseSetup } from "./course-setup";
 import { QuestionExtracts } from "./extracts";
-import { friendlyStatus } from "../lib/personas";
+import { friendlyStatus, learnerStatus } from "../lib/personas";
 type Run = (fn: () => Promise<void>) => void;
 export function Progress({
   initialTopic,
@@ -775,7 +775,7 @@ export function Assessment({
         ← Back
       </button>
       <PageHeading
-        label={`FEEDBACK · ${friendlyStatus(data.state)}`}
+        label={`FEEDBACK · ${(canQuery ? learnerStatus : friendlyStatus)(data.state)}`}
         title={
           reviewer
             ? "Review the work. Shape the next step."

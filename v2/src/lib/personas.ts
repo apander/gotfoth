@@ -82,3 +82,5 @@ export const statusLabels: Record<string, string> = {
 };
 export const friendlyStatus = (state: string) =>
   statusLabels[state] ?? "Awaiting an update";
+export const learnerStatus = (state: string) =>
+  state === "awaiting_funds" ? "Feedback pending" : friendlyStatus(state);

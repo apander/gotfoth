@@ -101,6 +101,9 @@ export const testLearnerId = (index: number) =>
   `7e571000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
 export const testQuestionIds = new Set(
   ["psychology", "business"].flatMap((subject) =>
-    [1, 2, 3, 4].map((n) => `ux-${subject}-q${n}`),
+    [1, 2, 3, 4].flatMap((n) => [
+      `ux-${subject}-q${n}`,
+      `ux-${subject}-exam-q${n}`,
+    ]),
   ),
 );

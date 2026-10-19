@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { type Tx, audit } from "./db";
-import { requireThat } from "../lib/errors";
+import { type Tx, audit, enqueue } from "./db";
+import { AppError, requireThat } from "../lib/errors";
 export const RateCard = z.object({
   label: z.string().min(1),
   model: z.string().min(1),
@@ -82,6 +82,17 @@ export async function createQuote(
   return { id, maxChargeMicros: maxCharge, expiresInSeconds: 900 };
 }
 export async function reserve(tx: Tx, quoteId: string, allowAccepted = false) {
+  const scope = (
+    await tx.query("SELECT family_id FROM quotes WHERE id=$1", [quoteId])
+  ).rows[0];
+  requireThat(scope, "QUOTE_EXPIRED", "Request a new processing quote.");
+  // Credit and cap changes use the same wallet-first order as reservations.
+  const account = (
+    await tx.query(
+      "SELECT balance FROM funding_accounts WHERE family_id=$1 FOR UPDATE",
+      [scope.family_id],
+    )
+  ).rows[0];
   const q = (
     await tx.query("SELECT * FROM quotes WHERE id=$1 FOR UPDATE", [quoteId])
   ).rows[0];
@@ -96,12 +107,6 @@ export async function reserve(tx: Tx, quoteId: string, allowAccepted = false) {
   ).rows[0];
   if (existing && (!existing.released_at || existing.settled !== null))
     return existing;
-  const account = (
-    await tx.query(
-      "SELECT balance FROM funding_accounts WHERE family_id=$1 FOR UPDATE",
-      [q.family_id],
-    )
-  ).rows[0];
   const learner = (
     await tx.query("SELECT monthly_cap FROM learners WHERE id=$1 FOR UPDATE", [
       q.learner_id,
@@ -209,6 +214,49 @@ export async function credit(
       "UPDATE funding_accounts SET balance=balance+$2 WHERE family_id=$1",
       [familyId, amount],
     );
+  if (amount > 0) await resumeFundedAssessments(tx, familyId);
+}
+// Runs inside the funding transaction: no marking starts without a reservation.
+export async function resumeFundedAssessments(
+  tx: Tx,
+  familyId: string,
+  learnerId?: string,
+) {
+  const waiting = (
+    await tx.query(
+      `SELECT r.id,a.data->>'quoteId' AS quote_id FROM assessments r
+     JOIN submissions s ON s.id=r.submission_id JOIN attempts a ON a.id=s.attempt_id
+     WHERE r.family_id=$1 AND r.state='awaiting_funds' AND ($2::uuid IS NULL OR r.learner_id=$2)
+     ORDER BY s.submitted_at,r.id FOR UPDATE OF r SKIP LOCKED`,
+      [familyId, learnerId ?? null],
+    )
+  ).rows;
+  let resumed = 0;
+  for (const item of waiting) {
+    try {
+      await reserve(tx, item.quote_id, true);
+    } catch (error) {
+      if (
+        error instanceof AppError &&
+        ["AWAITING_FUNDS", "STUDENT_CAP"].includes(error.code)
+      )
+        continue;
+      throw error;
+    }
+    await tx.query(
+      "UPDATE assessments SET state='queued',error_code=NULL WHERE id=$1",
+      [item.id],
+    );
+    await enqueue(
+      tx,
+      "mark",
+      `funded:${item.id}:${randomUUID()}`,
+      { assessmentId: item.id },
+      familyId,
+    );
+    resumed++;
+  }
+  return resumed;
 }
 export async function release(tx: Tx, quoteId: string) {
   await tx.query(
