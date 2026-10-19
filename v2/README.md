@@ -133,7 +133,7 @@ The student/parent access follow-up found that the fresh preview database had no
 
 ### UX test accounts
 
-The isolated preview now includes a password-based test account picker at `/testing`, with twelve fictional students, parents, teachers and a mixed-role account across four families. See [TEST_WORKSPACES.md](TEST_WORKSPACES.md) for scenarios, reset instructions, environment restrictions and live workflow tests. The test password is held in ignored `.vercel/persona-test-logins.json`, and only password hashes are stored in the database.
+The password-based test account picker at `/testing` is available on main and other deployments, with twelve fictional students, parents, teachers and a mixed-role account across four families. No preview, hostname, database-name or environment-flag guard applies. See [TEST_WORKSPACES.md](TEST_WORKSPACES.md) for scenarios, seeding, reset instructions and live workflow tests. The test password is held in ignored `.vercel/persona-test-logins.json`, and only password hashes are stored in the database. Normal accounts retain Google sign-in; test tools are restricted to the reserved fixture accounts and families. Test papers and simulated marking rates stay separate from normal families' content and paid processing.
 
 ### Guided student course setup
 

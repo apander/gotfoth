@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { testRequestAllowed } from "@/server/testing-config";
 import { actor } from "@/server/auth";
 import { database, family } from "@/server/db";
 import { credit } from "@/server/finance";
@@ -9,16 +8,13 @@ import { AppError } from "@/lib/errors";
 import { createAttemptInTransaction } from "@/server/learning";
 import { fixtureId } from "@/server/test-fixtures";
 export const runtime = "nodejs";
-export async function GET(request: Request) {
-  return testRequestAllowed(request)
-    ? Response.json(
-        { enabled: true },
-        { headers: { "cache-control": "no-store" } },
-      )
-    : new Response(null, { status: 404 });
+export async function GET() {
+  return Response.json(
+    { enabled: true },
+    { headers: { "cache-control": "no-store" } },
+  );
 }
 export async function POST(request: Request) {
-  if (!testRequestAllowed(request)) return new Response(null, { status: 404 });
   if (request.headers.get("origin") !== new URL(request.url).origin)
     return Response.json(
       { error: "Request origin could not be verified." },

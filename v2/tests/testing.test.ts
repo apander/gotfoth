@@ -4,13 +4,10 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFile } from "node:fs/promises";
 import { hashPassword, verifyPassword } from "better-auth/crypto";
 import {
-  testLoginEnabled,
-  testRequestAllowed,
-} from "../src/server/testing-config";
-import {
   testAccounts,
   isTestAccount,
   testFamilyIds,
+  isTestPractice,
 } from "../src/lib/test-accounts";
 import {
   seedTestFixtures,
@@ -20,50 +17,29 @@ import {
 import { markAnswer } from "../src/server/marking";
 import { validateResult } from "../src/lib/domain";
 import type { Tx } from "../src/server/db";
-const preview = {
-  VERCEL_ENV: "preview",
-  TEST_LOGIN_ENABLED: "true",
-  BETTER_AUTH_URL: "https://gotfoth-persona-preview.vercel.app",
-  DATABASE_URL:
-    "postgresql://runtime:password@ep-example.eu-central-1.aws.neon.tech/gotfoth_persona_preview?sslmode=require",
-};
-test("test authentication fails closed outside the exact preview and never permits real Google accounts", () => {
-  assert.equal(testLoginEnabled(preview), true);
-  assert.equal(
-    testRequestAllowed(
-      new Request("https://gotfoth-persona-preview.vercel.app/api/testing"),
-      preview,
-    ),
-    true,
-  );
-  assert.equal(
-    testRequestAllowed(
-      new Request("https://gotfoth.vercel.app/api/testing"),
-      preview,
-    ),
-    false,
-  );
-  assert.equal(testRequestAllowed(undefined, preview), false);
-  for (const patch of [
-    { VERCEL_ENV: "production" },
-    { VERCEL_ENV: "development" },
-    { TEST_LOGIN_ENABLED: "false" },
-    {
-      DATABASE_URL:
-        "postgresql://runtime:password@ep-example.eu-central-1.aws.neon.tech/neondb",
-    },
-    { BETTER_AUTH_URL: "https://gotfoth.vercel.app" },
-    { DATABASE_URL: "broken" },
-  ])
-    assert.equal(testLoginEnabled({ ...preview, ...patch }), false);
+import { catalogue } from "../src/server/learning";
+test("test accounts and simulated practice stay separate from normal accounts and questions", () => {
   assert.equal(isTestAccount("alex@ux.gotfoth.test"), true);
   assert.equal(isTestAccount("alasdair.anderson@gmail.com"), false);
   assert.equal(isTestAccount("system@ux.gotfoth.test"), false);
+  const questions = fixturePaper("psychology").questions;
+  assert.equal(isTestPractice(testFamilyIds.River, questions), true);
+  assert.equal(isTestPractice(testFamilyIds.River, []), false);
+  assert.equal(
+    isTestPractice(testFamilyIds.River, [{ id: "real-question" }]),
+    false,
+  );
+  assert.equal(
+    isTestPractice("88888888-8888-4888-8888-888888888888", questions),
+    false,
+  );
 });
-test("simulated marking is limited to fixture questions on the isolated preview and produces valid evidence", async () => {
+test("simulated marking works on main without an environment flag and produces valid evidence only for fixture questions", async () => {
   const before = { ...process.env };
   try {
-    Object.assign(process.env, preview);
+    process.env.VERCEL_ENV = "production";
+    process.env.BETTER_AUTH_URL = "https://gotfoth.vercel.app";
+    delete process.env.TEST_LOGIN_ENABLED;
     delete process.env.OPENAI_API_KEY;
     const q = fixturePaper("psychology").questions[0],
       answer = "A small sample may not represent the population.";
@@ -76,9 +52,9 @@ test("simulated marking is limited to fixture questions on the isolated preview 
       () => markAnswer({ ...q, id: "real-question" }, answer, {}, fixtureRate),
       /provider is not configured/,
     );
-    process.env.VERCEL_ENV = "production";
     await assert.rejects(
-      () => markAnswer(q, answer, {}, fixtureRate),
+      () =>
+        markAnswer(q, answer, {}, { ...fixtureRate, model: "normal-provider" }),
       /provider is not configured/,
     );
   } finally {
@@ -107,7 +83,17 @@ test("fixture seeding is repeatable, supports real review data, and reset preser
       );
     const hash = await hashPassword("fixture-test-password-only");
     await db.query(
-      "INSERT INTO families(id,name) VALUES('88888888-8888-4888-8888-888888888888','Existing real preview family')",
+      "INSERT INTO families(id,name) VALUES('88888888-8888-4888-8888-888888888888','Existing real family')",
+    );
+    await db.query(
+      "INSERT INTO rate_cards(id,data,active) VALUES('88888888-8888-4888-8888-888888888887',$1,true)",
+      [
+        JSON.stringify({
+          ...fixtureRate,
+          label: "Existing rate",
+          model: "normal-provider",
+        }),
+      ],
     );
     const seed = (reset = false) =>
       db.transaction((tx) =>
@@ -117,6 +103,24 @@ test("fixture seeding is repeatable, supports real review data, and reset preser
     assert.equal(result.accounts, 12);
     assert.equal(result.families, 4);
     await seed();
+    assert.equal(
+      (await db.query<{ id: string }>("SELECT id FROM rate_cards WHERE active"))
+        .rows[0].id,
+      "88888888-8888-4888-8888-888888888887",
+    );
+    assert.equal(
+      (await catalogue(db as unknown as Tx, testFamilyIds.River)).length,
+      4,
+    );
+    assert.equal(
+      (
+        await catalogue(
+          db as unknown as Tx,
+          "88888888-8888-4888-8888-888888888888",
+        )
+      ).length,
+      0,
+    );
     assert.equal(
       (
         await db.query<{ count: number }>(
@@ -174,7 +178,7 @@ test("fixture seeding is repeatable, supports real review data, and reset preser
           "SELECT name FROM families WHERE id='88888888-8888-4888-8888-888888888888'",
         )
       ).rows[0].name,
-      "Existing real preview family",
+      "Existing real family",
     );
     await db.query(
       "INSERT INTO memberships(user_id,family_id,role) VALUES('ux-fixture-jordan','88888888-8888-4888-8888-888888888888','parent')",

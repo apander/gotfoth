@@ -265,14 +265,8 @@ export async function seedTestFixtures(
     `INSERT INTO "user"(id,name,email,"emailVerified") VALUES('ux-fixture-system','UX fixture setup','system@ux.gotfoth.test',true) ON CONFLICT DO NOTHING`,
   );
   const cardId = fixtureId("rate");
-  const active = (await tx.query("SELECT id FROM rate_cards WHERE active"))
-    .rows;
-  if (active.some((r) => r.id !== cardId))
-    throw new Error(
-      "A non-fixture rate card is active; fixture seeding will not replace it.",
-    );
   await tx.query(
-    "INSERT INTO rate_cards(id,data,active) VALUES($1,$2,true) ON CONFLICT(id) DO NOTHING",
+    "INSERT INTO rate_cards(id,data,active) VALUES($1,$2,false) ON CONFLICT(id) DO UPDATE SET active=false",
     [cardId, JSON.stringify(fixtureRate)],
   );
   for (const subject of ["psychology", "business"] as const) {

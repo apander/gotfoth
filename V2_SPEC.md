@@ -90,6 +90,8 @@ The initial implementation provides a copyable invitation link for the superuser
 
 Uninvited users cannot provision an application account or enter a family workspace. Previously admitted, active users can return through Google login without another invitation.
 
+The designated fictional UX test accounts can also sign in with their shared test password at `/testing` on any deployment, including main. This has no preview, hostname, database-name or environment-flag restriction. It does not enable password sign-in or registration for normal accounts. Test sessions retain normal family and role checks. Synthetic practice, simulated marking and test credit are limited to the reserved test families and do not change real families' content, rates or paid AI budget.
+
 ### Family roles
 
 **Parents** monitor published results and study activity, fund the family wallet, and set monthly learner limits. Assessment views are read-only. Authorised family data export and deletion live in family settings.

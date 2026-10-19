@@ -19,9 +19,13 @@ import {
 } from "../lib/domain";
 import { createQuote, reserve, release } from "./finance";
 import { publishedPracticePapers } from "./exam-papers";
-export async function catalogue(tx: Tx) {
+import { isTestFamily } from "../lib/test-accounts";
+export async function catalogue(tx: Tx, familyId: string) {
   return (
-    await tx.query("SELECT data FROM catalogue WHERE status='published'")
+    await tx.query(
+      "SELECT data FROM catalogue WHERE status='published' AND (identity LIKE 'ux-fixture-%' OR identity LIKE 'ux-exam-example-%')=$1",
+      [isTestFamily(familyId)],
+    )
   ).rows.map((r) => Paper.parse(r.data));
 }
 export async function createAttempt(
@@ -64,7 +68,7 @@ export async function createAttemptInTransaction(
   ).rows[0];
   if (!row) throw missing();
   const course = Enrolment.parse(row.data);
-  const papers = (await catalogue(tx)).filter(
+  const papers = (await catalogue(tx, familyId)).filter(
     (p) =>
       p.subject === course.subject &&
       p.compatibleSpecifications.includes(course.specification),
@@ -165,7 +169,7 @@ export async function createAttemptInTransaction(
       data.retryOf ? new Set() : seen,
       releases,
     );
-    if (!selection.length)
+    if (!selection.length && !isTestFamily(familyId))
       selection = (await publishedPracticePapers(
         tx,
         course.subject,

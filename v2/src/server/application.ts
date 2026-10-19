@@ -91,7 +91,7 @@ export async function snapshot(actor: Actor, familyId: string) {
         [ids],
       )
     ).rows;
-    const papers = (await catalogue(tx)).map(
+    const papers = (await catalogue(tx, familyId)).map(
       ({ questions, generalRubric, resources, ...p }) => ({
         ...p,
         questionCount: questions.length,

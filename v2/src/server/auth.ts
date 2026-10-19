@@ -4,7 +4,6 @@ import { APIError, createAuthMiddleware } from "better-auth/api";
 import { headers } from "next/headers";
 import { accountIsSuperuser, database, type Actor } from "./db";
 import { AppError } from "../lib/errors";
-import { testLoginEnabled, testRequestAllowed } from "./testing-config";
 import { isTestAccount } from "../lib/test-accounts";
 let instance: ReturnType<typeof betterAuth> | undefined;
 export function auth() {
@@ -23,11 +22,9 @@ export function auth() {
     database: database(),
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: process.env.BETTER_AUTH_URL,
-    rateLimit: testLoginEnabled()
-      ? { customRules: { "/sign-in/email": { window: 60, max: 60 } } }
-      : undefined,
+    rateLimit: { customRules: { "/sign-in/email": { window: 60, max: 60 } } },
     emailAndPassword: {
-      enabled: testLoginEnabled(),
+      enabled: true,
       disableSignUp: true,
       requireEmailVerification: true,
       minPasswordLength: 12,
@@ -36,12 +33,11 @@ export function auth() {
       before: createAuthMiddleware(async (ctx) => {
         if (
           ctx.path === "/sign-in/email" &&
-          (!testRequestAllowed(ctx.request) ||
-            !isTestAccount(String(ctx.body?.email ?? "")))
+          !isTestAccount(String(ctx.body?.email ?? ""))
         )
           throw new APIError("FORBIDDEN", {
             message:
-              "Test sign-in is only available for the listed preview accounts.",
+              "Test sign-in is only available for the listed test accounts.",
           });
       }),
     },

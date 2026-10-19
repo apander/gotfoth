@@ -107,3 +107,12 @@ export const testQuestionIds = new Set(
     ]),
   ),
 );
+export const isTestFamily = (familyId: string) =>
+  Object.values(testFamilyIds).includes(familyId);
+export const isTestPractice = (
+  familyId: string,
+  questions: readonly { id: string }[],
+) =>
+  isTestFamily(familyId) &&
+  questions.length > 0 &&
+  questions.every((q) => testQuestionIds.has(q.id));

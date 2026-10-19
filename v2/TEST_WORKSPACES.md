@@ -1,6 +1,6 @@
-# Preview test workspaces
+# Test workspaces
 
-Open `https://gotfoth-persona-preview.vercel.app/testing` using the preview share link, enter the shared test password, and choose an account. Google is not involved in these fixture logins. The page lists every name, email, family and starting scenario.
+Open `https://gotfoth.vercel.app/testing`, enter the shared test password, and choose an account. Google is not involved in these fixture logins. The page lists every name, email, family and starting scenario. The picker and test authentication are available on every deployment without an environment flag, hostname restriction or database-name restriction.
 
 There are 12 accounts across four fictional families:
 
@@ -23,19 +23,19 @@ The test tools banner links back to the account picker. **Run test processing** 
 
 ## Restore the starter data
 
-From the `v2` directory, with the existing ignored preview operator configuration:
+From the `v2` directory, with the existing ignored main operator and runtime configuration:
 
 ```powershell
-npx --no-install tsx scripts/seed-test-workspaces.ts --apply --reset
+npx --no-install tsx scripts/seed-test-workspaces.ts --main --apply --reset
 ```
 
-Without `--apply`, the script only prints its plan. Re-running `--apply` without `--reset` adds missing fixtures without erasing test work. Reset targets only the four reserved fixture family IDs, removes their workflow data and test sessions, then restores the starter scenarios. It refuses fixture accounts linked to a non-fixture family. It preserves the original Anderson preview family and real Google accounts. Published assessment ledger entries are included in reset coverage.
+Without `--apply`, the script only prints its plan. Re-running `--apply` without `--reset` adds missing fixtures without erasing test work. Omit `--main` to use the existing preview configuration instead. Reset targets only the four reserved fixture family IDs, removes their workflow data and test sessions, then restores the starter scenarios. It refuses fixture accounts linked to a non-fixture family. It preserves other families and real Google accounts. Published assessment ledger entries are included in reset coverage. Seeding preserves existing active marking rates; the inactive simulator configuration is selected only for synthetic questions in the reserved test families. Synthetic papers are excluded from normal families' course and practice catalogues.
 
 ## Boundaries and verification
 
-Test sign-in requires the explicit flag `TEST_LOGIN_ENABLED=true`, `VERCEL_ENV=preview`, the exact persona-preview auth URL, the isolated `gotfoth_persona_preview` database, and requests to the stable preview host. Only the listed fixture emails can use password sign-in; email registration remains disabled. Test sessions use Better Auth and retain all existing server membership and learner checks. Test tooling rejects normal Google accounts and cannot act on other family IDs. Normal production authentication and marking remain governed by their existing configuration.
+Test sign-in has no deployment guard. Only the listed fixture emails can use password sign-in; a correct password is required and email registration remains disabled. Test sessions use Better Auth and retain all existing server membership and learner checks. Test tooling rejects normal Google accounts, requires same-origin requests, and cannot act on other family IDs. Simulated marking costs zero and does not consume the paid AI budget. Normal accounts keep Google authentication and their configured marking rates.
 
-The standard browser suite remains fixture-based. To run the additional eight live tests, set `TEST_WORKSPACES_PASSWORD` from the ignored credentials file, `TEST_BASE_URL` to the stable preview, and `PLAYWRIGHT_STORAGE_STATE` to an authorised ignored preview browser-state file. Run `npm run test:browser -- tests/test-workspaces.spec.ts`, then reset the fixture data. These tests cover all 12 logins, real course setup, cross-family and role restrictions, bad passwords, disabled registration, idempotent test credit, submission, simulated processing, teacher publication and read-only parent access.
+The standard browser suite remains fixture-based. To run the live workflow tests, set `TEST_WORKSPACES_PASSWORD` from the ignored credentials file and `TEST_BASE_URL` to the deployment being tested. A protected preview may also need `PLAYWRIGHT_STORAGE_STATE`; main does not. Run `npm run test:browser -- tests/test-workspaces.spec.ts`. These tests cover all 12 logins, real course setup, cross-family and role restrictions, bad passwords, disabled registration, idempotent test credit, submission, simulated processing, teacher publication and read-only parent access. Reset only when the starter scenarios are needed again.
 
 
 ## Exam examples with supporting data

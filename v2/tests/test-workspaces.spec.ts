@@ -6,9 +6,9 @@ import {
 } from "../src/lib/test-accounts";
 import { fixtureId } from "../src/server/test-fixtures";
 const password = process.env.TEST_WORKSPACES_PASSWORD;
-const base = process.env.TEST_BASE_URL ?? "";
-test.describe("real preview test workspaces", () => {
-  test.skip(!password, "Requires the isolated preview and its test password.");
+const base = process.env.TEST_BASE_URL ?? "https://gotfoth.vercel.app";
+test.describe("live test workspaces", () => {
+  test.skip(!password, "Requires the seeded test accounts and their password.");
   test.describe.configure({ mode: "serial" });
   async function post(page: Page, path: string, data: object) {
     return page.request.post(path, { headers: { origin: base }, data });
@@ -23,6 +23,26 @@ test.describe("real preview test workspaces", () => {
     expect(response.status()).toBe(200);
     return account;
   }
+  test("test workspaces are discoverable from the main sign-in screen", async ({
+    page,
+  }) => {
+    const enabled = await page.request.get("/api/testing");
+    expect(enabled.status()).toBe(200);
+    expect(await enabled.json()).toEqual({ enabled: true });
+    await page.goto("/");
+    await page
+      .getByRole("link", {
+        name: "Open test workspaces · no Google account needed",
+      })
+      .click();
+    await expect(page).toHaveURL(new URL("/testing", base).toString());
+    await expect(
+      page.getByRole("heading", { name: "Choose a person. Try their day." }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Sign in as/ })).toHaveCount(
+      testAccounts.length,
+    );
+  });
   for (const key of ["alex", "jordan", "morgan", "avery"])
     test(`test picker opens ${key} without Google`, async ({ page }) => {
       await page.goto("/testing");
@@ -35,9 +55,7 @@ test.describe("real preview test workspaces", () => {
         })
         .click();
       await expect(page).toHaveURL(
-        (url) =>
-          url.pathname === "/" &&
-          url.hostname === "gotfoth-persona-preview.vercel.app",
+        (url) => url.pathname === "/" && url.origin === new URL(base).origin,
       );
       await expect(page.getByLabel("Test workspace tools")).toBeVisible();
       if (key === "alex")
@@ -92,6 +110,18 @@ test.describe("real preview test workspaces", () => {
   }) => {
     expect(
       (
+        await page.request.post("/api/testing", {
+          headers: { origin: "https://unrelated.example.test" },
+          data: {
+            action: "credit",
+            familyId: testFamilyIds.River,
+            requestId: crypto.randomUUID(),
+          },
+        })
+      ).status(),
+    ).toBe(403);
+    expect(
+      (
         await post(page, "/api/auth/sign-in/email", {
           email: "alex@ux.gotfoth.test",
           password: "definitely-wrong-password",
@@ -133,7 +163,7 @@ test.describe("real preview test workspaces", () => {
       ).status(),
     ).toBe(403);
   });
-  test("new student can save course setup using real preview data", async ({
+  test("new student can save course setup using the seeded test family", async ({
     page,
   }) => {
     await login(page, "casey");

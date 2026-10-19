@@ -18,8 +18,7 @@ import {
 } from "./db";
 import { RateCard, tokenCost, settle, release, reserve } from "./finance";
 import { retrievalSchedule } from "../lib/retrieval";
-import { testLoginEnabled } from "./testing-config";
-import { testQuestionIds } from "../lib/test-accounts";
+import { testQuestionIds, isTestPractice } from "../lib/test-accounts";
 import { simulatedFeedback } from "../lib/test-feedback";
 export const configurationHash = (rate: RateCard) =>
   createHash("sha256").update(JSON.stringify(rate)).digest("hex");
@@ -30,11 +29,7 @@ export async function markAnswer(
   rate: RateCard,
   review = false,
 ) {
-  if (
-    testLoginEnabled() &&
-    rate.model === "gotfoth-ux-simulator" &&
-    testQuestionIds.has(q.id)
-  ) {
+  if (rate.model === "gotfoth-ux-simulator" && testQuestionIds.has(q.id)) {
     requireThat(
       answer.length <= rate.maxAnswerChars,
       "ANSWER_LIMIT",
@@ -141,7 +136,11 @@ export async function runMarking(
       return null;
     }
     const rate = RateCard.parse(quote.configuration),
-      maximum = Number(quote.max_charge) * 2;
+      maximum =
+        rate.model === "gotfoth-ux-simulator" &&
+        isTestPractice(a.family_id, a.data.questions)
+          ? 0
+          : Number(quote.max_charge) * 2;
     const budget = (
       await tx.query("SELECT * FROM operator_budget WHERE id=1 FOR UPDATE")
     ).rows[0];

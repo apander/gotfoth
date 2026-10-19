@@ -43,7 +43,7 @@ export function TestingLab() {
   return (
     <main className="testing-lab">
       <Brand />
-      <p className="eyebrow">PREVIEW TEST WORKSPACES</p>
+      <p className="eyebrow">TEST WORKSPACES</p>
       <h1>Choose a person. Try their day.</h1>
       <p>
         Populated fictional families for UX and workflow testing. These accounts

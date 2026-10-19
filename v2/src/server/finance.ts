@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { type Tx, audit, enqueue } from "./db";
 import { AppError, requireThat } from "../lib/errors";
+import { isTestPractice } from "../lib/test-accounts";
 export const RateCard = z.object({
   label: z.string().min(1),
   model: z.string().min(1),
@@ -37,7 +38,9 @@ export async function createQuote(
   attempt: { id: string; family_id: string; learner_id: string; data: any },
 ) {
   const result = await tx.query(
-    "SELECT * FROM rate_cards WHERE active ORDER BY created_at DESC LIMIT 1",
+    isTestPractice(attempt.family_id, attempt.data.questions)
+      ? "SELECT * FROM rate_cards WHERE data->>'model'='gotfoth-ux-simulator' ORDER BY created_at DESC LIMIT 1"
+      : "SELECT * FROM rate_cards WHERE active AND data->>'model'<>'gotfoth-ux-simulator' ORDER BY created_at DESC LIMIT 1",
   );
   requireThat(
     result.rows[0],
