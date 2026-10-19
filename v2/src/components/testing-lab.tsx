@@ -15,8 +15,7 @@ async function testingRequest(body?: object) {
   return data;
 }
 export function TestingLab() {
-  const [password, setPassword] = useState(""),
-    [busy, setBusy] = useState(""),
+  const [busy, setBusy] = useState(""),
     [error, setError] = useState("");
   async function enter(email: string, exam = false) {
     setBusy(email);
@@ -24,9 +23,16 @@ export function TestingLab() {
     try {
       const client = createAuthClient({ baseURL: location.origin });
       await client.signOut();
-      const result = await client.signIn.email({ email, password });
-      if (result.error)
-        throw new Error(result.error.message ?? "Check the test password.");
+      const response = await fetch("/api/auth/sign-in/test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error(
+          result.message ?? "The test account could not be opened.",
+        );
       if (exam) {
         const example = await testingRequest({
           action: "exam",
@@ -50,15 +56,6 @@ export function TestingLab() {
         use the application’s normal permissions. Marking is simulated and
         always goes to teacher review.
       </p>
-      <label className="field test-password">
-        Shared test password
-        <input
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-      </label>
       {error && (
         <p className="error" role="alert">
           {error}
@@ -79,10 +76,7 @@ export function TestingLab() {
             <h2>{account.name}</h2>
             <p>{account.scenario}</p>
             <small>{account.email}</small>
-            <Button
-              disabled={!password || !!busy}
-              onClick={() => enter(account.email)}
-            >
+            <Button disabled={!!busy} onClick={() => enter(account.email)}>
               {busy === account.email
                 ? "Signing in…"
                 : `Sign in as ${account.name.split(" ")[0]}`}
@@ -90,7 +84,7 @@ export function TestingLab() {
             {account.role === "student" && account.key !== "casey" && (
               <Button
                 variant="secondary"
-                disabled={!password || !!busy}
+                disabled={!!busy}
                 onClick={() => enter(account.email, true)}
               >
                 Open exam example as {account.name.split(" ")[0]}

@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PGlite } from "@electric-sql/pglite";
 import { readFile } from "node:fs/promises";
-import { hashPassword, verifyPassword } from "better-auth/crypto";
 import {
   testAccounts,
   isTestAccount,
@@ -18,10 +17,26 @@ import { markAnswer } from "../src/server/marking";
 import { validateResult } from "../src/lib/domain";
 import type { Tx } from "../src/server/db";
 import { catalogue } from "../src/server/learning";
+import { testSignInAccount } from "../src/server/test-sign-in";
 test("test accounts and simulated practice stay separate from normal accounts and questions", () => {
   assert.equal(isTestAccount("alex@ux.gotfoth.test"), true);
   assert.equal(isTestAccount("alasdair.anderson@gmail.com"), false);
   assert.equal(isTestAccount("system@ux.gotfoth.test"), false);
+  const student = {
+    id: "ux-fixture-alex",
+    email: "alex@ux.gotfoth.test",
+    emailVerified: true,
+  };
+  assert.equal(testSignInAccount(student)?.key, "alex");
+  assert.equal(testSignInAccount({ ...student, id: "real-user" }), undefined);
+  assert.equal(
+    testSignInAccount({ ...student, email: "alasdair.anderson@gmail.com" }),
+    undefined,
+  );
+  assert.equal(
+    testSignInAccount({ ...student, emailVerified: false }),
+    undefined,
+  );
   const questions = fixturePaper("psychology").questions;
   assert.equal(isTestPractice(testFamilyIds.River, questions), true);
   assert.equal(isTestPractice(testFamilyIds.River, []), false);
@@ -81,7 +96,6 @@ test("fixture seeding is repeatable, supports real review data, and reset preser
           "utf8",
         ),
       );
-    const hash = await hashPassword("fixture-test-password-only");
     await db.query(
       "INSERT INTO families(id,name) VALUES('88888888-8888-4888-8888-888888888888','Existing real family')",
     );
@@ -96,9 +110,7 @@ test("fixture seeding is repeatable, supports real review data, and reset preser
       ],
     );
     const seed = (reset = false) =>
-      db.transaction((tx) =>
-        seedTestFixtures(tx as unknown as Tx, hash, reset),
-      );
+      db.transaction((tx) => seedTestFixtures(tx as unknown as Tx, reset));
     const result = await seed();
     assert.equal(result.accounts, 12);
     assert.equal(result.families, 4);
@@ -137,17 +149,13 @@ test("fixture seeding is repeatable, supports real review data, and reset preser
       ).rows[0].count,
       2,
     );
-    const stored = (
-      await db.query<{ password: string }>(
-        "SELECT password FROM account WHERE id='ux-password-alex'",
-      )
-    ).rows[0].password;
     assert.equal(
-      await verifyPassword({
-        hash: stored,
-        password: "fixture-test-password-only",
-      }),
-      true,
+      (
+        await db.query<{ count: number }>(
+          "SELECT count(*)::int AS count FROM account WHERE \"providerId\"='credential'",
+        )
+      ).rows[0].count,
+      0,
     );
     const review = (
       await db.query<{ candidates: any[] }>(

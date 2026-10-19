@@ -1082,10 +1082,6 @@
 .testing-lab > p {
   max-width: 800px;
 }
-.test-password {
-  max-width: 400px;
-  margin: 28px 0;
-}
 .test-account-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

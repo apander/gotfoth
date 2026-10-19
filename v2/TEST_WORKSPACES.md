@@ -1,6 +1,6 @@
 # Test workspaces
 
-Open `https://gotfoth.vercel.app/testing`, enter the shared test password, and choose an account. Google is not involved in these fixture logins. The page lists every name, email, family and starting scenario. The picker and test authentication are available on every deployment without an environment flag, hostname restriction or database-name restriction.
+Open `https://gotfoth.vercel.app/testing` and choose an account. No password or Google account is needed. The page lists every name, email, family and starting scenario. The picker and test authentication are available on every deployment without an environment flag, hostname restriction or database-name restriction.
 
 There are 12 accounts across four fictional families:
 
@@ -9,7 +9,7 @@ There are 12 accounts across four fictional families:
 - Green: new student Casey, parent Chris and teacher Lee.
 - Brook: student Taylor, parent Pat and teacher Lee. This family starts with no credit.
 
-All account emails are `KEY@ux.gotfoth.test`, where KEY is the lower-case first name. The ignored `.vercel/persona-test-logins.json` file contains the shared password and account directory. Passwords are hashed in the authentication database; no password is included in browser JavaScript or tracked documentation.
+All account emails are `KEY@ux.gotfoth.test`, where KEY is the lower-case first name. Selecting a seeded account creates a normal Better Auth session. There are no shared test credentials to distribute or configure. The seeding script writes an optional account directory to ignored `.vercel/persona-test-accounts.json`.
 
 ## Useful journeys
 
@@ -33,11 +33,11 @@ Without `--apply`, the script only prints its plan. Re-running `--apply` without
 
 ## Boundaries and verification
 
-Test sign-in has no deployment guard. Only the listed fixture emails can use password sign-in; a correct password is required and email registration remains disabled. Test sessions use Better Auth and retain all existing server membership and learner checks. Test tooling rejects normal Google accounts, requires same-origin requests, and cannot act on other family IDs. Simulated marking costs zero and does not consume the paid AI budget. Normal accounts keep Google authentication and their configured marking rates.
+Test sign-in has no deployment guard. Anyone can select one of the listed fictional accounts. The passwordless endpoint requires the exact seeded user ID and verified fixture email, active memberships only in reserved test families, and no administrator privileges. It accepts same-origin POST requests only. Password sign-in and email registration are disabled. Test sessions use Better Auth and retain all existing server membership and learner checks. Test tooling rejects normal Google accounts and cannot act on other family IDs. Simulated marking costs zero and does not consume the paid AI budget. Normal accounts keep Google authentication and their configured marking rates.
 
-The standard browser suite remains fixture-based. To run the live workflow tests, set `TEST_WORKSPACES_PASSWORD` from the ignored credentials file and `TEST_BASE_URL` to the deployment being tested. A protected preview may also need `PLAYWRIGHT_STORAGE_STATE`; main does not. Run `npm run test:browser -- tests/test-workspaces.spec.ts`. These tests cover all 12 logins, real course setup, cross-family and role restrictions, bad passwords, disabled registration, idempotent test credit, submission, simulated processing, teacher publication and read-only parent access. Reset only when the starter scenarios are needed again.
+The standard browser suite remains fixture-based. To opt into live workflow tests that modify the fictional families, set `RUN_LIVE_TESTS=true` in the test runner and `TEST_BASE_URL` to the deployment being tested. This flag only controls automated tests; the app's picker requires no flag or credentials. A protected preview may also need `PLAYWRIGHT_STORAGE_STATE`; main does not. Run `npm run test:browser -- tests/test-workspaces.spec.ts`. These tests cover all 12 passwordless logins, real course setup, cross-family and role restrictions, disabled password sign-in and registration, idempotent test credit, submission, simulated processing, teacher publication and read-only parent access. Reset only when the starter scenarios are needed again.
 
 
 ## Exam examples with supporting data
 
-Enter the shared password and choose **Open exam example as Alex** in the account picker. This opens a new Psychology paper with a fictional study, a results table and four questions tied to that evidence. Signed-in students can also use **Open exam example** from the test tools banner. Sam’s Business subject also includes a separate fictional business extract with financial data. The examples are explicitly synthetic and use simulated marking. Previously saved attempts retain their original question content; they are not replaced or reset.
+Choose **Open exam example as Alex** in the account picker. This opens a new Psychology paper with a fictional study, a results table and four questions tied to that evidence. Signed-in students can also use **Open exam example** from the test tools banner. Sam’s Business subject also includes a separate fictional business extract with financial data. The examples are explicitly synthetic and use simulated marking. Previously saved attempts retain their original question content; they are not replaced or reset.

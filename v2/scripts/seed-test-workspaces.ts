@@ -1,8 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { parseEnv } from "node:util";
-import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
-import { hashPassword } from "better-auth/crypto";
 import { seedTestFixtures } from "../src/server/test-fixtures";
 import { testAccounts, testFamilyIds } from "../src/lib/test-accounts";
 import { requireNeonUrl } from "../src/lib/neon-url";
@@ -46,14 +44,7 @@ console.log(
   }),
 );
 if (apply) {
-  const credentialsFile = "../.vercel/persona-test-logins.json";
-  const saved = existsSync(credentialsFile)
-    ? JSON.parse(readFileSync(credentialsFile, "utf8"))
-    : null;
-  const password =
-    saved?.password ?? `UX-${randomBytes(18).toString("base64url")}`;
-  if (typeof password !== "string" || password.length < 16)
-    throw new Error("Invalid saved test password.");
+  const directoryFile = "../.vercel/persona-test-accounts.json";
   const pool = new Pool({ connectionString: adminURL.toString() }),
     client = await pool.connect();
   try {
@@ -71,18 +62,13 @@ if (apply) {
       throw new Error(
         "Fixture setup requires the configured database owner connection.",
       );
-    const summary = await seedTestFixtures(
-      client,
-      await hashPassword(password),
-      reset,
-    );
+    const summary = await seedTestFixtures(client, reset);
     await client.query("COMMIT");
     writeFileSync(
-      credentialsFile,
+      directoryFile,
       JSON.stringify(
         {
           url: new URL("/testing", runtime.BETTER_AUTH_URL).toString(),
-          password,
           accounts: testAccounts,
         },
         null,
@@ -93,8 +79,7 @@ if (apply) {
     console.log(
       JSON.stringify({
         ...summary,
-        credentialFile: ".vercel/persona-test-logins.json",
-        passwordPrinted: false,
+        directoryFile: ".vercel/persona-test-accounts.json",
       }),
     );
   } catch (e) {

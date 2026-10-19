@@ -180,11 +180,7 @@ export async function seedExamExamples(tx: Tx) {
       );
   }
 }
-export async function seedTestFixtures(
-  tx: Tx,
-  passwordHash: string,
-  reset = false,
-) {
+export async function seedTestFixtures(tx: Tx, reset = false) {
   const ids = Object.values(testFamilyIds);
   const existing = (
     await tx.query("SELECT id,name FROM families WHERE id=ANY($1::uuid[])", [
@@ -256,11 +252,11 @@ export async function seedTestFixtures(
       'INSERT INTO "user"(id,name,email,"emailVerified") VALUES($1,$2,$3,true) ON CONFLICT(id) DO NOTHING',
       [a.id, a.name, a.email],
     );
-    await tx.query(
-      `INSERT INTO account(id,"accountId","providerId","userId",password) VALUES($1,$2,'credential',$2,$3) ON CONFLICT("providerId","accountId") DO UPDATE SET password=EXCLUDED.password`,
-      [`ux-password-${a.key}`, a.id, passwordHash],
-    );
   }
+  await tx.query(
+    'DELETE FROM account WHERE "providerId"=\'credential\' AND "userId"=ANY($1::text[])',
+    [testAccounts.map((account) => account.id)],
+  );
   await tx.query(
     `INSERT INTO "user"(id,name,email,"emailVerified") VALUES('ux-fixture-system','UX fixture setup','system@ux.gotfoth.test',true) ON CONFLICT DO NOTHING`,
   );

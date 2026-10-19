@@ -5,10 +5,12 @@ import {
   testLearnerId,
 } from "../src/lib/test-accounts";
 import { fixtureId } from "../src/server/test-fixtures";
-const password = process.env.TEST_WORKSPACES_PASSWORD;
 const base = process.env.TEST_BASE_URL ?? "https://gotfoth.vercel.app";
 test.describe("live test workspaces", () => {
-  test.skip(!password, "Requires the seeded test accounts and their password.");
+  test.skip(
+    process.env.RUN_LIVE_TESTS !== "true",
+    "Opt in to tests that modify the seeded fictional families with RUN_LIVE_TESTS=true.",
+  );
   test.describe.configure({ mode: "serial" });
   async function post(page: Page, path: string, data: object) {
     return page.request.post(path, { headers: { origin: base }, data });
@@ -16,9 +18,8 @@ test.describe("live test workspaces", () => {
   async function login(page: Page, key: string) {
     const account = testAccounts.find((a) => a.key === key)!;
     await post(page, "/api/auth/sign-out", {});
-    const response = await post(page, "/api/auth/sign-in/email", {
+    const response = await post(page, "/api/auth/sign-in/test", {
       email: account.email,
-      password,
     });
     expect(response.status()).toBe(200);
     return account;
@@ -42,11 +43,14 @@ test.describe("live test workspaces", () => {
     await expect(page.getByRole("button", { name: /^Sign in as/ })).toHaveCount(
       testAccounts.length,
     );
+    await expect(page.locator('input[type="password"]')).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Sign in as Alex", exact: true }),
+    ).toBeEnabled();
   });
   for (const key of ["alex", "jordan", "morgan", "avery"])
     test(`test picker opens ${key} without Google`, async ({ page }) => {
       await page.goto("/testing");
-      await page.getByLabel("Shared test password").fill(password!);
       const account = testAccounts.find((a) => a.key === key)!;
       await page
         .getByRole("button", {
@@ -105,7 +109,7 @@ test.describe("live test workspaces", () => {
         );
     }
   });
-  test("wrong password, real accounts, signup, and cross-family reads stay blocked", async ({
+  test("non-test accounts, password sign-in, signup, and cross-family reads stay blocked", async ({
     page,
   }) => {
     expect(
@@ -130,17 +134,45 @@ test.describe("live test workspaces", () => {
     ).not.toBe(200);
     expect(
       (
-        await post(page, "/api/auth/sign-in/email", {
+        await post(page, "/api/auth/sign-in/test", {
           email: "alasdair.anderson@gmail.com",
-          password,
         })
       ).status(),
     ).toBe(403);
     expect(
       (
+        await post(page, "/api/auth/sign-in/test", {
+          email: "system@ux.gotfoth.test",
+        })
+      ).status(),
+    ).toBe(403);
+    expect(
+      (
+        await post(page, "/api/auth/sign-in/test", {
+          email: "unknown@ux.gotfoth.test",
+        })
+      ).status(),
+    ).toBe(403);
+    expect(
+      (
+        await page.request.post("/api/auth/sign-in/test", {
+          headers: { origin: "https://unrelated.example.test" },
+          data: { email: "alex@ux.gotfoth.test" },
+        })
+      ).status(),
+    ).toBe(403);
+    expect(
+      (
+        await page.request.get(
+          "/api/auth/sign-in/test?email=alex%40ux.gotfoth.test",
+        )
+      ).status(),
+    ).not.toBe(200);
+    expect(
+      (
         await post(page, "/api/auth/sign-up/email", {
           email: "outsider@ux.gotfoth.test",
-          password,
+          password: "not-a-real-password",
           name: "Outside",
         })
       ).status(),
@@ -354,7 +386,6 @@ test.describe("live test workspaces", () => {
     test.setTimeout(90000);
     await page.setViewportSize({ width: 1366, height: 650 });
     await page.goto("/testing");
-    await page.getByLabel("Shared test password").fill(password!);
     await page
       .getByRole("button", { name: "Open exam example as Alex", exact: true })
       .click();

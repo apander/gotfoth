@@ -28,7 +28,7 @@ test("all practice modes save unfunded work; only parent funding and limits unlo
         ),
       );
     const tx = db as unknown as Tx;
-    await seedTestFixtures(tx, "unused-test-hash");
+    await seedTestFixtures(tx);
     const family = testFamilyIds.Brook,
       learner = testLearnerId(4);
     // Keep pre-existing fixture work separate from the four submissions below.

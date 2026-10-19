@@ -1,10 +1,10 @@
 import "server-only";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { APIError } from "better-auth/api";
 import { headers } from "next/headers";
 import { accountIsSuperuser, database, type Actor } from "./db";
 import { AppError } from "../lib/errors";
-import { isTestAccount } from "../lib/test-accounts";
+import { testSignIn } from "./test-sign-in";
 let instance: ReturnType<typeof betterAuth> | undefined;
 export function auth() {
   if (instance) return instance;
@@ -22,24 +22,13 @@ export function auth() {
     database: database(),
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: process.env.BETTER_AUTH_URL,
-    rateLimit: { customRules: { "/sign-in/email": { window: 60, max: 60 } } },
+    plugins: [testSignIn()],
+    rateLimit: { customRules: { "/sign-in/test": { window: 60, max: 60 } } },
     emailAndPassword: {
-      enabled: true,
+      enabled: false,
       disableSignUp: true,
       requireEmailVerification: true,
       minPasswordLength: 12,
-    },
-    hooks: {
-      before: createAuthMiddleware(async (ctx) => {
-        if (
-          ctx.path === "/sign-in/email" &&
-          !isTestAccount(String(ctx.body?.email ?? ""))
-        )
-          throw new APIError("FORBIDDEN", {
-            message:
-              "Test sign-in is only available for the listed test accounts.",
-          });
-      }),
     },
     socialProviders: {
       google: {
