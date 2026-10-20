@@ -619,6 +619,241 @@
 }
 
 /* Calendar and visual progress surfaces. */
+.teacher-companion .heading h1,
+.teacher-groups-companion .heading h1 {
+  font-size: 1.5rem;
+}
+.teacher-attention-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.teacher-attention-counts > * {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-height: 52px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--ink);
+  padding: 6px;
+}
+.teacher-attention-counts strong {
+  font-size: 1.25rem;
+}
+.teacher-attention-counts span {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.teacher-search {
+  display: flex;
+  align-items: center;
+  position: relative;
+  margin: 0 0 8px;
+}
+.teacher-search input {
+  width: 100%;
+  padding-right: 48px;
+  min-height: 44px;
+}
+.teacher-search-submit {
+  position: absolute;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  color: var(--accent-ink);
+  background: transparent;
+}
+.teacher-search-submit .icon {
+  width: 20px;
+  height: 20px;
+}
+.teacher-filters,
+.group-comparison-controls {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0 12px;
+  background: var(--white);
+  margin: 8px 0 12px;
+}
+.teacher-filters > summary,
+.group-comparison-controls > summary {
+  cursor: pointer;
+  align-content: center;
+  min-height: 44px;
+  color: var(--accent-ink);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+.teacher-filters > summary span,
+.group-comparison-controls > summary span {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 6px;
+}
+.teacher-filters[open] > summary,
+.group-comparison-controls[open] > summary {
+  margin-bottom: 12px;
+}
+.teacher-filters .field {
+  margin-bottom: 12px;
+}
+.teacher-search-context {
+  font-size: 0.8rem;
+  margin: 8px 0;
+}
+.teacher-search-context .link-button {
+  min-height: 44px;
+}
+.teacher-roster {
+  display: grid;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.teacher-student-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 12px;
+  min-height: 84px;
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+}
+.teacher-student-row:last-child {
+  border-bottom: 0;
+}
+.teacher-student-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.teacher-student-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.teacher-student-copy strong {
+  font-size: 0.95rem;
+}
+.teacher-student-copy small,
+.teacher-student-copy > span {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+.teacher-student-copy > span {
+  color: var(--accent-ink);
+}
+.teacher-student-row > .icon {
+  width: 18px;
+  height: 18px;
+  color: var(--accent);
+}
+.teacher-attention-queue > h2 {
+  margin: 14px 0 10px;
+  font-size: 1rem;
+}
+.teacher-attention-row {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  padding: 12px 14px 0;
+}
+.teacher-attention-row h3 {
+  font-size: 0.95rem;
+  margin: 0 0 4px;
+}
+.teacher-attention-row .meta {
+  font-size: 0.74rem;
+  margin: 0 0 8px;
+}
+.teacher-review-status {
+  font-size: 0.72rem;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.teacher-attention-row .link-button {
+  display: block;
+  min-height: 44px;
+  padding: 0;
+  margin-top: 4px;
+  font-size: 0.78rem;
+}
+.teacher-student-detail > .meta {
+  font-size: 0.8rem;
+  margin: 8px 0;
+}
+.teacher-student-detail > .link-button {
+  min-height: 44px;
+}
+.teacher-groups-companion .comparison-stats {
+  gap: 16px;
+  margin: 8px 0;
+}
+.teacher-groups-companion .card.stack {
+  padding: 14px;
+  gap: 12px;
+}
+.teacher-groups-companion .card.stack > h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.teacher-groups-companion .notice {
+  margin: 0;
+  padding: 12px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.teacher-groups-companion .group-comparison-controls {
+  margin: 0;
+}
+.teacher-groups-companion .monitor-row {
+  padding: 14px;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+.teacher-groups-companion .comparison-stats strong {
+  font-size: 1.5rem;
+}
+.teacher-groups-companion .comparison-person {
+  padding: 14px;
+}
+.teacher-groups-companion .comparison-person p {
+  font-size: 0.8rem;
+  margin: 8px 0;
+}
+.teacher-groups-companion .group-tabs {
+  gap: 8px;
+  margin: 12px 0;
+}
+.teacher-groups-companion .group-tabs .button {
+  min-height: 44px;
+  padding: 8px 12px;
+}
 .progress-child-switch {
   display: flex;
   flex-wrap: wrap;

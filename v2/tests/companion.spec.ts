@@ -807,6 +807,104 @@ test.describe("phone companion", () => {
       fullPage: true,
     });
   });
+  test("teacher screens lead with students, attention and comparisons instead of filter forms", async ({
+    context,
+    page,
+  }) => {
+    await fixture(context, "teacher");
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto("/?context=teacher&page=Students");
+    await expect(
+      page.getByRole("heading", { name: "Students", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Family", exact: true }),
+    ).not.toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Subject", exact: true }),
+    ).not.toBeVisible();
+    const student = page.locator(".teacher-student-row").first();
+    await expect(student).toContainText("Alex");
+    await page.locator(".teacher-filters > summary").focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("combobox", { name: "Family", exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("combobox", { name: "Family", exact: true }),
+    ).not.toBeVisible();
+    const box = await student.boundingBox(),
+      nav = await page
+        .getByRole("navigation", { name: "Main navigation" })
+        .boundingBox();
+    expect(box!.y + box!.height).toBeLessThan(nav!.y);
+    await page.screenshot({
+      path: "test-results/teacher-roster-first.png",
+      fullPage: true,
+    });
+    await page.getByLabel("Find a student").fill("Alex");
+    await page
+      .getByRole("button", { name: "Search students", exact: true })
+      .click();
+    await expect(page).toHaveURL(/search=Alex/);
+    await page.locator(".teacher-filters > summary").click();
+    await page
+      .getByRole("combobox", { name: "Family", exact: true })
+      .selectOption(family);
+    await expect(page).toHaveURL(new RegExp(`filterFamily=${family}`));
+    await expect(
+      page.getByRole("combobox", { name: "Subject", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("combobox", { name: "Subject", exact: true })
+      .selectOption("psychology");
+    await expect(page).toHaveURL(/subject=psychology/);
+    await page.locator(".teacher-student-row").first().click();
+    await expect(
+      page.getByRole("heading", { name: "Alex’s progress", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Performance overview", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Subject", exact: true }),
+    ).not.toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(/subject=psychology/);
+    await page.goto("/?context=teacher");
+    await expect(
+      page.getByRole("heading", { name: "Teaching overview" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Read submitted work →" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Family", exact: true }),
+    ).not.toBeVisible();
+    await page.screenshot({
+      path: "test-results/teacher-attention-first.png",
+      fullPage: true,
+    });
+    await page.goto("/?context=teacher&page=Groups");
+    await expect(
+      page.getByText("Not enough comparable evidence.", { exact: false }),
+    ).toBeVisible();
+    await expect(page.getByLabel("From", { exact: true })).not.toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Comparable evidence", exact: true }),
+    ).not.toBeVisible();
+    await page.screenshot({
+      path: "test-results/teacher-group-results-first.png",
+      fullPage: true,
+    });
+    await page.locator(".group-comparison-controls > summary").click();
+    await expect(page.getByLabel("From", { exact: true })).toBeVisible();
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "22px";
+    });
+    await noOverflow(page);
+  });
   test("teacher sees attention and submitted work without review controls", async ({
     context,
     page,
@@ -814,7 +912,7 @@ test.describe("phone companion", () => {
     await fixture(context, "teacher");
     await page.goto("/?context=teacher");
     await expect(
-      page.getByRole("heading", { name: "Know where to help." }),
+      page.getByRole("heading", { name: "Teaching overview" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Read submitted work →" }).click();
     await expect(

@@ -28,15 +28,18 @@ export function Groups({
       { familyId: string; learnerId: string }[]
     >([]),
     [offset, setOffset] = useState(0),
+    [controlsOpen, setControlsOpen] = useState(false),
     [search, setSearch] = useState("");
   const roster = useRead(
     editing
       ? `teacher/workspace?${new URLSearchParams({ view: "students", offset: String(offset), search })}`
       : null,
   );
+  const groupId =
+    route.group || (companion ? groups.data?.groups[0]?.id : undefined);
   const comparison = useRead<ComparisonRead>(
-    route.group
-      ? `teacher/comparison?${new URLSearchParams({ group: route.group, ...(route.benchmark ? { benchmark: route.benchmark } : {}), ...(route.from ? { from: route.from + "T00:00:00.000Z" } : {}), ...(route.to ? { to: route.to + "T23:59:59.999Z" } : {}) })}`
+    groupId
+      ? `teacher/comparison?${new URLSearchParams({ group: groupId, ...(route.benchmark ? { benchmark: route.benchmark } : {}), ...(route.from ? { from: route.from + "T00:00:00.000Z" } : {}), ...(route.to ? { to: route.to + "T23:59:59.999Z" } : {}) })}`
       : null,
   );
   const comparisonData = comparison.data;
@@ -51,13 +54,64 @@ export function Groups({
     setOffset(0);
     setSearch("");
   }
-  const current = groups.data?.groups.find((g: any) => g.id === route.group);
-  return (
+  const current = groups.data?.groups.find((g: any) => g.id === groupId);
+  const comparisonControls = comparisonData ? (
     <>
+      <div className="form-grid">
+        <label className="field">
+          From
+          <input
+            type="date"
+            value={route.from || comparisonData.from.slice(0, 10)}
+            onChange={(e) => onRoute({ from: e.target.value, benchmark: "" })}
+          />
+        </label>
+        <label className="field">
+          To
+          <input
+            type="date"
+            value={route.to || comparisonData.to.slice(0, 10)}
+            onChange={(e) => onRoute({ to: e.target.value, benchmark: "" })}
+          />
+        </label>
+      </div>
+      <label className="field">
+        Comparable evidence
+        <select
+          value={comparisonData.benchmark}
+          onChange={(e) => onRoute({ benchmark: e.target.value })}
+        >
+          {!comparisonData.benchmarks.length && (
+            <option value="">No matching published results</option>
+          )}
+          {comparisonData.benchmarks.map((b: any) => (
+            <option key={b.key} value={b.key}>
+              {b.label} · {b.count} student{b.count === 1 ? "" : "s"}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="meta">
+        Matches frozen questions and rubric, subject, mode, assistance and
+        previous exposure. Each student contributes their latest matching
+        result. Published evidence only.
+      </p>
+    </>
+  ) : null;
+  return (
+    <div
+      className={
+        companion ? "teacher-groups-companion" : "teacher-groups-desktop"
+      }
+    >
       <PageHeading
         label="TEACHING / GROUPS"
-        title="A clearer picture, together."
-        text="Your saved groups organise students you already teach. Comparable evidence keeps the context."
+        title={companion ? "Groups" : "A clearer picture, together."}
+        text={
+          companion
+            ? undefined
+            : "Your saved groups organise students you already teach. Comparable evidence keeps the context."
+        }
       />
       {!groups.data ? (
         <ReadState error={groups.error} refresh={groups.refresh} />
@@ -66,11 +120,12 @@ export function Groups({
           <div className="group-tabs">
             {groups.data.groups.map((g: any) => (
               <button
-                className={`button ${route.group === g.id ? "" : "secondary"}`}
+                className={`button ${groupId === g.id ? "" : "secondary"}`}
                 key={g.id}
-                onClick={() =>
-                  onRoute({ group: g.id, benchmark: "", offset: "0" })
-                }
+                onClick={() => {
+                  setControlsOpen(false);
+                  onRoute({ group: g.id, benchmark: "", offset: "0" });
+                }}
               >
                 {g.name} <small>({g.members.length})</small>
               </button>
@@ -106,56 +161,13 @@ export function Groups({
           )}
         </>
       )}
-      {route.group &&
+      {groupId &&
         (!comparisonData ? (
           <ReadState error={comparison.error} refresh={comparison.refresh} />
         ) : (
           <>
             <section className="card stack">
               <h2>{comparisonData.group.name}</h2>
-              <div className="form-grid">
-                <label className="field">
-                  From
-                  <input
-                    type="date"
-                    value={route.from || comparisonData.from.slice(0, 10)}
-                    onChange={(e) =>
-                      onRoute({ from: e.target.value, benchmark: "" })
-                    }
-                  />
-                </label>
-                <label className="field">
-                  To
-                  <input
-                    type="date"
-                    value={route.to || comparisonData.to.slice(0, 10)}
-                    onChange={(e) =>
-                      onRoute({ to: e.target.value, benchmark: "" })
-                    }
-                  />
-                </label>
-              </div>
-              <label className="field">
-                Comparable evidence
-                <select
-                  value={comparisonData.benchmark}
-                  onChange={(e) => onRoute({ benchmark: e.target.value })}
-                >
-                  {!comparisonData.benchmarks.length && (
-                    <option value="">No matching published results</option>
-                  )}
-                  {comparisonData.benchmarks.map((b: any) => (
-                    <option key={b.key} value={b.key}>
-                      {b.label} · {b.count} student{b.count === 1 ? "" : "s"}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p className="meta">
-                Matches frozen questions and rubric, subject, mode, assistance
-                and previous exposure. Each student contributes their latest
-                matching result. Published evidence only.
-              </p>
               {comparisonData.median === null || !comparisonData.range ? (
                 <p className="notice">
                   Not enough comparable evidence. A group summary needs at least
@@ -179,6 +191,24 @@ export function Groups({
                     <span>Comparable students</span>
                   </div>
                 </div>
+              )}
+              {companion ? (
+                <details
+                  className="group-comparison-controls"
+                  open={controlsOpen}
+                >
+                  <summary
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setControlsOpen((open) => !open);
+                    }}
+                  >
+                    Change comparison <span>Dates & evidence</span>
+                  </summary>
+                  {comparisonControls}
+                </details>
+              ) : (
+                comparisonControls
               )}
             </section>
             <section className="section">
@@ -333,6 +363,7 @@ export function Groups({
             ...route,
             context: "teacher",
             page: "Groups",
+            group: groupId,
           })}
         />
       )}
@@ -448,6 +479,6 @@ export function Groups({
           </Button>
         </Dialog>
       )}
-    </>
+    </div>
   );
 }

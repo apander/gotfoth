@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { api, date, euro } from "./api";
 import { useRead } from "./workspace-data";
 import { DesktopHandoff, Pagination, ReadState } from "./desktop-handoff";
-import { Button, Dialog, Empty, Meter, PageHeading } from "./ui";
+import { Button, Dialog, Empty, Icon, Meter, PageHeading } from "./ui";
 import { StudyCompanion } from "./persona-shell";
 import { CoursePlanning, Diary, topicName } from "./diary";
 import { Funding } from "./parent-space";
@@ -601,8 +601,9 @@ export function ProgressOverview({
   run: Run;
   onPractice?: (topic: string) => void;
   onAttempt?: (id: string) => void;
-  audience?: "student" | "parent";
+  audience?: "student" | "parent" | "teacher";
 }) {
+  const observer = audience !== "student";
   const tab = route.tab || (route.topic ? "topics" : "overview");
   const learner = people.find((l) => l.id === route.learner) ?? people[0],
     mine = courses.filter((c) => c.learner_id === learner?.id),
@@ -622,7 +623,7 @@ export function ProgressOverview({
   );
   const scopeControls = (
     <div className="progress-scope">
-      {audience !== "parent" && people.length > 1 && (
+      {!observer && people.length > 1 && (
         <label className="field">
           Student
           <select
@@ -720,23 +721,25 @@ export function ProgressOverview({
   const chart =
     tab === "overview" && read.data ? (
       <PerformanceChart
-        learnerName={audience === "parent" ? learner?.name : undefined}
+        learnerName={observer ? learner?.name : undefined}
         items={read.data.items}
         total={read.data.total}
         onOpen={(id) => onRoute({ assessment: id })}
       />
     ) : null;
   return (
-    <section
-      className={audience === "parent" ? "parent-progress" : "student-progress"}
-    >
+    <section className={observer ? "parent-progress" : "student-progress"}>
       <PageHeading
         label={audience === "parent" ? "FAMILY PROGRESS" : "PROGRESS"}
         title={
-          audience === "parent" ? "Learning progress" : "See how you’re doing."
+          audience === "teacher"
+            ? `${learner?.name ?? "Student"}’s progress`
+            : audience === "parent"
+              ? "Learning progress"
+              : "See how you’re doing."
         }
         text={
-          audience === "parent"
+          observer
             ? undefined
             : `${learner?.name ?? "Student"}’s progress, one practice at a time.`
         }
@@ -771,8 +774,8 @@ export function ProgressOverview({
           ))}
         </div>
       )}
-      {audience === "parent" && chart}
-      {audience === "parent" ? (
+      {observer && chart}
+      {observer ? (
         <details className="parent-progress-controls">
           <summary>
             Change view{" "}
@@ -786,7 +789,7 @@ export function ProgressOverview({
       ) : (
         scopeControls
       )}
-      {audience !== "parent" && chart}
+      {!observer && chart}
       <div
         className="segmented section"
         role="group"
@@ -903,7 +906,9 @@ function TeacherCompanion({
   const read = useRead(
     `teacher/workspace?${new URLSearchParams({ view: route.student ? "students" : route.page === "Students" ? "students" : "overview", offset: route.offset ?? "0", ...(route.filterFamily ? { family: route.filterFamily } : {}), ...(route.student ? { learner: route.student } : {}), ...(route.subject ? { subject: route.subject } : {}), ...(route.status ? { status: route.status } : {}), ...(route.search ? { search: route.search } : {}), ...(route.group ? { group: route.group } : {}) })}`,
   );
-  const [search, setSearch] = useState(route.search ?? "");
+  const [search, setSearch] = useState(route.search ?? ""),
+    [filtersOpen, setFiltersOpen] = useState(false);
+  useEffect(() => setSearch(route.search ?? ""), [route.search]);
   const selected = read.data?.students.find((s: any) => s.id === route.student);
   const detail = useRead(
     selected ? `family/summary?family=${selected.family_id}` : null,
@@ -912,178 +917,264 @@ function TeacherCompanion({
     return <ReadState error={read.error} refresh={read.refresh} />;
   const change = (patch: Destination) =>
     onRoute({ ...patch, student: "", offset: "0" });
+  const studentsPage = route.page === "Students";
+  const activeFilters = [
+    route.filterFamily,
+    route.subject,
+    route.group,
+    route.status,
+  ].filter(Boolean).length;
+  if (selected)
+    return (
+      <section className="teacher-companion teacher-student-detail">
+        <button
+          className="link-button"
+          onClick={() => onRoute({ student: "", learner: "", family: "" })}
+        >
+          ← All students
+        </button>
+        <p className="meta">
+          {selected.family_name} ·{" "}
+          {selected.courses
+            .map((c: any) => `${c.subject} · ${c.targetSession}`)
+            .join(" / ") || "No course set up yet"}
+        </p>
+        {!detail.data ? (
+          <ReadState error={detail.error} refresh={detail.refresh} />
+        ) : (
+          <>
+            <ProgressOverview
+              audience="teacher"
+              familyId={selected.family_id}
+              people={detail.data.learners.filter(
+                (l: any) => l.id === selected.id,
+              )}
+              courses={detail.data.enrolments.filter(
+                (c: any) => c.learner_id === selected.id,
+              )}
+              route={{ ...route, learner: selected.id }}
+              onRoute={onRoute}
+              run={run}
+            />
+            <details className="section">
+              <summary>Upcoming study</summary>
+              {detail.data.sessions
+                .filter((session: any) => session.learner_id === selected.id)
+                .map((session: any) => (
+                  <p key={session.id}>
+                    {session.data.title} · {date(session.data.start)}
+                  </p>
+                ))}
+            </details>
+          </>
+        )}
+      </section>
+    );
   return (
-    <>
+    <section className="teacher-companion">
       <PageHeading
-        label="YOUR TEACHING COMPANION"
-        title="Know where to help."
-        text="A quick view across your authorised families. Review and publication happen on your computer."
+        label="TEACHING"
+        title={studentsPage ? "Students" : "Teaching overview"}
       />
-      <div className="companion-counts">
-        <span>
-          <strong>{read.data.totals.students}</strong> students
-        </span>
-        <span>
-          <strong>{read.data.totals.actionable}</strong> reviews
-        </span>
-        <span>
-          <strong>{read.data.totals.blocked}</strong> blockers
-        </span>
-      </div>
-      <form
-        className="card stack"
-        onSubmit={(e) => {
-          e.preventDefault();
-          change({ search });
-        }}
-      >
-        <label className="field">
-          Find a student
+      {!studentsPage && (
+        <div className="teacher-attention-counts" aria-label="Teaching summary">
+          <button onClick={() => change({ page: "Students", status: "" })}>
+            <strong>{read.data.totals.students}</strong>
+            <span>Students</span>
+          </button>
+          <button
+            onClick={() => change({ page: "Overview", status: "needs_review" })}
+          >
+            <strong>{read.data.totals.actionable}</strong>
+            <span>To review</span>
+          </button>
+          <div>
+            <strong>{read.data.totals.blocked}</strong>
+            <span>Blocked</span>
+          </div>
+        </div>
+      )}
+      {studentsPage && (
+        <form
+          className="teacher-search"
+          role="search"
+          aria-label="Find students"
+          onSubmit={(e) => {
+            e.preventDefault();
+            change({ search });
+          }}
+        >
+          <label className="sr-only" htmlFor="teacher-student-search">
+            Find a student
+          </label>
           <input
+            id="teacher-student-search"
             type="search"
+            placeholder="Find a student"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-        </label>
-        <Button variant="secondary">Search</Button>
-        <label className="field">
-          Family
-          <select
-            value={route.filterFamily ?? ""}
-            onChange={(e) => change({ filterFamily: e.target.value })}
+          <button
+            className="teacher-search-submit"
+            aria-label="Search students"
           >
-            <option value="">All my families</option>
-            {read.data.families.map((f: any) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          Subject
-          <select
-            value={route.subject ?? ""}
-            onChange={(e) => change({ subject: e.target.value })}
-          >
-            <option value="">All subjects</option>
-            <option value="psychology">Psychology</option>
-            <option value="business">Business</option>
-          </select>
-        </label>
-        <label className="field">
-          Group
-          <select
-            value={route.group ?? ""}
-            onChange={(e) => change({ group: e.target.value })}
-          >
-            <option value="">All students</option>
-            {groups.data?.groups.map((g: any) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          Attention
-          <select
-            value={route.status ?? ""}
-            onChange={(e) => change({ status: e.target.value })}
-          >
-            <option value="">All states</option>
-            {["needs_review", "failed", "awaiting_funds", "published"].map(
-              (s) => (
-                <option key={s} value={s}>
-                  {friendlyStatus(s)}
+            <Icon name="Search" />
+          </button>
+        </form>
+      )}
+      <details className="teacher-filters" open={filtersOpen}>
+        <summary
+          onClick={(e) => {
+            e.preventDefault();
+            setFiltersOpen((open) => !open);
+          }}
+        >
+          Filters{" "}
+          <span>
+            {activeFilters
+              ? `${activeFilters} active`
+              : "All families · all subjects"}
+          </span>
+        </summary>
+        <div className="form-grid">
+          <label className="field">
+            Family
+            <select
+              value={route.filterFamily ?? ""}
+              onChange={(e) => change({ filterFamily: e.target.value })}
+            >
+              <option value="">All my families</option>
+              {read.data.families.map((f: any) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
                 </option>
-              ),
-            )}
-          </select>
-        </label>
-      </form>
-      {selected ? (
-        <>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            Subject
+            <select
+              value={route.subject ?? ""}
+              onChange={(e) => change({ subject: e.target.value })}
+            >
+              <option value="">All subjects</option>
+              <option value="psychology">Psychology</option>
+              <option value="business">Business</option>
+            </select>
+          </label>
+          <label className="field">
+            Group
+            <select
+              value={route.group ?? ""}
+              onChange={(e) => change({ group: e.target.value })}
+            >
+              <option value="">All students</option>
+              {groups.data?.groups.map((g: any) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            Attention
+            <select
+              value={route.status ?? ""}
+              onChange={(e) => change({ status: e.target.value })}
+            >
+              <option value="">All states</option>
+              {["needs_review", "failed", "awaiting_funds", "published"].map(
+                (s) => (
+                  <option key={s} value={s}>
+                    {friendlyStatus(s)}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+        </div>
+        {!!(activeFilters || route.search) && (
           <button
             className="link-button"
-            onClick={() => onRoute({ student: "", learner: "", family: "" })}
+            onClick={() => {
+              setSearch("");
+              change({
+                filterFamily: "",
+                subject: "",
+                group: "",
+                status: "",
+                search: "",
+              });
+            }}
           >
-            ← All students
+            Clear filters
           </button>
-          <section className="card">
-            <p className="eyebrow">{selected.family_name}</p>
-            <h2>{selected.name}</h2>
-            <p>
-              {selected.courses
-                .map((c: any) => `${c.subject} · ${c.targetSession}`)
-                .join(" / ") || "No course set up yet"}
-            </p>
-            <p>
-              {selected.pending} pending reviews · {selected.open_attempts} open
-              sessions
-            </p>
-          </section>
-          {detail.data && (
-            <>
-              <ProgressOverview
-                familyId={selected.family_id}
-                people={detail.data.learners.filter(
-                  (l: any) => l.id === selected.id,
-                )}
-                courses={detail.data.enrolments.filter(
-                  (c: any) => c.learner_id === selected.id,
-                )}
-                route={{ ...route, learner: selected.id }}
-                onRoute={onRoute}
-                run={run}
-              />
-              <details className="section">
-                <summary>Upcoming study</summary>
-                {detail.data.sessions
-                  .filter((s: any) => s.learner_id === selected.id)
-                  .map((s: any) => (
-                    <p key={s.id}>
-                      {s.data.title} · {date(s.data.start)}
-                    </p>
-                  ))}
-              </details>
-            </>
-          )}
-        </>
-      ) : (
+        )}
+      </details>
+      {!!route.search && (
+        <p className="teacher-search-context">
+          Results for “{route.search}”{" "}
+          <button
+            className="link-button"
+            onClick={() => {
+              setSearch("");
+              change({ search: "" });
+            }}
+          >
+            Clear search
+          </button>
+        </p>
+      )}
+      {studentsPage ? (
         <>
-          <div className="companion-list">
-            {read.data.students.map((s: any) => (
+          <div className="teacher-roster" aria-label="Student list">
+            {read.data.students.map((student: any) => (
               <button
-                className="student-summary"
-                key={s.id}
+                className="teacher-student-row"
+                key={student.id}
                 onClick={() =>
                   onRoute({
                     page: "Students",
-                    student: s.id,
-                    family: s.family_id,
-                    learner: s.id,
+                    student: student.id,
+                    family: student.family_id,
+                    learner: student.id,
                     offset: "0",
+                    tab: "overview",
+                    topic: "",
+                    course: "",
                   })
                 }
               >
-                <strong>{s.name}</strong>
-                <span>{s.family_name}</span>
-                <small>
-                  {s.pending
-                    ? "Review their submitted work."
-                    : s.open_attempts
-                      ? "An unfinished session is open."
-                      : s.latest?.state === "published"
-                        ? "Published feedback is available."
-                        : "Look for a first piece of published evidence."}
-                </small>
-                <span>
-                  {s.pending} reviews · {s.open_attempts} open sessions →
+                <span className="teacher-student-avatar" aria-hidden="true">
+                  {student.name.slice(0, 1)}
                 </span>
+                <span className="teacher-student-copy">
+                  <strong>{student.name}</strong>
+                  <small>
+                    {student.family_name} ·{" "}
+                    {student.courses.map((c: any) => c.subject).join(" / ") ||
+                      "No subjects yet"}
+                  </small>
+                  <span>
+                    {student.pending
+                      ? `${student.pending} review${student.pending === 1 ? "" : "s"} pending`
+                      : student.open_attempts
+                        ? "Practice in progress"
+                        : student.latest?.state === "published"
+                          ? "Published feedback available"
+                          : "No published evidence yet"}
+                  </span>
+                </span>
+                <Icon name="Arrow" />
               </button>
             ))}
           </div>
+          {!read.data.students.length && (
+            <Empty
+              title="No students in this view"
+              text="Try a different search or clear your filters."
+            />
+          )}
           <Pagination
             offset={read.data.offset}
             limit={25}
@@ -1091,35 +1182,51 @@ function TeacherCompanion({
             onChange={(offset) => onRoute({ offset: String(offset) })}
           />
         </>
+      ) : (
+        <section
+          className="teacher-attention-queue"
+          aria-label="Work needing attention"
+        >
+          <h2>Needs attention</h2>
+          {read.data.reviews.map((review: any) => (
+            <article className="teacher-attention-row" key={review.id}>
+              <div>
+                <h3>{review.learner_name}</h3>
+                <p className="meta">
+                  {review.family_name} · {topicName(review.subject)} ·{" "}
+                  {date(review.submitted_at)}
+                </p>
+              </div>
+              <span className="teacher-review-status">
+                {review.has_query
+                  ? "Student query"
+                  : friendlyStatus(review.state)}
+              </span>
+              <button
+                className="link-button"
+                onClick={() =>
+                  onRoute({ assessment: review.id, family: review.family_id })
+                }
+              >
+                Read submitted work →
+              </button>
+            </article>
+          ))}
+          {!read.data.reviews.length && (
+            <Empty
+              title="No work needing attention"
+              text="Reviews and student queries will appear here."
+            />
+          )}
+          <Pagination
+            offset={read.data.offset}
+            limit={25}
+            total={read.data.totals.reviews}
+            onChange={(offset) => onRoute({ offset: String(offset) })}
+          />
+        </section>
       )}
-      <section className="section">
-        <h2>Work needing attention</h2>
-        {read.data.reviews.map((r: any) => (
-          <article className="reminder-item" key={r.id}>
-            <h3>{r.learner_name}</h3>
-            <p className="meta">
-              {r.family_name} · {r.subject} · {date(r.submitted_at)}
-            </p>
-            <p>
-              {r.has_query ? "Student query · " : ""}
-              {friendlyStatus(r.state)}
-            </p>
-            <button
-              className="link-button"
-              onClick={() => onRoute({ assessment: r.id, family: r.family_id })}
-            >
-              Read submitted work →
-            </button>
-          </article>
-        ))}
-        <Pagination
-          offset={read.data.offset}
-          limit={25}
-          total={read.data.totals.reviews}
-          onChange={(offset) => onRoute({ offset: String(offset) })}
-        />
-      </section>
-    </>
+    </section>
   );
 }
 export function TeacherStudentEvidence({
@@ -1142,6 +1249,7 @@ export function TeacherStudentEvidence({
   return (
     <section className="section">
       <ProgressOverview
+        audience="teacher"
         familyId={route.filterFamily}
         people={read.data.learners.filter((l: any) => l.id === route.student)}
         courses={read.data.enrolments.filter(

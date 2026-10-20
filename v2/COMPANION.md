@@ -12,6 +12,8 @@ The same account, permissions and records support two deliberately different exp
 
 **Administrator companion:** Status, Families, Queues and Reminders, with read-only family/member/access, invitation, content and processing summaries. Desktop provides family/member/invitation mutations, publication, rate/configuration changes, operational evidence and job recovery. Administration remains separate from explicit family memberships.
 
+Teacher mobile landing pages lead with evidence and people. Overview opens the attention queue; Students opens a compact roster with inline search. Family, subject, saved-group and status controls live in a Filters disclosure, which stays open while selections refresh the list. Student detail opens its published-results chart before optional scope controls. Groups initially shows the first authorised saved group's comparison summary, with dates and evidence selection under Change comparison. URLs, Back navigation, family context and desktop continuation retain the chosen scope; these UI defaults grant no additional access.
+
 Both experiences retain normal sign-in, invitation acceptance, one-click fictional test accounts, account/profile/accessibility controls, workspace switching, sign-out and personal-account deletion. Desktop retains all companion capabilities. Computer links contain record identifiers, never credentials, and require the receiving user's own authorised sign-in.
 
 ## Diary and reminders
