@@ -1198,9 +1198,8 @@ function TeacherCompanion({
                 </p>
               </div>
               <span className="teacher-review-status">
-                {review.has_query
-                  ? "Student query"
-                  : friendlyStatus(review.state)}
+                  {review.has_query ? "Student query · " : ""}
+                  {friendlyStatus(review.state)}
               </span>
               <button
                 className="link-button"
